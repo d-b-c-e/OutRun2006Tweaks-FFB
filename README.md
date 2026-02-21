@@ -1,3 +1,55 @@
+# OutRun2006Tweaks — FFB Fork
+
+> **Fork of [emoose/OutRun2006Tweaks](https://github.com/emoose/OutRun2006Tweaks)** adding DirectInput force feedback for steering wheels via SDL3 Haptic API. Part of the [OutRun 2006 Redux](../outrun2006-redux) project.
+
+## FFB Fork Changes
+
+### Force Feedback Engine (`src/hooks_dinputffb.cpp`)
+
+Adds real force feedback to steering wheels using the SDL3 Haptic API. The original PC port has no FFB — this fork extracts physics telemetry from the game's `EVWORK_CAR` structure and drives 5 SDL haptic effects that produce 8 distinct game feel effects:
+
+| Effect | SDL Type | Source | Description |
+|--------|----------|--------|-------------|
+| Center Spring | SPRING | Speed | Self-centering force, heavier at speed |
+| Damper | DAMPER | Speed | Resistance to rapid steering |
+| Steering Weight | CONSTANT | Lateral forces | Cornering force feel |
+| Wall Impact | CONSTANT | Collision flags | Sharp jolt on collision |
+| Rumble Strip | SINE | Surface flags | Grass/sand/curb vibration |
+| Gear Shift | SINE | Gear changes | Brief gear change kick |
+| Road Texture | SINE | Stage number | Subtle road surface feel |
+| Tire Slip | FRICTION | Lateral derivatives | Loss of grip communication |
+
+### Direct Drive Wheel Support
+
+Auto-detects 30+ wheel models (Moza, Fanatec, Logitech, Thrustmaster, Simagic, etc.) and scales force output to prevent over-torque on direct drive bases. Reference torque is 2.2 Nm (Logitech G29); a 12 Nm Moza R12 gets ~18% strength automatically.
+
+### Configuration (`[FFB]` section in OutRun2006Tweaks.ini)
+
+```ini
+[FFB]
+DirectInputFFB = true       ; Master enable
+FFBDevice = -1              ; -1 = auto (first haptic device)
+FFBGlobalStrength = 1.0     ; 0.0 - 2.0
+FFBSpringStrength = 0.7     ; Center spring multiplier
+FFBDamperStrength = 0.5     ; Damper multiplier
+FFBSteeringWeight = 1.0     ; Cornering force multiplier
+FFBWallImpact = 1.0         ; Collision jolt multiplier
+FFBRumbleStrip = 0.6        ; Surface rumble multiplier
+FFBGearShift = 0.3          ; Gear shift kick multiplier
+FFBRoadTexture = 0.2        ; Road texture vibration multiplier
+FFBTireSlip = 0.8           ; Tire slip feedback multiplier
+FFBWheelTorqueNm = 0.0      ; 0 = auto-detect from wheel name
+FFBInvertForce = false       ; Reverse force direction
+```
+
+### Architecture Note
+
+SDL_Init creates threads internally, which deadlocks if called during DllMain (Windows loader lock). The FFB engine uses **deferred initialization** — the hook installs during DllMain but SDL_Init runs on the first `GamePlCar_Ctrl` tick during gameplay.
+
+---
+
+*Original README follows:*
+
 # OutRun2006Tweaks
 [![GitHub Downloads](https://img.shields.io/github/downloads/emoose/OutRun2006Tweaks/total)](https://github.com/emoose/OutRun2006Tweaks/releases)
 
