@@ -24,6 +24,7 @@ namespace FFB
 	// Haptic device state
 	static SDL_Haptic* hapticDevice = nullptr;
 	static bool initialized = false;
+	static bool initAttempted = false; // prevents repeated init attempts
 	static std::string deviceName;
 	static float wheelTorqueScale = 1.0f;
 
@@ -226,8 +227,17 @@ namespace FFB
 		}
 	}
 
-	bool Init()
+	// Deferred initialization -- called from Update() on first tick, NOT from DllMain.
+	// SDL_Init creates threads internally, which deadlocks if called during DllMain
+	// (Windows loader lock prevents thread creation during DLL_PROCESS_ATTACH).
+	bool DeferredInit()
 	{
+		if (initAttempted)
+			return initialized;
+		initAttempted = true;
+
+		spdlog::info("FFB: Starting deferred initialization...");
+
 		// Initialize SDL haptic + joystick subsystems
 		// SDL_Init is safe to call multiple times; it adds subsystems incrementally
 		if (!SDL_Init(SDL_INIT_HAPTIC | SDL_INIT_JOYSTICK))
@@ -242,7 +252,7 @@ namespace FFB
 
 		if (!hapticIds || numHaptics <= 0)
 		{
-			spdlog::warn("FFB: No haptic devices found");
+			spdlog::warn("FFB: No haptic devices found -- FFB effects will be disabled");
 			if (hapticIds) SDL_free(hapticIds);
 			return false;
 		}
@@ -331,8 +341,16 @@ namespace FFB
 
 	void Update(EVWORK_CAR* car)
 	{
-		if (!initialized || !hapticDevice || !car)
+		if (!car)
 			return;
+
+		// Lazy initialization: SDL_Init must happen AFTER DllMain returns
+		// (it creates threads, which deadlock under the Windows loader lock)
+		if (!initialized)
+		{
+			if (!DeferredInit())
+				return;
+		}
 
 		// Read telemetry from EVWORK_CAR
 		float speed = car->field_1C4;                      // Normalized speed (0.0 - ~1.0+)
@@ -576,7 +594,7 @@ class DirectInputFFBHook : public Hook
 	const static int GamePlCar_Ctrl_Addr = 0xA8330;
 
 	inline static SafetyHookInline GamePlCar_Ctrl = {};
-	static void GamePlCar_Ctrl_Hook(EVWORK_CAR* car)
+	static void __cdecl GamePlCar_Ctrl_Hook(EVWORK_CAR* car)
 	{
 		FFB::Update(car);
 		GamePlCar_Ctrl.call(car);
@@ -595,21 +613,19 @@ public:
 
 	bool apply() override
 	{
-		if (!FFB::Init())
-		{
-			spdlog::error("DirectInputFFB: FFB engine init failed -- hook will not be applied");
-			return false;
-		}
-
-		GamePlCar_Ctrl = safetyhook::create_inline(Module::exe_ptr(GamePlCar_Ctrl_Addr), GamePlCar_Ctrl_Hook);
+		// Only install the inline hook here -- do NOT call SDL_Init.
+		// SDL_Init creates threads which deadlocks under the Windows loader lock
+		// that is held during DllMain/DLL_PROCESS_ATTACH.
+		// FFB device initialization is deferred to the first Update() call.
+		auto targetAddr = Module::exe_ptr(GamePlCar_Ctrl_Addr);
+		GamePlCar_Ctrl = safetyhook::create_inline(targetAddr, GamePlCar_Ctrl_Hook);
 		if (!GamePlCar_Ctrl)
 		{
 			spdlog::error("DirectInputFFB: Failed to hook GamePlCar_Ctrl");
-			FFB::Shutdown();
 			return false;
 		}
 
-		spdlog::info("DirectInputFFB: Hook applied successfully");
+		spdlog::info("DirectInputFFB: Hook installed (FFB init deferred to first game tick)");
 		return true;
 	}
 
