@@ -297,6 +297,7 @@ set(outrun2006tweaks_SOURCES
 	"src/hook_mgr.hpp"
 	"src/hooks_audio.cpp"
 	"src/hooks_bugfixes.cpp"
+	"src/hooks_dinputffb.cpp"
 	"src/hooks_drawdistance.cpp"
 	"src/hooks_exceptions.cpp"
 	"src/hooks_flac.cpp"

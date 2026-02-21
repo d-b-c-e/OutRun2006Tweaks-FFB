@@ -121,6 +121,20 @@ namespace Settings
 		spdlog::info(" - ImpulseVibrationLeftMultiplier: {}", ImpulseVibrationLeftMultiplier);
 		spdlog::info(" - ImpulseVibrationRightMultiplier: {}", ImpulseVibrationRightMultiplier);
 
+		spdlog::info(" - DirectInputFFB: {}", DirectInputFFB);
+		spdlog::info(" - FFBDevice: {}", FFBDevice);
+		spdlog::info(" - FFBGlobalStrength: {}", FFBGlobalStrength);
+		spdlog::info(" - FFBSpringStrength: {}", FFBSpringStrength);
+		spdlog::info(" - FFBDamperStrength: {}", FFBDamperStrength);
+		spdlog::info(" - FFBSteeringWeight: {}", FFBSteeringWeight);
+		spdlog::info(" - FFBWallImpact: {}", FFBWallImpact);
+		spdlog::info(" - FFBRumbleStrip: {}", FFBRumbleStrip);
+		spdlog::info(" - FFBGearShift: {}", FFBGearShift);
+		spdlog::info(" - FFBRoadTexture: {}", FFBRoadTexture);
+		spdlog::info(" - FFBTireSlip: {}", FFBTireSlip);
+		spdlog::info(" - FFBWheelTorqueNm: {}", FFBWheelTorqueNm);
+		spdlog::info(" - FFBInvertForce: {}", FFBInvertForce);
+
 		spdlog::info(" - EnableHollyCourse2: {}", EnableHollyCourse2);
 		spdlog::info(" - SkipIntroLogos: {}", SkipIntroLogos);
 		spdlog::info(" - DisableCountdownTimer: {}", DisableCountdownTimer);
@@ -237,6 +251,30 @@ namespace Settings
 		ImpulseVibrationLeftMultiplier = std::clamp(ImpulseVibrationLeftMultiplier, 0.0f, 1.0f);
 		ImpulseVibrationRightMultiplier = ini.Get("Controls", "ImpulseVibrationRightMultiplier", ImpulseVibrationRightMultiplier);
 		ImpulseVibrationRightMultiplier = std::clamp(ImpulseVibrationRightMultiplier, 0.0f, 1.0f);
+
+		DirectInputFFB = ini.Get("FFB", "DirectInputFFB", DirectInputFFB);
+		FFBDevice = ini.Get("FFB", "FFBDevice", FFBDevice);
+		FFBGlobalStrength = ini.Get("FFB", "FFBGlobalStrength", FFBGlobalStrength);
+		FFBGlobalStrength = std::clamp(FFBGlobalStrength, 0.0f, 2.0f);
+		FFBSpringStrength = ini.Get("FFB", "FFBSpringStrength", FFBSpringStrength);
+		FFBSpringStrength = std::clamp(FFBSpringStrength, 0.0f, 2.0f);
+		FFBDamperStrength = ini.Get("FFB", "FFBDamperStrength", FFBDamperStrength);
+		FFBDamperStrength = std::clamp(FFBDamperStrength, 0.0f, 2.0f);
+		FFBSteeringWeight = ini.Get("FFB", "FFBSteeringWeight", FFBSteeringWeight);
+		FFBSteeringWeight = std::clamp(FFBSteeringWeight, 0.0f, 2.0f);
+		FFBWallImpact = ini.Get("FFB", "FFBWallImpact", FFBWallImpact);
+		FFBWallImpact = std::clamp(FFBWallImpact, 0.0f, 2.0f);
+		FFBRumbleStrip = ini.Get("FFB", "FFBRumbleStrip", FFBRumbleStrip);
+		FFBRumbleStrip = std::clamp(FFBRumbleStrip, 0.0f, 2.0f);
+		FFBGearShift = ini.Get("FFB", "FFBGearShift", FFBGearShift);
+		FFBGearShift = std::clamp(FFBGearShift, 0.0f, 2.0f);
+		FFBRoadTexture = ini.Get("FFB", "FFBRoadTexture", FFBRoadTexture);
+		FFBRoadTexture = std::clamp(FFBRoadTexture, 0.0f, 2.0f);
+		FFBTireSlip = ini.Get("FFB", "FFBTireSlip", FFBTireSlip);
+		FFBTireSlip = std::clamp(FFBTireSlip, 0.0f, 2.0f);
+		FFBWheelTorqueNm = ini.Get("FFB", "FFBWheelTorqueNm", FFBWheelTorqueNm);
+		FFBWheelTorqueNm = std::clamp(FFBWheelTorqueNm, 0.0f, 100.0f);
+		FFBInvertForce = ini.Get("FFB", "FFBInvertForce", FFBInvertForce);
 
 		EnableHollyCourse2 = ini.Get("Misc", "EnableHollyCourse2", EnableHollyCourse2);
 		SkipIntroLogos = ini.Get("Misc", "SkipIntroLogos", SkipIntroLogos);

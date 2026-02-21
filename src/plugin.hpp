@@ -142,6 +142,20 @@ namespace Settings
 	inline float ImpulseVibrationLeftMultiplier = 0.25f;
 	inline float ImpulseVibrationRightMultiplier = 0.25f;
 
+	inline bool DirectInputFFB = false;
+	inline int FFBDevice = -1;
+	inline float FFBGlobalStrength = 1.0f;
+	inline float FFBSpringStrength = 0.7f;
+	inline float FFBDamperStrength = 0.5f;
+	inline float FFBSteeringWeight = 1.0f;
+	inline float FFBWallImpact = 1.0f;
+	inline float FFBRumbleStrip = 0.6f;
+	inline float FFBGearShift = 0.3f;
+	inline float FFBRoadTexture = 0.2f;
+	inline float FFBTireSlip = 0.8f;
+	inline float FFBWheelTorqueNm = 0.0f;
+	inline bool FFBInvertForce = false;
+
 	inline int EnableHollyCourse2 = 1;
 	inline bool SkipIntroLogos = false;
 	inline bool DisableCountdownTimer = false;
