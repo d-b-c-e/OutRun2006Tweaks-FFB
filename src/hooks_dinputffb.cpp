@@ -14,10 +14,95 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "game.hpp"
+#include "telemetry.hpp"
 
 // External vibration data from hooks_forcefeedback.cpp
 extern float VibrationLeftMotor;
 extern float VibrationRightMotor;
+
+// Telemetry shared memory (written every frame for SimHub / bass shakers)
+namespace Telemetry
+{
+	static HANDLE hMapFile = nullptr;
+	static OutRun2006TelemetryData* pData = nullptr;
+	static bool initialized = false;
+	static uint32_t packetId = 0;
+
+	static bool Init()
+	{
+		if (!Settings::TelemetryEnabled)
+			return false;
+
+		const std::string& name = Settings::TelemetrySharedMemName;
+		hMapFile = CreateFileMappingA(
+			INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
+			sizeof(OutRun2006TelemetryData), name.c_str());
+
+		if (!hMapFile)
+		{
+			spdlog::error("Telemetry: CreateFileMapping failed (err={})", GetLastError());
+			return false;
+		}
+
+		pData = static_cast<OutRun2006TelemetryData*>(
+			MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(OutRun2006TelemetryData)));
+
+		if (!pData)
+		{
+			spdlog::error("Telemetry: MapViewOfFile failed (err={})", GetLastError());
+			CloseHandle(hMapFile);
+			hMapFile = nullptr;
+			return false;
+		}
+
+		memset(pData, 0, sizeof(OutRun2006TelemetryData));
+		pData->version = TELEMETRY_VERSION;
+		initialized = true;
+		spdlog::info("Telemetry: Shared memory '{}' created ({} bytes)", name, sizeof(OutRun2006TelemetryData));
+		return true;
+	}
+
+	static void Write(EVWORK_CAR* car, bool inGameplay)
+	{
+		if (!pData) return;
+
+		pData->packetId = ++packetId;
+		pData->speed = car->field_1C4;
+		pData->steeringAngle = car->field_1D0;
+		pData->lateralG1 = car->field_264;
+		pData->lateralG2 = car->field_268;
+		pData->impactForce = car->field_178;
+		pData->gear = car->cur_gear_208;
+		pData->prevGear = car->dword1D8;
+		pData->stateFlags = car->field_8;
+		pData->carFlags = car->flags_4;
+		pData->surfaceType[0] = car->water_flag_24C[0];
+		pData->surfaceType[1] = car->water_flag_24C[1];
+		pData->surfaceType[2] = car->water_flag_24C[2];
+		pData->surfaceType[3] = car->water_flag_24C[3];
+		pData->vibrationLeft = VibrationLeftMotor;
+		pData->vibrationRight = VibrationRightMotor;
+		pData->gameMode = Game::current_mode ? *Game::current_mode : 0;
+		pData->isInGameplay = inGameplay ? 1 : 0;
+	}
+
+	static void Shutdown()
+	{
+		if (pData)
+		{
+			UnmapViewOfFile(pData);
+			pData = nullptr;
+		}
+		if (hMapFile)
+		{
+			CloseHandle(hMapFile);
+			hMapFile = nullptr;
+		}
+		initialized = false;
+		spdlog::info("Telemetry: Shared memory closed");
+	}
+}
 
 namespace FFB
 {
@@ -39,6 +124,20 @@ namespace FFB
 	static uint32_t prevGear = 0;
 	static uint32_t prevCollisionFlags = 0;
 	static float prevSpeed = 0.0f;
+
+	// Exponential moving average for lateral forces (low-pass filter)
+	static float smoothedLateral = 0.0f;
+
+	// Crash detection: accumulate speed loss over a sliding window
+	static float speedHistory[8] = {};     // Last 8 frames of speed
+	static int speedHistoryIdx = 0;
+
+	// Crash impulse state
+	static int crashImpulseTimer = 0;      // Frames remaining for crash jolt
+	static float crashImpulseForce = 0.0f; // Direction and magnitude of crash jolt
+
+	// Previous constant force level (deadband to prevent micro-oscillations)
+	static int16_t prevConstantLevel = 0;
 
 	// Gear shift timer (frames remaining)
 	static int gearShiftTimer = 0;
@@ -109,57 +208,21 @@ namespace FFB
 	{
 		SDL_HapticEffect effect;
 
-		// 1. Center Spring -- self-centering force, scales with speed
-		if (features & SDL_HAPTIC_SPRING)
-		{
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_SPRING;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			int16_t coeff = int16_t(std::clamp(int(0x5000 * Settings::FFBSpringStrength), 0, 0x7FFF));
-			effect.condition.right_coeff[0] = coeff;
-			effect.condition.left_coeff[0] = coeff;
-			effect.condition.deadband[0] = 0;
-			effect.condition.center[0] = 0;
+		// NOTE: Condition effects (Spring, Damper, Friction) are DISABLED.
+		// DD wheel drivers (Moza, Fanatec, Simucube) have internal PID controllers
+		// that oscillate when fighting external spring/damper effects, causing
+		// persistent vibration. The arcade game only uses constant force anyway.
+		// Centering feel should come from the wheel's own spring setting in its
+		// configuration software (e.g., Moza Pit House).
 
-			springEffectId = SDL_CreateHapticEffect(hapticDevice, &effect);
-			if (springEffectId >= 0)
-			{
-				SDL_RunHapticEffect(hapticDevice, springEffectId, SDL_HAPTIC_INFINITY);
-				spdlog::info("FFB: Spring effect created (id: {})", springEffectId);
-			}
-			else
-				spdlog::warn("FFB: Failed to create spring: {}", SDL_GetError());
-		}
+		if (Settings::FFBSpringStrength > 0.0f)
+			spdlog::info("FFB: Spring disabled for DD wheels (use wheel software for centering)");
+		if (Settings::FFBDamperStrength > 0.0f)
+			spdlog::info("FFB: Damper disabled for DD wheels (use wheel software for damping)");
 
-		// 2. Damper -- resistance to rapid steering changes
-		if (features & SDL_HAPTIC_DAMPER)
-		{
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_DAMPER;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			int16_t coeff = int16_t(std::clamp(int(0x3000 * Settings::FFBDamperStrength), 0, 0x7FFF));
-			effect.condition.right_coeff[0] = coeff;
-			effect.condition.left_coeff[0] = coeff;
-
-			damperEffectId = SDL_CreateHapticEffect(hapticDevice, &effect);
-			if (damperEffectId >= 0)
-			{
-				SDL_RunHapticEffect(hapticDevice, damperEffectId, SDL_HAPTIC_INFINITY);
-				spdlog::info("FFB: Damper effect created (id: {})", damperEffectId);
-			}
-			else
-				spdlog::warn("FFB: Failed to create damper: {}", SDL_GetError());
-		}
-
-		// 3. Constant force -- steering weight, collision jolts, gear shift kicks
+		// 1. Constant force -- steering weight, collision jolts, gear shift kicks
+		// This is the ONLY force-producing effect. Matches the arcade approach
+		// which uses a single motor output byte for all FFB.
 		if (features & SDL_HAPTIC_CONSTANT)
 		{
 			memset(&effect, 0, sizeof(effect));
@@ -179,52 +242,10 @@ namespace FFB
 				spdlog::warn("FFB: Failed to create constant force: {}", SDL_GetError());
 		}
 
-		// 4. Sine wave -- rumble strips, road texture vibration, tire slip buzz
-		if (features & SDL_HAPTIC_SINE)
-		{
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_SINE;
-			effect.periodic.length = SDL_HAPTIC_INFINITY;
-			effect.periodic.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.periodic.direction.dir[0] = 1;
-			effect.periodic.period = 50; // 20 Hz default
-			effect.periodic.magnitude = 0;
-			effect.periodic.offset = 0;
-			effect.periodic.phase = 0;
+		// Sine wave and friction are NOT created — they also cause DD oscillation.
+		// Rumble strip / road texture can be revisited later with careful tuning
+		// or by using short-duration effects instead of persistent ones.
 
-			sineEffectId = SDL_CreateHapticEffect(hapticDevice, &effect);
-			if (sineEffectId >= 0)
-			{
-				SDL_RunHapticEffect(hapticDevice, sineEffectId, SDL_HAPTIC_INFINITY);
-				spdlog::info("FFB: Sine effect created (id: {})", sineEffectId);
-			}
-			else
-				spdlog::warn("FFB: Failed to create sine: {}", SDL_GetError());
-		}
-
-		// 5. Friction -- tire grip simulation
-		if (features & SDL_HAPTIC_FRICTION)
-		{
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_FRICTION;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			int16_t coeff = int16_t(std::clamp(int(0x4000 * Settings::FFBTireSlip), 0, 0x7FFF));
-			effect.condition.right_coeff[0] = coeff;
-			effect.condition.left_coeff[0] = coeff;
-
-			frictionEffectId = SDL_CreateHapticEffect(hapticDevice, &effect);
-			if (frictionEffectId >= 0)
-			{
-				SDL_RunHapticEffect(hapticDevice, frictionEffectId, SDL_HAPTIC_INFINITY);
-				spdlog::info("FFB: Friction effect created (id: {})", frictionEffectId);
-			}
-			else
-				spdlog::warn("FFB: Failed to create friction: {}", SDL_GetError());
-		}
 	}
 
 	// Deferred initialization -- called from Update() on first tick, NOT from DllMain.
@@ -323,13 +344,13 @@ namespace FFB
 		if (features & SDL_HAPTIC_AUTOCENTER)
 			SDL_SetHapticAutocenter(hapticDevice, 0);
 
-		// Set global gain (combines user strength * torque scale)
+		// Set global gain (user strength only -- torque scaling applied per-force)
 		if (features & SDL_HAPTIC_GAIN)
 		{
-			int gain = int(Settings::FFBGlobalStrength * wheelTorqueScale * 100.0f);
+			int gain = int(Settings::FFBGlobalStrength * 100.0f);
 			gain = std::clamp(gain, 0, 100);
 			SDL_SetHapticGain(hapticDevice, gain);
-			spdlog::info("FFB: Global gain set to {}%", gain);
+			spdlog::info("FFB: Global gain set to {}% (torque scale {:.3f} applied to steering weight only)", gain, wheelTorqueScale);
 		}
 
 		CreateEffects(features);
@@ -339,9 +360,34 @@ namespace FFB
 		return true;
 	}
 
+	int updateCounter = 0;
+
+	// Check if the game is in a state where FFB should be active
+	static bool IsInGameplay()
+	{
+		if (!Game::current_mode) return false;
+		GameState state = (GameState)*Game::current_mode;
+		return state == STATE_GAME ||
+			state == STATE_START ||
+			state == STATE_GOAL ||
+			state == STATE_TIMEUP ||
+			state == STATE_SMPAUSEMENU;
+	}
+
 	void Update(EVWORK_CAR* car)
 	{
 		if (!car)
+			return;
+
+		// Telemetry shared memory: init once, write every frame (independent of FFB)
+		if (!Telemetry::initialized && Settings::TelemetryEnabled)
+			Telemetry::Init();
+
+		bool inGameplay = IsInGameplay();
+		Telemetry::Write(car, inGameplay);
+
+		// FFB processing only when DirectInputFFB is enabled
+		if (!Settings::DirectInputFFB)
 			return;
 
 		// Lazy initialization: SDL_Init must happen AFTER DllMain returns
@@ -351,6 +397,34 @@ namespace FFB
 			if (!DeferredInit())
 				return;
 		}
+
+		// Zero forces when not in gameplay (menus, results, etc.)
+		// Prevents the wheel from staying stuck at the last force level
+		if (!inGameplay)
+		{
+			if (constantEffectId >= 0 && prevConstantLevel != 0)
+			{
+				SDL_HapticEffect effect;
+				memset(&effect, 0, sizeof(effect));
+				effect.type = SDL_HAPTIC_CONSTANT;
+				effect.constant.length = SDL_HAPTIC_INFINITY;
+				effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
+				effect.constant.direction.dir[0] = 1;
+				effect.constant.level = 0;
+				SDL_UpdateHapticEffect(hapticDevice, constantEffectId, &effect);
+				prevConstantLevel = 0;
+				smoothedLateral = 0.0f;
+				crashImpulseTimer = 0;
+			}
+			return;
+		}
+
+		// Throttle FFB updates: condition effects (spring/damper/friction) update
+		// every 4th frame (~15 Hz), constant force + sine every 2nd frame (~30 Hz).
+		// This reduces IPC calls to the wheel driver from 300/sec to ~75/sec.
+		updateCounter++;
+		bool updateConditions = (updateCounter % 4 == 0);
+		bool updateForces = (updateCounter % 2 == 0);
 
 		// Read telemetry from EVWORK_CAR
 		float speed = car->field_1C4;                      // Normalized speed (0.0 - ~1.0+)
@@ -379,82 +453,98 @@ namespace FFB
 		SDL_HapticEffect effect;
 
 		// ================================================================
-		// CENTER SPRING -- speed-dependent self-centering
+		// CENTER SPRING + DAMPER -- fixed coefficients, NO runtime updates.
+		// DD wheel drivers (Moza, Fanatec, etc.) create motor transients when
+		// effect parameters are reprogrammed via SDL_UpdateHapticEffect, which
+		// causes a ~15 Hz vibration pattern. Coefficients are set once during
+		// CreateEffects and left running. Speed-dependent centering is handled
+		// by the constant force instead.
 		// ================================================================
-		if (springEffectId >= 0)
-		{
-			// Soft at standstill, progressively stiffer with speed
-			float springBase = 0.15f + 0.85f * speedNorm;
-			int springCoeff = int(0x7FFF * springBase * Settings::FFBSpringStrength);
-			springCoeff = std::clamp(springCoeff, 0, 0x7FFF);
-
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_SPRING;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			effect.condition.right_coeff[0] = int16_t(springCoeff);
-			effect.condition.left_coeff[0] = int16_t(springCoeff);
-			effect.condition.deadband[0] = 0;
-			effect.condition.center[0] = 0;
-
-			SDL_UpdateHapticEffect(hapticDevice, springEffectId, &effect);
-		}
-
-		// ================================================================
-		// DAMPER -- speed-dependent resistance to rapid steering
-		// ================================================================
-		if (damperEffectId >= 0)
-		{
-			float damperBase = 0.2f + 0.8f * speedNorm;
-			int damperCoeff = int(0x7FFF * damperBase * Settings::FFBDamperStrength);
-			damperCoeff = std::clamp(damperCoeff, 0, 0x7FFF);
-
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_DAMPER;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			effect.condition.right_coeff[0] = int16_t(damperCoeff);
-			effect.condition.left_coeff[0] = int16_t(damperCoeff);
-
-			SDL_UpdateHapticEffect(hapticDevice, damperEffectId, &effect);
-		}
 
 		// ================================================================
 		// CONSTANT FORCE -- steering weight + collision + gear shift
 		// ================================================================
-		if (constantEffectId >= 0)
+
+		// Always update smoothed lateral (even on non-update frames) for consistent filtering
+		{
+			float lateralCombined = (lateralForce1 + lateralForce2);
+			// Exponential moving average: alpha 0.03 = heavy smoothing (~0.5 sec time constant)
+			// DD wheels amplify every force change as physical torque, so we need aggressive
+			// filtering to turn the noisy per-frame lateral oscillations into smooth force curves.
+			constexpr float alpha = 0.03f;
+			smoothedLateral = alpha * lateralCombined + (1.0f - alpha) * smoothedLateral;
+		}
+
+		// Track speed history for crash detection (sliding window)
+		speedHistory[speedHistoryIdx % 8] = speed;
+		speedHistoryIdx++;
+
+		// Detect crash: compare current speed to speed 6 frames ago
+		// Wall deceleration is spread across many frames, so per-frame delta is tiny.
+		// A 6-frame window (~100ms) captures the full deceleration event.
+		// Observed wall hit deltas: ~0.04-0.06 over 6 frames.
+		if (crashImpulseTimer <= 0 && speedHistoryIdx > 6)
+		{
+			float oldSpeed = speedHistory[(speedHistoryIdx - 6) % 8];
+			float windowDelta = oldSpeed - speed;
+			if (windowDelta > 0.03f && speed > 0.1f) // 3% speed loss at speed = wall hit
+			{
+				float impactMag = std::clamp((windowDelta - 0.03f) * 12.0f, 0.8f, 1.0f);
+				// Use steering angle for crash direction: you hit the wall on the side you steer toward
+				float impactDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f; // Push away from wall
+
+				crashImpulseForce = impactDir * impactMag * Settings::FFBWallImpact;
+				crashImpulseTimer = 90; // 1.5 sec cooldown (force active first 10 frames, then lockout)
+				spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} mag={:.2f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
+					windowDelta, impactMag, impactDir, steeringAngle, crashImpulseForce);
+			}
+		}
+
+		// Also trigger on flags8 0x1000 edge (contact event)
+		{
+			bool collisionActive = (stateFlags & 0x1000) != 0;
+			bool wasColliding = (prevCollisionFlags & 0x1000) != 0;
+			if (collisionActive && !wasColliding && crashImpulseTimer <= 0)
+			{
+				// Use steering angle for crash direction (same logic as speed-delta path)
+				float flagDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
+				crashImpulseForce = flagDir * 0.8f * Settings::FFBWallImpact;
+				crashImpulseTimer = 90;
+				spdlog::info("FFB: CRASH impulse from flags8 0x1000! dir={:.0f} steerAngle={:.2f} force={:.2f}",
+					flagDir, steeringAngle, crashImpulseForce);
+			}
+		}
+
+		if (constantEffectId >= 0 && updateForces)
 		{
 			float totalForce = 0.0f;
 
-			// --- Steering weight from lateral forces ---
-			// The lateral force fields indicate cornering load.
-			// Positive = force pushing one way, negative = the other.
-			// We combine them and scale by speed for a natural cornering feel.
-			float lateralCombined = (lateralForce1 + lateralForce2);
-			float steeringWeight = lateralCombined * speedNorm * Settings::FFBSteeringWeight;
+			// --- Steering weight from smoothed lateral forces ---
+			// Constant-force-only approach (no spring/damper/friction effects).
+			// The steering weight creates a directional pull during turns.
+			// With condition effects eliminated, we can use a higher range
+			// without DD oscillation. The 0.35 scaling caps at ~35% of motor
+			// range for the smoothed lateral forces.
+			float lateralNorm = std::clamp(smoothedLateral / 24.0f, -1.0f, 1.0f);
+			float steeringWeight = lateralNorm * speedNorm * Settings::FFBSteeringWeight * 0.35f * wheelTorqueScale;
 			totalForce += steeringWeight;
 
-			// --- Wall/collision impact ---
-			bool collisionActive = (stateFlags & 0x40) != 0;
-			bool wasColliding = (prevCollisionFlags & 0x40) != 0;
+			// --- Crash impulse (time-limited jolt with long cooldown) ---
+			// Timer starts at 90: frames 90-81 = active jolt, 80-1 = cooldown (no force, no re-trigger)
+			if (crashImpulseTimer > 0)
+			{
+				if (crashImpulseTimer > 80) // Active jolt phase (first 10 frames = ~167ms)
+				{
+					float envelope;
+					if (crashImpulseTimer > 85)
+						envelope = 1.0f; // Full force for first ~83ms
+					else
+						envelope = float(crashImpulseTimer - 80) / 5.0f; // Decay over ~83ms
 
-			if (collisionActive && !wasColliding)
-			{
-				// New collision onset -- sharp jolt
-				float impactDir = (impactForce >= 0.0f) ? 1.0f : -1.0f;
-				float impactMag = std::clamp(std::abs(impactForce) * 2.0f, 0.0f, 1.0f);
-				totalForce += impactDir * impactMag * Settings::FFBWallImpact;
-			}
-			else if (collisionActive)
-			{
-				// Sustained collision -- lighter continuous force
-				totalForce += impactForce * 0.5f * Settings::FFBWallImpact;
+					totalForce += crashImpulseForce * envelope;
+				}
+				// Frames 80-1: cooldown only, no force applied, prevents re-trigger
+				crashImpulseTimer--;
 			}
 
 			// --- Gear shift kick ---
@@ -469,6 +559,44 @@ namespace FFB
 				gearShiftTimer--;
 			}
 
+			// --- Surface rumble (off-road / rumble strip) ---
+			// Overlaid on the constant force as rapid alternating pulses.
+			// Uses updateCounter as a phase source (~30 Hz oscillation at 60fps
+			// since we update every 2nd frame). No separate sine effect needed.
+			if (offRoad && speed > 0.05f)
+			{
+				float rumblePhase = (updateCounter % 4 < 2) ? 1.0f : -1.0f;
+				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.2f * wheelTorqueScale;
+				totalForce += rumblePhase * rumbleIntensity;
+			}
+
+			// --- Tire slip rumble (high lateral forces = losing grip) ---
+			float lateralMag = std::abs(smoothedLateral);
+			if (lateralMag > 12.0f && speed > 0.1f)
+			{
+				float slipAmount = std::clamp((lateralMag - 12.0f) / 18.0f, 0.0f, 1.0f);
+				float slipPhase = (updateCounter % 3 < 2) ? 1.0f : -1.0f;
+				float slipRumble = slipPhase * slipAmount * Settings::FFBTireSlip * 0.12f * wheelTorqueScale;
+				totalForce += slipRumble;
+			}
+
+			// --- Engine rev vibration (stationary + low speed) ---
+			// Uses the game's own vibration motor values as a proxy for engine intensity.
+			// Felt most at the start line when revving before the countdown finishes.
+			if (speed < 0.15f)
+			{
+				float engineIntensity = std::max(VibrationLeftMotor, VibrationRightMotor);
+				if (engineIntensity > 0.05f)
+				{
+					// Rapid alternating force simulating engine vibration
+					float revPhase = (updateCounter % 3 < 2) ? 1.0f : -1.0f;
+					// Scale down at higher speeds so it fades into road feel naturally
+					float speedFade = 1.0f - (speed / 0.15f);
+					float revForce = revPhase * engineIntensity * speedFade * 0.25f * wheelTorqueScale;
+					totalForce += revForce;
+				}
+			}
+
 			// Apply inversion if configured
 			if (Settings::FFBInvertForce)
 				totalForce = -totalForce;
@@ -476,20 +604,28 @@ namespace FFB
 			totalForce = std::clamp(totalForce, -1.0f, 1.0f);
 			int16_t level = int16_t(totalForce * 32767.0f);
 
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_CONSTANT;
-			effect.constant.length = SDL_HAPTIC_INFINITY;
-			effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.constant.direction.dir[0] = 1;
-			effect.constant.level = level;
+			// Deadband: skip updating the effect if the level barely changed.
+			// On DD wheels, every SDL_UpdateHapticEffect causes a motor torque change.
+			// Tiny changes (a few LSBs) are felt as micro-vibrations.
+			int16_t delta = std::abs(level - prevConstantLevel);
+			if (delta > 500 || crashImpulseTimer > 80) // ~1.5% deadband unless crash jolt active
+			{
+				memset(&effect, 0, sizeof(effect));
+				effect.type = SDL_HAPTIC_CONSTANT;
+				effect.constant.length = SDL_HAPTIC_INFINITY;
+				effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
+				effect.constant.direction.dir[0] = 1;
+				effect.constant.level = level;
 
-			SDL_UpdateHapticEffect(hapticDevice, constantEffectId, &effect);
+				SDL_UpdateHapticEffect(hapticDevice, constantEffectId, &effect);
+				prevConstantLevel = level;
+			}
 		}
 
 		// ================================================================
 		// SINE WAVE -- rumble strips + road texture + tire slip vibration
 		// ================================================================
-		if (sineEffectId >= 0)
+		if (sineEffectId >= 0 && updateForces)
 		{
 			float sineMag = 0.0f;
 			uint16_t sinePeriod = 80; // Default: subtle 12.5 Hz road texture
@@ -508,12 +644,13 @@ namespace FFB
 			}
 
 			// Tire slip vibration -- high lateral forces indicate loss of grip
-			float lateralMag = std::abs(lateralForce1) + std::abs(lateralForce2);
-			if (lateralMag > 0.3f && speed > 0.1f)
+			// Use smoothed lateral for consistent feel (same filter as steering weight)
+			float lateralMag = std::abs(smoothedLateral);
+			if (lateralMag > 10.0f && speed > 0.1f) // Lateral forces range ~0-30
 			{
-				float slipIntensity = std::clamp((lateralMag - 0.3f) * 2.0f, 0.0f, 1.0f);
+				float slipIntensity = std::clamp((lateralMag - 10.0f) / 20.0f, 0.0f, 1.0f);
 				sineMag += slipIntensity * 0.5f * Settings::FFBTireSlip;
-				sinePeriod = std::min(sinePeriod, uint16_t(25)); // Fast 40 Hz buzz for slip
+				sinePeriod = std::min(sinePeriod, uint16_t(40)); // 25 Hz buzz for slip
 			}
 
 			sineMag = std::clamp(sineMag, 0.0f, 1.0f);
@@ -532,28 +669,19 @@ namespace FFB
 			SDL_UpdateHapticEffect(hapticDevice, sineEffectId, &effect);
 		}
 
-		// ================================================================
-		// FRICTION -- tire grip simulation (reduces when sliding)
-		// ================================================================
-		if (frictionEffectId >= 0)
+		// FRICTION -- fixed coefficients, same as spring/damper (no runtime updates)
+		// Coefficient set once in CreateEffects.
+
+		// Diagnostic logging: speed window delta + force level, every 2 seconds
+		static DWORD lastDiagTime = 0;
+		DWORD now = GetTickCount();
+		if (now - lastDiagTime >= 2000 && speedHistoryIdx > 6)
 		{
-			float lateralMag = std::abs(lateralForce1) + std::abs(lateralForce2);
-			// High lateral force = low grip = reduced friction FFB
-			float gripFactor = 1.0f - std::clamp(lateralMag * 2.0f, 0.0f, 0.8f);
-			int frictionCoeff = int(0x6000 * gripFactor * speedNorm * Settings::FFBTireSlip);
-			frictionCoeff = std::clamp(frictionCoeff, 0, 0x7FFF);
-
-			memset(&effect, 0, sizeof(effect));
-			effect.type = SDL_HAPTIC_FRICTION;
-			effect.condition.length = SDL_HAPTIC_INFINITY;
-			effect.condition.direction.type = SDL_HAPTIC_CARTESIAN;
-			effect.condition.direction.dir[0] = 1;
-			effect.condition.right_sat[0] = 0xFFFF;
-			effect.condition.left_sat[0] = 0xFFFF;
-			effect.condition.right_coeff[0] = int16_t(frictionCoeff);
-			effect.condition.left_coeff[0] = int16_t(frictionCoeff);
-
-			SDL_UpdateHapticEffect(hapticDevice, frictionEffectId, &effect);
+			lastDiagTime = now;
+			float oldSpd = speedHistory[(speedHistoryIdx - 6) % 8];
+			float winDelta = oldSpd - speed;
+			spdlog::info("FFB DIAG: spd={:.4f} prevSpd={:.4f} winDelta={:.4f} smoothLat={:.2f} constLvl={} flags8=0x{:X} crashTimer={}",
+				speed, oldSpd, winDelta, smoothedLateral, (int)prevConstantLevel, stateFlags, crashImpulseTimer);
 		}
 
 		// Store previous frame state for next-frame edge detection
@@ -564,6 +692,8 @@ namespace FFB
 
 	void Shutdown()
 	{
+		Telemetry::Shutdown();
+
 		if (!hapticDevice)
 			return;
 
@@ -608,7 +738,7 @@ public:
 
 	bool validate() override
 	{
-		return Settings::DirectInputFFB;
+		return Settings::DirectInputFFB || Settings::TelemetryEnabled;
 	}
 
 	bool apply() override

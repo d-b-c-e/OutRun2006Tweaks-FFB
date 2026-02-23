@@ -5,6 +5,9 @@
 #include <cstdlib>
 #include "Proxy.hpp"
 
+// Forward declaration — full definition in <dinput.h>, only pointer used here
+struct IDirectInput8A;
+
 // XAPOFX1_5.dll
 typedef DWORD(WINAPI* CreateFX_ptr)(REFCLSID clsid, void* pEffect);
 
@@ -37,9 +40,15 @@ typedef HRESULT(WINAPI* DirectInput8Create_ptr)(HINSTANCE hinst, DWORD dwVersion
 
 DirectInput8Create_ptr DirectInput8Create_orig;
 
+// Exposed for hooks_inputremap.cpp (not currently used but reserved for future DInput filtering)
+IDirectInput8A* g_RealDirectInput8 = nullptr;
+
 PLUGIN_API HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID* ppvOut, void* punkOuter)
 {
-    return DirectInput8Create_orig(hinst, dwVersion, riidltf, ppvOut, punkOuter);
+    HRESULT hr = DirectInput8Create_orig(hinst, dwVersion, riidltf, ppvOut, punkOuter);
+    if (SUCCEEDED(hr) && ppvOut && *ppvOut)
+        g_RealDirectInput8 = static_cast<IDirectInput8A*>(*ppvOut);
+    return hr;
 }
 
 // dxgi.dll
