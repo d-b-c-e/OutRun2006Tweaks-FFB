@@ -121,6 +121,15 @@ namespace Settings
 		spdlog::info(" - ImpulseVibrationLeftMultiplier: {}", ImpulseVibrationLeftMultiplier);
 		spdlog::info(" - ImpulseVibrationRightMultiplier: {}", ImpulseVibrationRightMultiplier);
 
+		spdlog::info(" - UseDirectInputRemap: {}", UseDirectInputRemap);
+		spdlog::info(" - DIRemapDeviceGuid: {}", DIRemapDeviceGuid);
+		spdlog::info(" - DIRemapSteeringAxis: {}", DIRemapSteeringAxis);
+		spdlog::info(" - DIRemapSteeringInvert: {}", DIRemapSteeringInvert);
+		spdlog::info(" - DIRemapAccelAxis: {}", DIRemapAccelAxis);
+		spdlog::info(" - DIRemapAccelInvert: {}", DIRemapAccelInvert);
+		spdlog::info(" - DIRemapBrakeAxis: {}", DIRemapBrakeAxis);
+		spdlog::info(" - DIRemapBrakeInvert: {}", DIRemapBrakeInvert);
+
 		spdlog::info(" - DirectInputFFB: {}", DirectInputFFB);
 		spdlog::info(" - FFBDevice: {}", FFBDevice);
 		spdlog::info(" - FFBGlobalStrength: {}", FFBGlobalStrength);
@@ -252,6 +261,64 @@ namespace Settings
 		ImpulseVibrationRightMultiplier = ini.Get("Controls", "ImpulseVibrationRightMultiplier", ImpulseVibrationRightMultiplier);
 		ImpulseVibrationRightMultiplier = std::clamp(ImpulseVibrationRightMultiplier, 0.0f, 1.0f);
 
+		UseDirectInputRemap = ini.Get("DirectInput", "UseDirectInputRemap", UseDirectInputRemap);
+		DIRemapDeviceGuid = ini.Get("DirectInput", "DeviceGuid", DIRemapDeviceGuid);
+		DIRemapSteeringAxis = ini.Get("DirectInput", "SteeringAxis", DIRemapSteeringAxis);
+		DIRemapSteeringAxis = std::clamp(DIRemapSteeringAxis, 0, 7);
+		DIRemapSteeringInvert = ini.Get("DirectInput", "SteeringInvert", DIRemapSteeringInvert);
+		DIRemapSteeringSensitivity = ini.Get("DirectInput", "SteeringSensitivity", DIRemapSteeringSensitivity);
+		DIRemapSteeringSensitivity = std::clamp(DIRemapSteeringSensitivity, 0.1f, 10.0f);
+		DIRemapAccelAxis = ini.Get("DirectInput", "AccelerationAxis", DIRemapAccelAxis);
+		DIRemapAccelAxis = std::clamp(DIRemapAccelAxis, 0, 7);
+		DIRemapAccelInvert = ini.Get("DirectInput", "AccelerationInvert", DIRemapAccelInvert);
+		DIRemapBrakeAxis = ini.Get("DirectInput", "BrakeAxis", DIRemapBrakeAxis);
+		DIRemapBrakeAxis = std::clamp(DIRemapBrakeAxis, 0, 7);
+		DIRemapBrakeInvert = ini.Get("DirectInput", "BrakeInvert", DIRemapBrakeInvert);
+		DIRemapButtonA = ini.Get("DirectInput", "ButtonA", DIRemapButtonA);
+		DIRemapButtonB = ini.Get("DirectInput", "ButtonB", DIRemapButtonB);
+		DIRemapButtonX = ini.Get("DirectInput", "ButtonX", DIRemapButtonX);
+		DIRemapButtonY = ini.Get("DirectInput", "ButtonY", DIRemapButtonY);
+		DIRemapButtonStart = ini.Get("DirectInput", "ButtonStart", DIRemapButtonStart);
+		DIRemapButtonBack = ini.Get("DirectInput", "ButtonBack", DIRemapButtonBack);
+		DIRemapButtonGearUp = ini.Get("DirectInput", "ButtonGearUp", DIRemapButtonGearUp);
+		DIRemapButtonGearDown = ini.Get("DirectInput", "ButtonGearDown", DIRemapButtonGearDown);
+		DIRemapButtonChangeView = ini.Get("DirectInput", "ButtonChangeView", DIRemapButtonChangeView);
+		DIRemapButtonSelUp = ini.Get("DirectInput", "ButtonSelUp", DIRemapButtonSelUp);
+		DIRemapButtonSelDown = ini.Get("DirectInput", "ButtonSelDown", DIRemapButtonSelDown);
+		DIRemapButtonSelLeft = ini.Get("DirectInput", "ButtonSelLeft", DIRemapButtonSelLeft);
+		DIRemapButtonSelRight = ini.Get("DirectInput", "ButtonSelRight", DIRemapButtonSelRight);
+
+		// [DirectInput.Shifter] — separate shifter device
+		DIShifterDeviceGuid = ini.Get("DirectInput.Shifter", "DeviceGuid", DIShifterDeviceGuid);
+		DIShifterEnabled = !DIShifterDeviceGuid.empty();
+		DIShifterGearMode = ini.Get("DirectInput.Shifter", "GearMode", DIShifterGearMode);
+		DIShifterButtonGearUp = ini.Get("DirectInput.Shifter", "ButtonGearUp", DIShifterButtonGearUp);
+		DIShifterButtonGearDown = ini.Get("DirectInput.Shifter", "ButtonGearDown", DIShifterButtonGearDown);
+		DIShifterButtonGear1 = ini.Get("DirectInput.Shifter", "ButtonGear1", DIShifterButtonGear1);
+		DIShifterButtonGear2 = ini.Get("DirectInput.Shifter", "ButtonGear2", DIShifterButtonGear2);
+		DIShifterButtonGear3 = ini.Get("DirectInput.Shifter", "ButtonGear3", DIShifterButtonGear3);
+		DIShifterButtonGear4 = ini.Get("DirectInput.Shifter", "ButtonGear4", DIShifterButtonGear4);
+		DIShifterButtonGear5 = ini.Get("DirectInput.Shifter", "ButtonGear5", DIShifterButtonGear5);
+		DIShifterButtonGear6 = ini.Get("DirectInput.Shifter", "ButtonGear6", DIShifterButtonGear6);
+		DIShifterButtonGearReverse = ini.Get("DirectInput.Shifter", "ButtonGearReverse", DIShifterButtonGearReverse);
+
+		// [DirectInput.Aux] — button box / stalk device
+		DIAuxDeviceGuid = ini.Get("DirectInput.Aux", "DeviceGuid", DIAuxDeviceGuid);
+		DIAuxEnabled = !DIAuxDeviceGuid.empty();
+		DIAuxButtonA = ini.Get("DirectInput.Aux", "ButtonA", DIAuxButtonA);
+		DIAuxButtonB = ini.Get("DirectInput.Aux", "ButtonB", DIAuxButtonB);
+		DIAuxButtonX = ini.Get("DirectInput.Aux", "ButtonX", DIAuxButtonX);
+		DIAuxButtonY = ini.Get("DirectInput.Aux", "ButtonY", DIAuxButtonY);
+		DIAuxButtonStart = ini.Get("DirectInput.Aux", "ButtonStart", DIAuxButtonStart);
+		DIAuxButtonBack = ini.Get("DirectInput.Aux", "ButtonBack", DIAuxButtonBack);
+		DIAuxButtonGearUp = ini.Get("DirectInput.Aux", "ButtonGearUp", DIAuxButtonGearUp);
+		DIAuxButtonGearDown = ini.Get("DirectInput.Aux", "ButtonGearDown", DIAuxButtonGearDown);
+		DIAuxButtonChangeView = ini.Get("DirectInput.Aux", "ButtonChangeView", DIAuxButtonChangeView);
+		DIAuxButtonSelUp = ini.Get("DirectInput.Aux", "ButtonSelUp", DIAuxButtonSelUp);
+		DIAuxButtonSelDown = ini.Get("DirectInput.Aux", "ButtonSelDown", DIAuxButtonSelDown);
+		DIAuxButtonSelLeft = ini.Get("DirectInput.Aux", "ButtonSelLeft", DIAuxButtonSelLeft);
+		DIAuxButtonSelRight = ini.Get("DirectInput.Aux", "ButtonSelRight", DIAuxButtonSelRight);
+
 		DirectInputFFB = ini.Get("FFB", "DirectInputFFB", DirectInputFFB);
 		FFBDevice = ini.Get("FFB", "FFBDevice", FFBDevice);
 		FFBGlobalStrength = ini.Get("FFB", "FFBGlobalStrength", FFBGlobalStrength);
@@ -275,6 +342,9 @@ namespace Settings
 		FFBWheelTorqueNm = ini.Get("FFB", "FFBWheelTorqueNm", FFBWheelTorqueNm);
 		FFBWheelTorqueNm = std::clamp(FFBWheelTorqueNm, 0.0f, 100.0f);
 		FFBInvertForce = ini.Get("FFB", "FFBInvertForce", FFBInvertForce);
+
+		TelemetryEnabled = ini.Get("Telemetry", "Enable", TelemetryEnabled);
+		TelemetrySharedMemName = ini.Get("Telemetry", "SharedMemName", TelemetrySharedMemName);
 
 		EnableHollyCourse2 = ini.Get("Misc", "EnableHollyCourse2", EnableHollyCourse2);
 		SkipIntroLogos = ini.Get("Misc", "SkipIntroLogos", SkipIntroLogos);

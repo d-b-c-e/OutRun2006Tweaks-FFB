@@ -142,6 +142,61 @@ namespace Settings
 	inline float ImpulseVibrationLeftMultiplier = 0.25f;
 	inline float ImpulseVibrationRightMultiplier = 0.25f;
 
+	// DirectInput axis/button remapping (mutually exclusive with UseNewInput)
+	inline bool UseDirectInputRemap = false;
+	inline std::string DIRemapDeviceGuid = "auto";
+	inline int DIRemapSteeringAxis = 0;
+	inline bool DIRemapSteeringInvert = false;
+	inline float DIRemapSteeringSensitivity = 1.0f;
+	inline int DIRemapAccelAxis = 1;
+	inline bool DIRemapAccelInvert = false;
+	inline int DIRemapBrakeAxis = 2;
+	inline bool DIRemapBrakeInvert = false;
+	inline int DIRemapButtonA = 0;
+	inline int DIRemapButtonB = 1;
+	inline int DIRemapButtonX = 2;
+	inline int DIRemapButtonY = 3;
+	inline int DIRemapButtonStart = 7;
+	inline int DIRemapButtonBack = 6;
+	inline int DIRemapButtonGearUp = 4;
+	inline int DIRemapButtonGearDown = 5;
+	inline int DIRemapButtonChangeView = 8;
+	inline int DIRemapButtonSelUp = -1;
+	inline int DIRemapButtonSelDown = -1;
+	inline int DIRemapButtonSelLeft = -1;
+	inline int DIRemapButtonSelRight = -1;
+
+	// [DirectInput.Shifter] — separate shifter device
+	inline bool DIShifterEnabled = false;
+	inline std::string DIShifterDeviceGuid = "";
+	inline std::string DIShifterGearMode = "sequential"; // "sequential" or "hpattern"
+	inline int DIShifterButtonGearUp = 4;
+	inline int DIShifterButtonGearDown = 5;
+	inline int DIShifterButtonGear1 = -1;
+	inline int DIShifterButtonGear2 = -1;
+	inline int DIShifterButtonGear3 = -1;
+	inline int DIShifterButtonGear4 = -1;
+	inline int DIShifterButtonGear5 = -1;
+	inline int DIShifterButtonGear6 = -1;
+	inline int DIShifterButtonGearReverse = -1;
+
+	// [DirectInput.Aux] — button box / stalk device
+	inline bool DIAuxEnabled = false;
+	inline std::string DIAuxDeviceGuid = "";
+	inline int DIAuxButtonA = -1;
+	inline int DIAuxButtonB = -1;
+	inline int DIAuxButtonX = -1;
+	inline int DIAuxButtonY = -1;
+	inline int DIAuxButtonStart = -1;
+	inline int DIAuxButtonBack = -1;
+	inline int DIAuxButtonGearUp = -1;
+	inline int DIAuxButtonGearDown = -1;
+	inline int DIAuxButtonChangeView = -1;
+	inline int DIAuxButtonSelUp = -1;
+	inline int DIAuxButtonSelDown = -1;
+	inline int DIAuxButtonSelLeft = -1;
+	inline int DIAuxButtonSelRight = -1;
+
 	inline bool DirectInputFFB = false;
 	inline int FFBDevice = -1;
 	inline float FFBGlobalStrength = 1.0f;
@@ -155,6 +210,10 @@ namespace Settings
 	inline float FFBTireSlip = 0.8f;
 	inline float FFBWheelTorqueNm = 0.0f;
 	inline bool FFBInvertForce = false;
+
+	// Telemetry shared memory (for SimHub / bass shakers)
+	inline bool TelemetryEnabled = false;
+	inline std::string TelemetrySharedMemName = "OutRun2006Telemetry";
 
 	inline int EnableHollyCourse2 = 1;
 	inline bool SkipIntroLogos = false;
