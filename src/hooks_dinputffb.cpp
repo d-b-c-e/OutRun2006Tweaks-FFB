@@ -120,6 +120,9 @@ namespace FFB
 	static int sineEffectId = -1;
 	static int frictionEffectId = -1;
 
+	// Watchdog: timestamp of last Update() call for staleness detection
+	static volatile DWORD lastUpdateTick = 0;
+
 	// Previous frame state for edge detection
 	static uint32_t prevGear = 0;
 	static uint32_t prevCollisionFlags = 0;
@@ -362,6 +365,11 @@ namespace FFB
 
 	int updateCounter = 0;
 
+	// Phase accumulators for sine wave synthesis (smooth vibration effects)
+	float rumblePhase = 0.0f;
+	float slipPhase = 0.0f;
+	float enginePhase = 0.0f;
+
 	// Check if the game is in a state where FFB should be active
 	static bool IsInGameplay()
 	{
@@ -374,10 +382,41 @@ namespace FFB
 			state == STATE_SMPAUSEMENU;
 	}
 
+	// Called from a broad game hook to zero forces if Update() hasn't
+	// been called recently (handles menu transitions where GamePlCar_Ctrl stops).
+	void CheckWatchdog()
+	{
+		if (!initialized || !hapticDevice || constantEffectId < 0)
+			return;
+
+		DWORD now = GetTickCount();
+		DWORD elapsed = now - lastUpdateTick;
+
+		// If Update() hasn't been called for 250ms and forces are non-zero, zero them
+		if (elapsed > 250 && lastUpdateTick > 0 && prevConstantLevel != 0)
+		{
+			SDL_HapticEffect effect;
+			memset(&effect, 0, sizeof(effect));
+			effect.type = SDL_HAPTIC_CONSTANT;
+			effect.constant.length = SDL_HAPTIC_INFINITY;
+			effect.constant.direction.type = SDL_HAPTIC_CARTESIAN;
+			effect.constant.direction.dir[0] = 1;
+			effect.constant.level = 0;
+			SDL_UpdateHapticEffect(hapticDevice, constantEffectId, &effect);
+			prevConstantLevel = 0;
+			smoothedLateral = 0.0f;
+			crashImpulseTimer = 0;
+			spdlog::info("FFB: Watchdog zeroed forces (no Update for {}ms)", elapsed);
+		}
+	}
+
 	void Update(EVWORK_CAR* car)
 	{
 		if (!car)
 			return;
+
+		// Record timestamp for watchdog staleness detection
+		lastUpdateTick = GetTickCount();
 
 		// Telemetry shared memory: init once, write every frame (independent of FFB)
 		if (!Telemetry::initialized && Settings::TelemetryEnabled)
@@ -419,12 +458,14 @@ namespace FFB
 			return;
 		}
 
-		// Throttle FFB updates: condition effects (spring/damper/friction) update
-		// every 4th frame (~15 Hz), constant force + sine every 2nd frame (~30 Hz).
-		// This reduces IPC calls to the wheel driver from 300/sec to ~75/sec.
+		// Update rates:
+		// - Constant force: every frame (60 Hz) for responsive steering feel.
+		//   Prior 30 Hz throttle caused sluggish force transitions.
+		// - Condition effects (spring/damper): every 4th frame (~15 Hz) since
+		//   DD wheel drivers create motor transients on reprogramming.
 		updateCounter++;
 		bool updateConditions = (updateCounter % 4 == 0);
-		bool updateForces = (updateCounter % 2 == 0);
+		bool updateForces = true;
 
 		// Read telemetry from EVWORK_CAR
 		float speed = car->field_1C4;                      // Normalized speed (0.0 - ~1.0+)
@@ -468,10 +509,11 @@ namespace FFB
 		// Always update smoothed lateral (even on non-update frames) for consistent filtering
 		{
 			float lateralCombined = (lateralForce1 + lateralForce2);
-			// Exponential moving average: alpha 0.03 = heavy smoothing (~0.5 sec time constant)
-			// DD wheels amplify every force change as physical torque, so we need aggressive
-			// filtering to turn the noisy per-frame lateral oscillations into smooth force curves.
-			constexpr float alpha = 0.03f;
+			// Dual-rate EMA: fast attack (0.25) for responsive corner entry,
+			// slow decay (0.10) for smooth force release when straightening.
+			// This mimics real self-aligning torque behavior — builds quickly
+			// as you enter a turn, fades gradually as you exit.
+			float alpha = (std::abs(lateralCombined) > std::abs(smoothedLateral)) ? 0.25f : 0.10f;
 			smoothedLateral = alpha * lateralCombined + (1.0f - alpha) * smoothedLateral;
 		}
 
@@ -495,6 +537,9 @@ namespace FFB
 
 				crashImpulseForce = impactDir * impactMag * Settings::FFBWallImpact;
 				crashImpulseTimer = 90; // 1.5 sec cooldown (force active first 10 frames, then lockout)
+				// Reset lateral EMA so the collision physics spike doesn't sustain
+				// a "pinned" steering weight force after the crash impulse ends.
+				smoothedLateral = 0.0f;
 				spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} mag={:.2f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
 					windowDelta, impactMag, impactDir, steeringAngle, crashImpulseForce);
 			}
@@ -510,6 +555,7 @@ namespace FFB
 				float flagDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
 				crashImpulseForce = flagDir * 0.8f * Settings::FFBWallImpact;
 				crashImpulseTimer = 90;
+				smoothedLateral = 0.0f; // Reset EMA to prevent post-crash pinning
 				spdlog::info("FFB: CRASH impulse from flags8 0x1000! dir={:.0f} steerAngle={:.2f} force={:.2f}",
 					flagDir, steeringAngle, crashImpulseForce);
 			}
@@ -519,15 +565,35 @@ namespace FFB
 		{
 			float totalForce = 0.0f;
 
-			// --- Steering weight from smoothed lateral forces ---
-			// Constant-force-only approach (no spring/damper/friction effects).
-			// The steering weight creates a directional pull during turns.
-			// With condition effects eliminated, we can use a higher range
-			// without DD oscillation. The 0.35 scaling caps at ~35% of motor
-			// range for the smoothed lateral forces.
-			float lateralNorm = std::clamp(smoothedLateral / 24.0f, -1.0f, 1.0f);
-			float steeringWeight = lateralNorm * speedNorm * Settings::FFBSteeringWeight * 0.35f * wheelTorqueScale;
-			totalForce += steeringWeight;
+			// --- Steering weight (self-aligning torque approximation) ---
+			// Uses an inverted-U SAT curve: force builds linearly at low slip,
+			// peaks at ~70% of max lateral G, then drops — giving the driver
+			// an "understeer warning" as the wheel goes light before grip is lost.
+			// Suppressed during active crash impulse to prevent force stacking.
+			if (crashImpulseTimer <= 80)
+			{
+				float lateralNorm = std::clamp(smoothedLateral / 24.0f, -1.0f, 1.0f);
+
+				// SAT curve: inverted-U with drop-off beyond peak grip
+				float absLat = std::abs(lateralNorm);
+				float satForce;
+				if (absLat < 0.7f)
+				{
+					satForce = lateralNorm; // Linear region
+				}
+				else
+				{
+					// Beyond peak grip: force drops (pneumatic trail collapse)
+					float sign = (lateralNorm > 0.0f) ? 1.0f : -1.0f;
+					float dropoff = 1.0f - 2.0f * (absLat - 0.7f);
+					satForce = sign * 0.7f * std::max(dropoff, 0.4f);
+				}
+
+				float steeringWeight = satForce * speedNorm * Settings::FFBSteeringWeight * 0.12f * wheelTorqueScale;
+				float maxSteeringForce = 0.12f * wheelTorqueScale;
+				steeringWeight = std::clamp(steeringWeight, -maxSteeringForce, maxSteeringForce);
+				totalForce += steeringWeight;
+			}
 
 			// --- Crash impulse (time-limited jolt with long cooldown) ---
 			// Timer starts at 90: frames 90-81 = active jolt, 80-1 = cooldown (no force, no re-trigger)
@@ -560,55 +626,85 @@ namespace FFB
 			}
 
 			// --- Surface rumble (off-road / rumble strip) ---
-			// Overlaid on the constant force as rapid alternating pulses.
-			// Uses updateCounter as a phase source (~30 Hz oscillation at 60fps
-			// since we update every 2nd frame). No separate sine effect needed.
+			// Sine wave synthesis at 30 Hz for smooth vibration feel on DD wheels.
+			// Square waves have harsh harmonics that feel buzzy; sine is natural.
 			if (offRoad && speed > 0.05f)
 			{
-				float rumblePhase = (updateCounter % 4 < 2) ? 1.0f : -1.0f;
+				rumblePhase = std::fmod(rumblePhase + 30.0f / 60.0f * 6.2832f, 6.2832f);
+				float rumbleWave = std::sin(rumblePhase);
 				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.2f * wheelTorqueScale;
-				totalForce += rumblePhase * rumbleIntensity;
+				totalForce += rumbleWave * rumbleIntensity;
+			}
+			else
+			{
+				rumblePhase = 0.0f; // Reset phase when not on rumble surface
 			}
 
 			// --- Tire slip rumble (high lateral forces = losing grip) ---
+			// Sine wave at 22 Hz — slightly offset from rumble strip frequency
+			// to avoid harmonic reinforcement when both are active.
 			float lateralMag = std::abs(smoothedLateral);
 			if (lateralMag > 12.0f && speed > 0.1f)
 			{
+				slipPhase = std::fmod(slipPhase + 22.0f / 60.0f * 6.2832f, 6.2832f);
+				float slipWave = std::sin(slipPhase);
 				float slipAmount = std::clamp((lateralMag - 12.0f) / 18.0f, 0.0f, 1.0f);
-				float slipPhase = (updateCounter % 3 < 2) ? 1.0f : -1.0f;
-				float slipRumble = slipPhase * slipAmount * Settings::FFBTireSlip * 0.12f * wheelTorqueScale;
+				float slipRumble = slipWave * slipAmount * Settings::FFBTireSlip * 0.12f * wheelTorqueScale;
 				totalForce += slipRumble;
+			}
+			else
+			{
+				slipPhase = 0.0f;
 			}
 
 			// --- Engine rev vibration (stationary + low speed) ---
-			// Uses the game's own vibration motor values as a proxy for engine intensity.
-			// Felt most at the start line when revving before the countdown finishes.
+			// Sine wave at 15 Hz for smooth idle rumble (not buzzy square wave).
 			if (speed < 0.15f)
 			{
-				float engineIntensity = std::max(VibrationLeftMotor, VibrationRightMotor);
-				if (engineIntensity > 0.05f)
-				{
-					// Rapid alternating force simulating engine vibration
-					float revPhase = (updateCounter % 3 < 2) ? 1.0f : -1.0f;
-					// Scale down at higher speeds so it fades into road feel naturally
-					float speedFade = 1.0f - (speed / 0.15f);
-					float revForce = revPhase * engineIntensity * speedFade * 0.25f * wheelTorqueScale;
-					totalForce += revForce;
-				}
+				enginePhase = std::fmod(enginePhase + 15.0f / 60.0f * 6.2832f, 6.2832f);
+				float engineWave = std::sin(enginePhase);
+
+				float engineIntensity = 0.6f;
+				float motorVal = std::max(VibrationLeftMotor, VibrationRightMotor);
+				if (motorVal > 0.05f)
+					engineIntensity = motorVal;
+
+				float speedFade = 1.0f - (speed / 0.15f);
+				float revForce = engineWave * engineIntensity * speedFade * 0.25f * wheelTorqueScale;
+				totalForce += revForce;
+			}
+			else
+			{
+				enginePhase = 0.0f;
 			}
 
 			// Apply inversion if configured
 			if (Settings::FFBInvertForce)
 				totalForce = -totalForce;
 
-			totalForce = std::clamp(totalForce, -1.0f, 1.0f);
+			// Soft saturation via tanh: preserves relative force differences
+			// near the limit instead of hard-clipping to +/-1.0.
+			// Forces below ~0.5 are nearly linear; above 0.8 they compress smoothly.
+			totalForce = std::tanh(totalForce);
 			int16_t level = int16_t(totalForce * 32767.0f);
 
-			// Deadband: skip updating the effect if the level barely changed.
-			// On DD wheels, every SDL_UpdateHapticEffect causes a motor torque change.
-			// Tiny changes (a few LSBs) are felt as micro-vibrations.
+			// Slew-rate limiter: prevent micro-oscillations on DD wheels
+			// by capping how fast the force can change between frames.
+			// Max 6% change per frame (~60 Hz = full sweep in ~280ms).
+			// Crash impulses and gear shift kicks bypass the limiter
+			// so they feel instant and don't get "pinned" by slow decay.
+			int16_t slewDelta = level - prevConstantLevel;
+			constexpr int16_t maxSlew = 2000; // ~6% of 32768
+			bool bypassSlew = (crashImpulseTimer > 80) || (gearShiftTimer > 0);
+			if (std::abs(slewDelta) > maxSlew && !bypassSlew)
+				level = prevConstantLevel + ((slewDelta > 0) ? maxSlew : -maxSlew);
+
+			// Deadband: skip updating if the level barely changed.
+			// Reduced from 500 (1.5%) to 200 (0.6%) — the slew-rate limiter
+			// now handles micro-oscillation prevention, so we can use a
+			// tighter deadband for better low-force detail.
 			int16_t delta = std::abs(level - prevConstantLevel);
-			if (delta > 500 || crashImpulseTimer > 80) // ~1.5% deadband unless crash jolt active
+			if (delta > 200 || crashImpulseTimer > 80)
 			{
 				memset(&effect, 0, sizeof(effect));
 				effect.type = SDL_HAPTIC_CONSTANT;

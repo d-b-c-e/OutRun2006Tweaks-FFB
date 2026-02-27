@@ -52,9 +52,13 @@ namespace DInputRemap
 	struct HPatternState
 	{
 		int targetGear = 0;       // 0=neutral, 1-6=forward, -1=reverse
-		bool shiftCooldown = false;
+		int cooldownFrames = 0;   // frames remaining before next shift allowed
+		int prevTargetGear = 0;   // for edge detection
+		uint32_t cachedMask = 0;  // per-frame cached H-pattern emissions
+		bool maskComputed = false; // reset each frame in Poll()
 	};
 	static HPatternState hpattern;
+	static constexpr int HPATTERN_COOLDOWN = 6; // ~100ms at 60fps (faster for multi-gear jumps)
 
 	// ---------- Axis helpers ----------
 
@@ -377,6 +381,39 @@ namespace DInputRemap
 		PollSlot(shifter);
 		PollSlot(aux);
 		UpdateHPattern();
+
+		// Reset per-frame H-pattern cache so it's recomputed once this frame
+		hpattern.maskComputed = false;
+
+		// Tick cooldown
+		if (hpattern.cooldownFrames > 0)
+			hpattern.cooldownFrames--;
+
+		// Diagnostic: log POV state and ALL button presses (first 60 seconds)
+		static DWORD diagStartTick = 0;
+		if (diagStartTick == 0) diagStartTick = tick;
+		if (primary.device && (tick - diagStartTick) < 60000)
+		{
+			// Log POV changes (all 4 POV hats)
+			for (int p = 0; p < 4; p++)
+			{
+				DWORD pov = primary.currentState.rgdwPOV[p];
+				DWORD prevPov = primary.previousState.rgdwPOV[p];
+				if (pov != prevPov)
+				{
+					spdlog::info("DInputRemap: POV[{}] changed: {} -> {} (0x{:08X} -> 0x{:08X})",
+						p, prevPov, pov, prevPov, pov);
+				}
+			}
+			// Log ALL button presses (full 128 range)
+			for (int i = 0; i < 128; i++)
+			{
+				if ((primary.currentState.rgbButtons[i] & 0x80) && !(primary.previousState.rgbButtons[i] & 0x80))
+				{
+					spdlog::info("DInputRemap: Button {} pressed on primary device", i);
+				}
+			}
+		}
 	}
 
 	// ---------- Axis reading (primary slot only) ----------
@@ -494,12 +531,25 @@ namespace DInputRemap
 		}
 	}
 
+	// In H-pattern mode, suppress primary device paddle GearUp/GearDown
+	// to prevent paddles from fighting the H-pattern state machine.
+	static bool ShouldSuppressPrimary(SwitchId id)
+	{
+		if (Settings::DIShifterGearMode == "hpattern" && shifter.device &&
+			(id == SwitchId::GearUp || id == SwitchId::GearDown))
+			return true;
+		return false;
+	}
+
 	// Check if a SwitchId button is pressed on any slot
 	static bool IsButtonPressedAny(SwitchId id)
 	{
-		// Primary
-		if (IsButtonPressed(primary, ButtonForSwitchPrimary(id)))
-			return true;
+		// Primary (suppressed for gear buttons in H-pattern mode)
+		if (!ShouldSuppressPrimary(id))
+		{
+			if (IsButtonPressed(primary, ButtonForSwitchPrimary(id)))
+				return true;
+		}
 		// Aux
 		if (IsButtonPressed(aux, ButtonForSwitchAux(id)))
 			return true;
@@ -515,8 +565,11 @@ namespace DInputRemap
 	// Check if a SwitchId button was pressed on any slot (previous frame)
 	static bool WasButtonPressedAny(SwitchId id)
 	{
-		if (WasButtonPressed(primary, ButtonForSwitchPrimary(id)))
-			return true;
+		if (!ShouldSuppressPrimary(id))
+		{
+			if (WasButtonPressed(primary, ButtonForSwitchPrimary(id)))
+				return true;
+		}
 		if (WasButtonPressed(aux, ButtonForSwitchAux(id)))
 			return true;
 		if (Settings::DIShifterGearMode == "sequential")
@@ -605,28 +658,42 @@ namespace DInputRemap
 				mask |= (1 << i);
 		}
 
-		// H-pattern synthetic GearUp/GearDown edges
-		if (Settings::DIShifterGearMode == "hpattern" && hpattern.targetGear != 0 && Game::is_in_game())
+		// H-pattern synthetic GearUp/GearDown edges (computed once per frame)
+		// Continuously emits shifts toward targetGear until currentGear matches.
+		// This allows multi-gear jumps (e.g. 5th->3rd) by emitting one shift
+		// per cooldown period until the target is reached.
+		if (Settings::DIShifterGearMode == "hpattern" && Game::is_in_game())
 		{
-			EVWORK_CAR* car = Game::pl_car();
-			if (car)
+			if (!hpattern.maskComputed)
 			{
-				int currentGear = static_cast<int>(car->cur_gear_208);
-				if (hpattern.targetGear > currentGear && !hpattern.shiftCooldown)
+				hpattern.cachedMask = 0;
+				hpattern.maskComputed = true;
+
+				if (hpattern.targetGear != 0 && hpattern.cooldownFrames == 0)
 				{
-					mask |= (1 << static_cast<int>(SwitchId::GearUp));
-					hpattern.shiftCooldown = true;
+					EVWORK_CAR* car = Game::pl_car();
+					if (car)
+					{
+						int currentGear = static_cast<int>(car->cur_gear_208);
+						if (hpattern.targetGear > currentGear)
+						{
+							hpattern.cachedMask |= (1 << static_cast<int>(SwitchId::GearUp));
+							hpattern.cooldownFrames = HPATTERN_COOLDOWN;
+							spdlog::trace("DInputRemap: H-pattern shift UP (target={}, current={})",
+								hpattern.targetGear, currentGear);
+						}
+						else if (hpattern.targetGear < currentGear)
+						{
+							hpattern.cachedMask |= (1 << static_cast<int>(SwitchId::GearDown));
+							hpattern.cooldownFrames = HPATTERN_COOLDOWN;
+							spdlog::trace("DInputRemap: H-pattern shift DOWN (target={}, current={})",
+								hpattern.targetGear, currentGear);
+						}
+					}
 				}
-				else if (hpattern.targetGear < currentGear && !hpattern.shiftCooldown)
-				{
-					mask |= (1 << static_cast<int>(SwitchId::GearDown));
-					hpattern.shiftCooldown = true;
-				}
-				else
-				{
-					hpattern.shiftCooldown = false;
-				}
+				hpattern.prevTargetGear = hpattern.targetGear;
 			}
+			mask |= hpattern.cachedMask;
 		}
 
 		// POV hat edge detection from all slots

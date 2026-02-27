@@ -10,6 +10,10 @@
 
 void InitExceptionHandler(); // hooks_exceptions.cpp
 
+// FFB cleanup -- must be called on DLL unload to stop haptic effects
+// (otherwise the constant force stays active and the wheel is stuck)
+namespace FFB { void Shutdown(); }
+
 namespace Module
 {
 	constexpr std::string_view TargetFilename = "OR2006C2C.exe";
@@ -457,6 +461,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, int ul_reason_for_call, LPVOID lpReserved
 	}
 	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
 	{
+		// Stop all haptic effects before unloading -- prevents the wheel
+		// from staying stuck at the last force level after game exit.
+		FFB::Shutdown();
 		proxy::on_detach();
 	}
 

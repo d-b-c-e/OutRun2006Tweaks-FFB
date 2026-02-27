@@ -12,6 +12,9 @@
 bool overlayInited = false;
 bool overlayActive = false;
 
+// FFB watchdog: zero forces when GamePlCar_Ctrl stops being called (menu transitions)
+namespace FFB { void CheckWatchdog(); }
+
 struct CUSTOMVERTEX
 {
 	FLOAT x, y, z, rhw;
@@ -87,6 +90,9 @@ class D3DHooks : public Hook
 	inline static SafetyHookMid midhook_d3dendscene{};
 	static void D3DEndScene(SafetyHookContext& ctx)
 	{
+		// FFB watchdog: if GamePlCar_Ctrl hasn't been called for 250ms
+		// (menu transition, results screen, etc.), zero the forces.
+		FFB::CheckWatchdog();
 		if (Settings::UILetterboxing > 0 && Settings::UIScalingMode > 0)
 		{
 			IDirect3DDevice9* d3ddev = Game::D3DDevice();
