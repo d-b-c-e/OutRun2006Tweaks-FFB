@@ -147,6 +147,7 @@ namespace Settings
 		spdlog::info(" - FFBTireSlip: {}", FFBTireSlip);
 		spdlog::info(" - FFBWheelTorqueNm: {}", FFBWheelTorqueNm);
 		spdlog::info(" - FFBInvertForce: {}", FFBInvertForce);
+		spdlog::info(" - FFBDiagnosticLogging: {}", FFBDiagnosticLogging);
 
 		spdlog::info(" - EnableHollyCourse2: {}", EnableHollyCourse2);
 		spdlog::info(" - SkipIntroLogos: {}", SkipIntroLogos);
@@ -291,6 +292,14 @@ namespace Settings
 		DIRemapButtonSelDown = ini.Get("DirectInput", "ButtonSelDown", DIRemapButtonSelDown);
 		DIRemapButtonSelLeft = ini.Get("DirectInput", "ButtonSelLeft", DIRemapButtonSelLeft);
 		DIRemapButtonSelRight = ini.Get("DirectInput", "ButtonSelRight", DIRemapButtonSelRight);
+		DIRemapMenuAxisUpDown = ini.Get("DirectInput", "MenuAxisUpDown", DIRemapMenuAxisUpDown);
+		DIRemapMenuAxisUpDown = std::clamp(DIRemapMenuAxisUpDown, -1, 7);
+		DIRemapMenuAxisLeftRight = ini.Get("DirectInput", "MenuAxisLeftRight", DIRemapMenuAxisLeftRight);
+		DIRemapMenuAxisLeftRight = std::clamp(DIRemapMenuAxisLeftRight, -1, 7);
+		DIRemapMenuAxisUpDownInvert = ini.Get("DirectInput", "MenuAxisUpDownInvert", DIRemapMenuAxisUpDownInvert);
+		DIRemapMenuAxisLeftRightInvert = ini.Get("DirectInput", "MenuAxisLeftRightInvert", DIRemapMenuAxisLeftRightInvert);
+		DIRemapMenuAxisDeadZone = ini.Get("DirectInput", "MenuAxisDeadZone", DIRemapMenuAxisDeadZone);
+		DIRemapMenuAxisDeadZone = std::clamp(DIRemapMenuAxisDeadZone, 0.0f, 0.99f);
 
 		// [DirectInput.Shifter] — separate shifter device
 		DIShifterDeviceGuid = ini.Get("DirectInput.Shifter", "DeviceGuid", DIShifterDeviceGuid);
@@ -346,6 +355,7 @@ namespace Settings
 		FFBWheelTorqueNm = ini.Get("FFB", "FFBWheelTorqueNm", FFBWheelTorqueNm);
 		FFBWheelTorqueNm = std::clamp(FFBWheelTorqueNm, 0.0f, 100.0f);
 		FFBInvertForce = ini.Get("FFB", "FFBInvertForce", FFBInvertForce);
+		FFBDiagnosticLogging = ini.Get("FFB", "DiagnosticLogging", FFBDiagnosticLogging);
 
 		TelemetryEnabled = ini.Get("Telemetry", "Enable", TelemetryEnabled);
 		TelemetrySharedMemName = ini.Get("Telemetry", "SharedMemName", TelemetrySharedMemName);
@@ -412,6 +422,7 @@ void Plugin_Init()
 	}
 
 	spdlog::info("OutRun2006Tweaks v" MODULE_VERSION_STR " - github.com/emoose/OutRun2006Tweaks");
+	spdlog::info("Windows build: {}", WinVer::GetWindowsBuildNumber());
 	Module::to_log();
 
 	if (!Settings::read(Module::IniPath))

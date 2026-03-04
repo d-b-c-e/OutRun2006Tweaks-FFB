@@ -769,15 +769,18 @@ namespace FFB
 		// Coefficient set once in CreateEffects.
 
 		// Diagnostic logging: speed window delta + force level, every 2 seconds
-		static DWORD lastDiagTime = 0;
-		DWORD now = GetTickCount();
-		if (now - lastDiagTime >= 2000 && speedHistoryIdx > 6)
+		if (Settings::FFBDiagnosticLogging)
 		{
-			lastDiagTime = now;
-			float oldSpd = speedHistory[(speedHistoryIdx - 6) % 8];
-			float winDelta = oldSpd - speed;
-			spdlog::info("FFB DIAG: spd={:.4f} prevSpd={:.4f} winDelta={:.4f} smoothLat={:.2f} constLvl={} flags8=0x{:X} crashTimer={}",
-				speed, oldSpd, winDelta, smoothedLateral, (int)prevConstantLevel, stateFlags, crashImpulseTimer);
+			static DWORD lastDiagTime = 0;
+			DWORD now = GetTickCount();
+			if (now - lastDiagTime >= 2000 && speedHistoryIdx > 6)
+			{
+				lastDiagTime = now;
+				float oldSpd = speedHistory[(speedHistoryIdx - 6) % 8];
+				float winDelta = oldSpd - speed;
+				spdlog::info("FFB DIAG: spd={:.4f} prevSpd={:.4f} winDelta={:.4f} smoothLat={:.2f} constLvl={} flags8=0x{:X} crashTimer={}",
+					speed, oldSpd, winDelta, smoothedLateral, (int)prevConstantLevel, stateFlags, crashImpulseTimer);
+			}
 		}
 
 		// Store previous frame state for next-frame edge detection

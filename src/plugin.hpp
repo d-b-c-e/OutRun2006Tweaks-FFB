@@ -165,6 +165,11 @@ namespace Settings
 	inline int DIRemapButtonSelDown = -1;
 	inline int DIRemapButtonSelLeft = -1;
 	inline int DIRemapButtonSelRight = -1;
+	inline int DIRemapMenuAxisUpDown = -1;    // axis index for menu up/down (-1 = disabled)
+	inline int DIRemapMenuAxisLeftRight = -1; // axis index for menu left/right (-1 = disabled)
+	inline bool DIRemapMenuAxisUpDownInvert = false;
+	inline bool DIRemapMenuAxisLeftRightInvert = false;
+	inline float DIRemapMenuAxisDeadZone = 0.5f; // 50% — high default to prevent drift
 
 	// [DirectInput.Shifter] — separate shifter device
 	inline bool DIShifterEnabled = false;
@@ -210,6 +215,7 @@ namespace Settings
 	inline float FFBTireSlip = 0.8f;
 	inline float FFBWheelTorqueNm = 0.0f;
 	inline bool FFBInvertForce = false;
+	inline bool FFBDiagnosticLogging = false;
 
 	// Telemetry shared memory (for SimHub / bass shakers)
 	inline bool TelemetryEnabled = false;
@@ -304,6 +310,63 @@ namespace Util
 	inline std::string trim(const std::string& s)
 	{
 		return ltrim(rtrim(s));
+	}
+}
+
+namespace WinVer
+{
+	// Detect Windows version using RtlGetVersion (ntdll) which is not subject to
+	// manifest-based version lying like GetVersionEx/VerifyVersionInfo.
+	// Returns true if running on Windows build >= the specified build number.
+	inline bool IsWindowsBuildOrGreater(DWORD buildNumber)
+	{
+		// RtlGetVersion is an ntdll function that always returns the true OS version
+		typedef LONG(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+
+		HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+		if (!ntdll)
+			return false;
+
+		auto rtlGetVersion = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+		if (!rtlGetVersion)
+			return false;
+
+		RTL_OSVERSIONINFOW osvi{};
+		osvi.dwOSVersionInfoSize = sizeof(osvi);
+		if (rtlGetVersion(&osvi) != 0) // STATUS_SUCCESS == 0
+			return false;
+
+		return osvi.dwBuildNumber >= buildNumber;
+	}
+
+	// Windows 11 24H2 = build 26100
+	// This version introduced changes that cause a deadlock when combining
+	// single-core thread affinity with certain D3D9 initialization operations.
+	inline bool IsWindows11_24H2OrGreater()
+	{
+		return IsWindowsBuildOrGreater(26100);
+	}
+
+	// Get the current Windows build number for logging purposes.
+	// Returns 0 on failure.
+	inline DWORD GetWindowsBuildNumber()
+	{
+		typedef LONG(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+
+		HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+		if (!ntdll)
+			return 0;
+
+		auto rtlGetVersion = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+		if (!rtlGetVersion)
+			return 0;
+
+		RTL_OSVERSIONINFOW osvi{};
+		osvi.dwOSVersionInfoSize = sizeof(osvi);
+		if (rtlGetVersion(&osvi) != 0)
+			return 0;
+
+		return osvi.dwBuildNumber;
 	}
 }
 
