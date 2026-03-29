@@ -346,6 +346,7 @@ namespace Settings
 		FFBWheelTorqueNm = ini.Get("FFB", "FFBWheelTorqueNm", FFBWheelTorqueNm);
 		FFBWheelTorqueNm = std::clamp(FFBWheelTorqueNm, 0.0f, 100.0f);
 		FFBInvertForce = ini.Get("FFB", "FFBInvertForce", FFBInvertForce);
+		FFBDiagnosticLog = ini.Get("FFB", "FFBDiagnosticLog", FFBDiagnosticLog);
 
 		TelemetryEnabled = ini.Get("Telemetry", "Enable", TelemetryEnabled);
 		TelemetrySharedMemName = ini.Get("Telemetry", "SharedMemName", TelemetrySharedMemName);

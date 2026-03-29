@@ -210,6 +210,7 @@ namespace Settings
 	inline float FFBTireSlip = 0.8f;
 	inline float FFBWheelTorqueNm = 0.0f;
 	inline bool FFBInvertForce = false;
+	inline bool FFBDiagnosticLog = false;
 
 	// Telemetry shared memory (for SimHub / bass shakers)
 	inline bool TelemetryEnabled = false;

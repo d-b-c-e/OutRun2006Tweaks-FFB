@@ -540,8 +540,9 @@ namespace FFB
 				// Reset lateral EMA so the collision physics spike doesn't sustain
 				// a "pinned" steering weight force after the crash impulse ends.
 				smoothedLateral = 0.0f;
-				spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} mag={:.2f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
-					windowDelta, impactMag, impactDir, steeringAngle, crashImpulseForce);
+				if (Settings::FFBDiagnosticLog)
+					spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} mag={:.2f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
+						windowDelta, impactMag, impactDir, steeringAngle, crashImpulseForce);
 			}
 		}
 
@@ -556,8 +557,9 @@ namespace FFB
 				crashImpulseForce = flagDir * 0.8f * Settings::FFBWallImpact;
 				crashImpulseTimer = 90;
 				smoothedLateral = 0.0f; // Reset EMA to prevent post-crash pinning
-				spdlog::info("FFB: CRASH impulse from flags8 0x1000! dir={:.0f} steerAngle={:.2f} force={:.2f}",
-					flagDir, steeringAngle, crashImpulseForce);
+				if (Settings::FFBDiagnosticLog)
+					spdlog::info("FFB: CRASH impulse from flags8 0x1000! dir={:.0f} steerAngle={:.2f} force={:.2f}",
+						flagDir, steeringAngle, crashImpulseForce);
 			}
 		}
 
@@ -769,15 +771,18 @@ namespace FFB
 		// Coefficient set once in CreateEffects.
 
 		// Diagnostic logging: speed window delta + force level, every 2 seconds
-		static DWORD lastDiagTime = 0;
-		DWORD now = GetTickCount();
-		if (now - lastDiagTime >= 2000 && speedHistoryIdx > 6)
+		if (Settings::FFBDiagnosticLog)
 		{
-			lastDiagTime = now;
-			float oldSpd = speedHistory[(speedHistoryIdx - 6) % 8];
-			float winDelta = oldSpd - speed;
-			spdlog::info("FFB DIAG: spd={:.4f} prevSpd={:.4f} winDelta={:.4f} smoothLat={:.2f} constLvl={} flags8=0x{:X} crashTimer={}",
-				speed, oldSpd, winDelta, smoothedLateral, (int)prevConstantLevel, stateFlags, crashImpulseTimer);
+			static DWORD lastDiagTime = 0;
+			DWORD now = GetTickCount();
+			if (now - lastDiagTime >= 2000 && speedHistoryIdx > 6)
+			{
+				lastDiagTime = now;
+				float oldSpd = speedHistory[(speedHistoryIdx - 6) % 8];
+				float winDelta = oldSpd - speed;
+				spdlog::info("FFB DIAG: spd={:.4f} prevSpd={:.4f} winDelta={:.4f} smoothLat={:.2f} constLvl={} flags8=0x{:X} crashTimer={}",
+					speed, oldSpd, winDelta, smoothedLateral, (int)prevConstantLevel, stateFlags, crashImpulseTimer);
+			}
 		}
 
 		// Store previous frame state for next-frame edge detection
