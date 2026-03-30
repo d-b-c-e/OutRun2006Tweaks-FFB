@@ -196,7 +196,7 @@ namespace DInputRemap
 
 	// ---------- Init a single device slot ----------
 
-	static bool InitSlot(DeviceSlot& slot, const std::string& guidStr, const char* slotName, IDirectInput8A* di)
+	static bool InitSlot(DeviceSlot& slot, const std::string& guidStr, const char* slotName, IDirectInput8A* di, bool isPrimary = false)
 	{
 		if (slot.initAttempted)
 			return slot.initialized;
@@ -242,8 +242,14 @@ namespace DInputRemap
 			return false;
 		}
 
-		// Non-exclusive background access
-		hr = slot.device->SetCooperativeLevel(Game::GameHwnd(), DISCL_BACKGROUND | DISCL_NONEXCLUSIVE);
+		// Primary slot uses EXCLUSIVE mode when FFB is enabled (DirectInput requires
+		// exclusive access to send force feedback effects). Other slots stay non-exclusive.
+		DWORD coopFlags = DISCL_BACKGROUND;
+		if (isPrimary && Settings::DirectInputFFB)
+			coopFlags |= DISCL_EXCLUSIVE;
+		else
+			coopFlags |= DISCL_NONEXCLUSIVE;
+		hr = slot.device->SetCooperativeLevel(Game::GameHwnd(), coopFlags);
 		if (FAILED(hr))
 		{
 			spdlog::error("DInputRemap: {} SetCooperativeLevel failed (HRESULT 0x{:08X})", slotName, (unsigned)hr);
@@ -297,7 +303,7 @@ namespace DInputRemap
 		}
 
 		// Primary slot (required — fail if it can't open)
-		if (!InitSlot(primary, Settings::DIRemapDeviceGuid, "Primary", di))
+		if (!InitSlot(primary, Settings::DIRemapDeviceGuid, "Primary", di, true))
 			return false;
 
 		spdlog::info("DInputRemap: Primary mapping — Steering={}({}), Accel={}({}), Brake={}({})",
@@ -716,6 +722,10 @@ namespace DInputRemap
 
 		return mask;
 	}
+
+	// Accessors for the FFB engine to share the primary device handle
+	IDirectInputDevice8A* GetPrimaryDevice() { return primary.device; }
+	bool IsPrimaryInitialized() { return primary.initialized; }
 }
 
 class DirectInputRemapHook : public Hook

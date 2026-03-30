@@ -321,6 +321,7 @@ set(outrun2006tweaks_SOURCES
 	"src/overlay/update_check.cpp"
 	"src/plugin.hpp"
 	"src/resource.h"
+	"src/telemetry.hpp"
 )
 
 add_library(outrun2006tweaks SHARED)
@@ -371,6 +372,8 @@ target_link_libraries(outrun2006tweaks PUBLIC
 	Winmm.lib
 	Setupapi.lib
 	Crypt32.lib
+	dxguid.lib
+	dinput8.lib
 )
 
 target_link_options(outrun2006tweaks PUBLIC
