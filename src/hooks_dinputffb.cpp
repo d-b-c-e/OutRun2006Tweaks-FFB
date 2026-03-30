@@ -8,7 +8,10 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
 #include <dinput.h>
+#pragma comment(lib, "Ws2_32.lib")
 #include <cmath>
 #include <algorithm>
 #include <string>
@@ -23,19 +26,130 @@
 extern float VibrationLeftMotor;
 extern float VibrationRightMotor;
 
-// Telemetry shared memory (written every frame for SimHub / bass shakers)
+// Forza Motorsport "Dash" UDP packet (311 bytes, little-endian)
+// Emitted to localhost:8000 for Moza Pit House wheel display
+#pragma pack(push, 1)
+struct ForzaDashPacket
+{
+	// SLED section (0-231)
+	int32_t  IsRaceOn;                    //   0
+	uint32_t TimestampMS;                 //   4
+	float    EngineMaxRpm;                //   8
+	float    EngineIdleRpm;               //  12
+	float    CurrentEngineRpm;            //  16
+	float    AccelerationX;               //  20
+	float    AccelerationY;               //  24
+	float    AccelerationZ;               //  28
+	float    VelocityX;                   //  32
+	float    VelocityY;                   //  36
+	float    VelocityZ;                   //  40
+	float    AngularVelocityX;            //  44
+	float    AngularVelocityY;            //  48
+	float    AngularVelocityZ;            //  52
+	float    Yaw;                         //  56
+	float    Pitch;                       //  60
+	float    Roll;                        //  64
+	float    NormSuspTravelFL;            //  68
+	float    NormSuspTravelFR;            //  72
+	float    NormSuspTravelRL;            //  76
+	float    NormSuspTravelRR;            //  80
+	float    TireSlipRatioFL;             //  84
+	float    TireSlipRatioFR;             //  88
+	float    TireSlipRatioRL;             //  92
+	float    TireSlipRatioRR;             //  96
+	float    WheelRotSpeedFL;             // 100
+	float    WheelRotSpeedFR;             // 104
+	float    WheelRotSpeedRL;             // 108
+	float    WheelRotSpeedRR;             // 112
+	int32_t  WheelOnRumbleFL;             // 116
+	int32_t  WheelOnRumbleFR;             // 120
+	int32_t  WheelOnRumbleRL;             // 124
+	int32_t  WheelOnRumbleRR;             // 128
+	float    WheelPuddleFL;              // 132
+	float    WheelPuddleFR;              // 136
+	float    WheelPuddleRL;              // 140
+	float    WheelPuddleRR;              // 144
+	float    SurfaceRumbleFL;             // 148
+	float    SurfaceRumbleFR;             // 152
+	float    SurfaceRumbleRL;             // 156
+	float    SurfaceRumbleRR;             // 160
+	float    TireSlipAngleFL;             // 164
+	float    TireSlipAngleFR;             // 168
+	float    TireSlipAngleRL;             // 172
+	float    TireSlipAngleRR;             // 176
+	float    TireCombinedSlipFL;          // 180
+	float    TireCombinedSlipFR;          // 184
+	float    TireCombinedSlipRL;          // 188
+	float    TireCombinedSlipRR;          // 192
+	float    SuspTravelMetersFL;          // 196
+	float    SuspTravelMetersFR;          // 200
+	float    SuspTravelMetersRL;          // 204
+	float    SuspTravelMetersRR;          // 208
+	int32_t  CarOrdinal;                  // 212
+	int32_t  CarClass;                    // 216
+	int32_t  CarPerformanceIndex;         // 220
+	int32_t  DrivetrainType;              // 224
+	int32_t  NumCylinders;                // 228
+	// DASH section (232-310)
+	float    PositionX;                   // 232
+	float    PositionY;                   // 236
+	float    PositionZ;                   // 240
+	float    Speed;                       // 244 (m/s)
+	float    Power;                       // 248
+	float    Torque;                      // 252
+	float    TireTempFL;                  // 256
+	float    TireTempFR;                  // 260
+	float    TireTempRL;                  // 264
+	float    TireTempRR;                  // 268
+	float    Boost;                       // 272
+	float    Fuel;                        // 276
+	float    DistanceTraveled;            // 280
+	float    BestLap;                     // 284
+	float    LastLap;                     // 288
+	float    CurrentLap;                  // 292
+	float    CurrentRaceTime;             // 296
+	uint16_t LapNumber;                   // 300
+	uint8_t  RacePosition;               // 302
+	uint8_t  Accel;                       // 303 (throttle 0-255)
+	uint8_t  Brake;                       // 304 (0-255)
+	uint8_t  Clutch;                      // 305
+	uint8_t  HandBrake;                   // 306
+	uint8_t  Gear;                        // 307 (0=R, 1-10=fwd)
+	int8_t   Steer;                       // 308 (-127..127)
+	int8_t   NormDrivingLine;             // 309
+	int8_t   NormAIBrakeDiff;             // 310
+};
+#pragma pack(pop)
+static_assert(sizeof(ForzaDashPacket) == 311, "ForzaDashPacket must be 311 bytes");
+
+// Telemetry: shared memory (SimHub) + Forza UDP (Moza Pit House display)
 namespace Telemetry
 {
+	// Shared memory for SimHub plugin
 	static HANDLE hMapFile = nullptr;
 	static OutRun2006TelemetryData* pData = nullptr;
 	static bool initialized = false;
 	static uint32_t packetId = 0;
+
+	// Forza UDP for Moza Pit House wheel display
+	static SOCKET udpSocket = INVALID_SOCKET;
+	static sockaddr_in udpAddr = {};
+	static bool udpInitialized = false;
+	static const int FORZA_UDP_PORT = 8000;
+
+	// Approximate gear ratios for RPM synthesis (OutRun doesn't expose RPM)
+	// These create a believable RPM range on the wheel display
+	static const float GearRatios[] = { 0.0f, 3.5f, 2.1f, 1.4f, 1.0f, 0.8f, 0.65f };
+	static const float MaxRPM = 8500.0f;
+	static const float IdleRPM = 900.0f;
+	static const float MaxSpeedMps = 90.0f; // ~324 km/h, OutRun top speed approx
 
 	static bool Init()
 	{
 		if (!Settings::TelemetryEnabled)
 			return false;
 
+		// Init shared memory
 		const std::string& name = Settings::TelemetrySharedMemName;
 		hMapFile = CreateFileMappingA(
 			INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
@@ -62,31 +176,99 @@ namespace Telemetry
 		pData->version = TELEMETRY_VERSION;
 		initialized = true;
 		spdlog::info("Telemetry: Shared memory '{}' created ({} bytes)", name, sizeof(OutRun2006TelemetryData));
+
+		// Init Forza UDP socket for Moza Pit House
+		WSADATA wsaData;
+		if (WSAStartup(MAKEWORD(2, 2), &wsaData) == 0)
+		{
+			udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+			if (udpSocket != INVALID_SOCKET)
+			{
+				udpAddr.sin_family = AF_INET;
+				udpAddr.sin_port = htons(FORZA_UDP_PORT);
+				udpAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+				udpInitialized = true;
+				spdlog::info("Telemetry: Forza UDP emitter ready (127.0.0.1:{})", FORZA_UDP_PORT);
+			}
+			else
+			{
+				spdlog::warn("Telemetry: Failed to create UDP socket (err={})", WSAGetLastError());
+			}
+		}
+
 		return true;
 	}
 
 	static void Write(EVWORK_CAR* car, bool inGameplay)
 	{
-		if (!pData) return;
+		// Write to shared memory (SimHub)
+		if (pData)
+		{
+			pData->packetId = ++packetId;
+			pData->speed = car->field_1C4;
+			pData->steeringAngle = car->field_1D0;
+			pData->lateralG1 = car->field_264;
+			pData->lateralG2 = car->field_268;
+			pData->impactForce = car->field_178;
+			pData->gear = car->cur_gear_208;
+			pData->prevGear = car->dword1D8;
+			pData->stateFlags = car->field_8;
+			pData->carFlags = car->flags_4;
+			pData->surfaceType[0] = car->water_flag_24C[0];
+			pData->surfaceType[1] = car->water_flag_24C[1];
+			pData->surfaceType[2] = car->water_flag_24C[2];
+			pData->surfaceType[3] = car->water_flag_24C[3];
+			pData->vibrationLeft = VibrationLeftMotor;
+			pData->vibrationRight = VibrationRightMotor;
+			pData->gameMode = Game::current_mode ? *Game::current_mode : 0;
+			pData->isInGameplay = inGameplay ? 1 : 0;
+		}
 
-		pData->packetId = ++packetId;
-		pData->speed = car->field_1C4;
-		pData->steeringAngle = car->field_1D0;
-		pData->lateralG1 = car->field_264;
-		pData->lateralG2 = car->field_268;
-		pData->impactForce = car->field_178;
-		pData->gear = car->cur_gear_208;
-		pData->prevGear = car->dword1D8;
-		pData->stateFlags = car->field_8;
-		pData->carFlags = car->flags_4;
-		pData->surfaceType[0] = car->water_flag_24C[0];
-		pData->surfaceType[1] = car->water_flag_24C[1];
-		pData->surfaceType[2] = car->water_flag_24C[2];
-		pData->surfaceType[3] = car->water_flag_24C[3];
-		pData->vibrationLeft = VibrationLeftMotor;
-		pData->vibrationRight = VibrationRightMotor;
-		pData->gameMode = Game::current_mode ? *Game::current_mode : 0;
-		pData->isInGameplay = inGameplay ? 1 : 0;
+		// Send Forza UDP (Moza Pit House wheel display)
+		if (udpInitialized && udpSocket != INVALID_SOCKET)
+		{
+			ForzaDashPacket pkt = {};
+
+			pkt.IsRaceOn = inGameplay ? 1 : 0;
+			pkt.TimestampMS = GetTickCount();
+
+			// Speed: convert normalized (0-2+) to m/s
+			float speedMps = car->field_1C4 * MaxSpeedMps;
+			pkt.Speed = speedMps;
+
+			// Gear
+			uint32_t gear = car->cur_gear_208;
+			pkt.Gear = (uint8_t)std::clamp(gear, 0u, 10u);
+
+			// Synthesize RPM from speed and gear
+			// OutRun doesn't expose RPM, so we calculate a plausible value
+			float gearRatio = (gear > 0 && gear < 7) ? GearRatios[gear] : 1.0f;
+			float speedNorm = std::clamp(car->field_1C4 / 2.0f, 0.0f, 1.0f);
+			float rpm = IdleRPM + speedNorm * gearRatio * (MaxRPM - IdleRPM);
+			rpm = std::clamp(rpm, IdleRPM, MaxRPM);
+
+			pkt.CurrentEngineRpm = rpm;
+			pkt.EngineMaxRpm = MaxRPM;
+			pkt.EngineIdleRpm = IdleRPM;
+
+			// Steering angle mapped to Forza's -127..127 range
+			pkt.Steer = (int8_t)std::clamp((int)(car->field_1D0 * 127.0f), -127, 127);
+
+			// Lateral acceleration (for display)
+			pkt.AccelerationX = car->field_264 + car->field_268;
+
+			// Surface rumble (for display indicators)
+			bool offRoad = car->water_flag_24C[0] > 1 || car->water_flag_24C[1] > 1 ||
+			               car->water_flag_24C[2] > 1 || car->water_flag_24C[3] > 1;
+			if (offRoad)
+			{
+				pkt.SurfaceRumbleFL = pkt.SurfaceRumbleFR = 1.0f;
+				pkt.SurfaceRumbleRL = pkt.SurfaceRumbleRR = 1.0f;
+			}
+
+			sendto(udpSocket, (const char*)&pkt, sizeof(pkt), 0,
+				(sockaddr*)&udpAddr, sizeof(udpAddr));
+		}
 	}
 
 	static void Shutdown()
@@ -100,6 +282,11 @@ namespace Telemetry
 		{
 			CloseHandle(hMapFile);
 			hMapFile = nullptr;
+		}
+		if (udpSocket != INVALID_SOCKET)
+		{
+			closesocket(udpSocket);
+			udpSocket = INVALID_SOCKET;
 		}
 		initialized = false;
 		spdlog::info("Telemetry: Shared memory closed");
@@ -495,11 +682,17 @@ namespace FFB
 		// Always update smoothed lateral (even on non-update frames) for consistent filtering
 		{
 			float lateralCombined = (lateralForce1 + lateralForce2);
+
+			// Deadzone: zero out physics noise on straights.
+			// The game produces small lateral G oscillations (±1-2 units) even on
+			// straight roads. The arcade's 16-level quantization dropped these to
+			// zero; our 10000-level resolution amplifies them into perceptible pull.
+			if (std::abs(lateralCombined) < 2.0f)
+				lateralCombined = 0.0f;
+
 			// Dual-rate EMA: fast attack (0.25) for responsive corner entry,
-			// slow decay (0.10) for smooth force release when straightening.
-			// This mimics real self-aligning torque behavior — builds quickly
-			// as you enter a turn, fades gradually as you exit.
-			float alpha = (std::abs(lateralCombined) > std::abs(smoothedLateral)) ? 0.25f : 0.10f;
+			// faster decay (0.20) for snappy arcade feel when straightening.
+			float alpha = (std::abs(lateralCombined) > std::abs(smoothedLateral)) ? 0.25f : 0.20f;
 			smoothedLateral = alpha * lateralCombined + (1.0f - alpha) * smoothedLateral;
 		}
 
@@ -517,17 +710,17 @@ namespace FFB
 			float windowDelta = oldSpeed - speed;
 			if (windowDelta > 0.03f && speed > 0.1f) // 3% speed loss at speed = wall hit
 			{
-				float impactMag = std::clamp((windowDelta - 0.03f) * 12.0f, 0.8f, 1.0f);
-				// Use steering angle for crash direction: you hit the wall on the side you steer toward
-				float impactDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f; // Push away from wall
+				// Use steering angle for crash direction: push away from wall
+				float impactDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
 
-				crashImpulseForce = impactDir * impactMag * Settings::FFBWallImpact;
+				// Strong jolt that cuts through steering weight (1.5 > max steering of 1.0)
+				crashImpulseForce = impactDir * 1.5f * Settings::FFBWallImpact;
 				crashImpulseTimer = 90; // 1.5 sec cooldown (force active first 10 frames, then lockout)
 				// Reset lateral EMA so the collision physics spike doesn't sustain
 				// a "pinned" steering weight force after the crash impulse ends.
 				smoothedLateral = 0.0f;
-				spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} mag={:.2f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
-					windowDelta, impactMag, impactDir, steeringAngle, crashImpulseForce);
+				spdlog::info("FFB: CRASH impulse! windowDelta={:.3f} dir={:.0f} steerAngle={:.2f} force={:.2f}",
+					windowDelta, impactDir, steeringAngle, crashImpulseForce);
 			}
 		}
 
@@ -539,7 +732,7 @@ namespace FFB
 			{
 				// Use steering angle for crash direction (same logic as speed-delta path)
 				float flagDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
-				crashImpulseForce = flagDir * 0.8f * Settings::FFBWallImpact;
+				crashImpulseForce = flagDir * 1.2f * Settings::FFBWallImpact;
 				crashImpulseTimer = 90;
 				smoothedLateral = 0.0f; // Reset EMA to prevent post-crash pinning
 				spdlog::info("FFB: CRASH impulse from flags8 0x1000! dir={:.0f} steerAngle={:.2f} force={:.2f}",
@@ -551,37 +744,16 @@ namespace FFB
 		{
 			float totalForce = 0.0f;
 
-			// --- Steering weight (self-aligning torque approximation) ---
-			// Uses an inverted-U SAT curve: force builds linearly at low slip,
-			// peaks at ~70% of max lateral G, then drops — giving the driver
-			// an "understeer warning" as the wheel goes light before grip is lost.
+			// --- Steering weight (linear arcade mapping) ---
+			// Linear force proportional to lateral G, matching the original arcade's
+			// approach (linear force from curve intensity). No SAT curve — the game's
+			// physics don't model tire slip angles that would drive a realistic SAT.
 			// Suppressed during active crash impulse to prevent force stacking.
 			if (crashImpulseTimer <= 80)
 			{
 				float lateralNorm = std::clamp(smoothedLateral / 24.0f, -1.0f, 1.0f);
-
-				// SAT curve: inverted-U with drop-off beyond peak grip
-				float absLat = std::abs(lateralNorm);
-				float satForce;
-				if (absLat < 0.7f)
-				{
-					satForce = lateralNorm; // Linear region
-				}
-				else
-				{
-					// Beyond peak grip: force drops (pneumatic trail collapse)
-					float sign = (lateralNorm > 0.0f) ? 1.0f : -1.0f;
-					float dropoff = 1.0f - 2.0f * (absLat - 0.7f);
-					satForce = sign * 0.7f * std::max(dropoff, 0.4f);
-				}
-
-				// Steering weight force. satForce is ±1.0 from SAT curve, speedNorm is 0-1.
-				// With FFBSteeringWeight=1.0, a hard turn at top speed produces ~0.7 output
-				// (before tanh), which is a strong but not overwhelming force.
-				// Users adjust with FFBSteeringWeight slider + wheel software.
-				float steeringWeight = satForce * speedNorm * Settings::FFBSteeringWeight;
-				float maxSteeringForce = Settings::FFBSteeringWeight;
-				steeringWeight = std::clamp(steeringWeight, -maxSteeringForce, maxSteeringForce);
+				float steeringWeight = lateralNorm * speedNorm * Settings::FFBSteeringWeight;
+				steeringWeight = std::clamp(steeringWeight, -Settings::FFBSteeringWeight, Settings::FFBSteeringWeight);
 				totalForce += steeringWeight;
 			}
 
@@ -622,7 +794,7 @@ namespace FFB
 			{
 				rumblePhase = std::fmod(rumblePhase + 30.0f / 60.0f * 6.2832f, 6.2832f);
 				float rumbleWave = std::sin(rumblePhase);
-				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.08f;
+				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.15f;
 				totalForce += rumbleWave * rumbleIntensity;
 			}
 			else
@@ -639,7 +811,7 @@ namespace FFB
 				slipPhase = std::fmod(slipPhase + 22.0f / 60.0f * 6.2832f, 6.2832f);
 				float slipWave = std::sin(slipPhase);
 				float slipAmount = std::clamp((lateralMag - 12.0f) / 18.0f, 0.0f, 1.0f);
-				float slipRumble = slipWave * slipAmount * Settings::FFBTireSlip * 0.06f;
+				float slipRumble = slipWave * slipAmount * Settings::FFBTireSlip * 0.10f;
 				totalForce += slipRumble;
 			}
 			else

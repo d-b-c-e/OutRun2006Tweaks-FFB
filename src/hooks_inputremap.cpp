@@ -338,11 +338,13 @@ namespace DInputRemap
 		if (!slot.device) return;
 		slot.previousState = slot.currentState;
 
-		HRESULT hr = slot.device->Poll();
-		if (FAILED(hr))
-			hr = slot.device->Acquire();
+		// Poll() errors are common and harmless (many devices don't need polling).
+		// Do NOT re-acquire on Poll() failure — re-acquisition invalidates all
+		// DirectInput FFB effects on the device, causing E_HANDLE errors.
+		// Only re-acquire when GetDeviceState genuinely reports input loss.
+		slot.device->Poll();
 
-		hr = slot.device->GetDeviceState(sizeof(DIJOYSTATE2), &slot.currentState);
+		HRESULT hr = slot.device->GetDeviceState(sizeof(DIJOYSTATE2), &slot.currentState);
 		if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED)
 		{
 			slot.device->Acquire();
