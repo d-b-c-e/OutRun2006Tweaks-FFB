@@ -776,6 +776,31 @@ class DirectInputRemapHook : public Hook
 		}
 	}
 
+	// VolumeSwitch: converts analog axis readings to menu nav switch values.
+	// The original game reads gamepad/wheel axes here and produces menu
+	// up/down/left/right from them. When remap is active we suppress ALL
+	// channels — our SwitchOn/SwitchNow hooks handle menu nav via discrete
+	// buttons and POV hat instead.
+	inline static SafetyHookInline VolumeSwitch_hook = {};
+	static int __cdecl VolumeSwitch_dest(ADChannel volumeId)
+	{
+		if (DInputRemap::initialized)
+		{
+			static bool logged = false;
+			if (!logged) { spdlog::info("VolumeSwitch: suppressed (remap active)"); logged = true; }
+			return 0;
+		}
+		// Pass through to original when remap not active
+		int orig = VolumeSwitch_hook.ccall<int>(volumeId);
+		static bool loggedOrig = false;
+		if (!loggedOrig && orig != 0)
+		{
+			spdlog::info("VolumeSwitch: ch={} returned {} (remap NOT active)", (int)volumeId, orig);
+			loggedOrig = true;
+		}
+		return orig;
+	}
+
 	inline static SafetyHookInline SwitchOn_hook = {};
 	static int __cdecl SwitchOn_dest(uint32_t switches)
 	{
@@ -847,6 +872,7 @@ public:
 		}
 
 		GetVolumeOld_hook = safetyhook::create_inline(Module::exe_ptr(0x53750), GetVolumeOld_dest);
+		VolumeSwitch_hook = safetyhook::create_inline(Module::exe_ptr(0x53780), VolumeSwitch_dest);
 		SwitchOn_hook = safetyhook::create_inline(Module::exe_ptr(0x536F0), SwitchOn_dest);
 		SwitchNow_hook = safetyhook::create_inline(Module::exe_ptr(0x536C0), SwitchNow_dest);
 
