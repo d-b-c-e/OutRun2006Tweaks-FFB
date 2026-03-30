@@ -723,7 +723,30 @@ public:
 
 	bool validate() override
 	{
-		return Settings::SingleCoreAffinity;
+		if (!Settings::SingleCoreAffinity)
+			return false;
+
+		// Windows 11 24H2 (build 26100+) changed the thread scheduler.
+		// SetThreadAffinityMask pinning threads to core 0 deadlocks with
+		// NVIDIA's D3D9 driver threads during device initialization, causing
+		// a white screen hang on startup. Auto-disable on affected builds.
+		// Same issue confirmed in NFS Underground 2 (ThirteenAG/WidescreenFixesPack#1649).
+		typedef LONG(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+		auto RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(
+			GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+		if (RtlGetVersion)
+		{
+			RTL_OSVERSIONINFOW osvi = {};
+			osvi.dwOSVersionInfoSize = sizeof(osvi);
+			if (RtlGetVersion(&osvi) == 0 && osvi.dwBuildNumber >= 26100)
+			{
+				spdlog::warn("SingleCoreAffinity: Auto-disabled on Windows build {} "
+					"(24H2+ deadlocks with D3D9 driver threads)", osvi.dwBuildNumber);
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	bool apply() override
