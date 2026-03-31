@@ -683,17 +683,16 @@ namespace FFB
 		{
 			float lateralCombined = (lateralForce1 + lateralForce2);
 
-			// Deadzone: zero out physics noise on straights.
-			// The game produces small lateral G oscillations (±1-2 units) even on
-			// straight roads. The arcade's 16-level quantization dropped these to
-			// zero; our 10000-level resolution amplifies them into perceptible pull.
-			if (std::abs(lateralCombined) < 2.0f)
-				lateralCombined = 0.0f;
-
 			// Dual-rate EMA: fast attack (0.25) for responsive corner entry,
 			// faster decay (0.20) for snappy arcade feel when straightening.
 			float alpha = (std::abs(lateralCombined) > std::abs(smoothedLateral)) ? 0.25f : 0.20f;
 			smoothedLateral = alpha * lateralCombined + (1.0f - alpha) * smoothedLateral;
+
+			// Deadzone applied to SMOOTHED value (not raw input).
+			// The game produces lateral G values of 3-5 even on gentle road curves.
+			// Applying deadzone after EMA prevents accumulated noise from leaking through.
+			if (std::abs(smoothedLateral) < 5.0f)
+				smoothedLateral = 0.0f;
 		}
 
 		// Track speed history for crash detection (sliding window)
@@ -710,8 +709,11 @@ namespace FFB
 			float windowDelta = oldSpeed - speed;
 			if (windowDelta > 0.03f && speed > 0.1f) // 3% speed loss at speed = wall hit
 			{
-				// Use steering angle for crash direction: push away from wall
-				float impactDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
+				// Use lateral G direction for crash direction: the side with more
+				// lateral force is the side that hit the wall, push away from it.
+				// Steering angle was unreliable (nearly zero at crash time).
+				float lateralAtCrash = lateralForce1 + lateralForce2;
+				float impactDir = (lateralAtCrash >= 0.0f) ? -1.0f : 1.0f;
 
 				// Strong jolt that cuts through steering weight (1.5 > max steering of 1.0)
 				crashImpulseForce = impactDir * 1.5f * Settings::FFBWallImpact;
@@ -730,8 +732,9 @@ namespace FFB
 			bool wasColliding = (prevCollisionFlags & 0x1000) != 0;
 			if (collisionActive && !wasColliding && crashImpulseTimer <= 0)
 			{
-				// Use steering angle for crash direction (same logic as speed-delta path)
-				float flagDir = (steeringAngle >= 0.0f) ? -1.0f : 1.0f;
+				// Use lateral G for crash direction (same logic as speed-delta path)
+				float lateralAtCrash = lateralForce1 + lateralForce2;
+				float flagDir = (lateralAtCrash >= 0.0f) ? -1.0f : 1.0f;
 				crashImpulseForce = flagDir * 1.2f * Settings::FFBWallImpact;
 				crashImpulseTimer = 90;
 				smoothedLateral = 0.0f; // Reset EMA to prevent post-crash pinning
@@ -794,7 +797,7 @@ namespace FFB
 			{
 				rumblePhase = std::fmod(rumblePhase + 30.0f / 60.0f * 6.2832f, 6.2832f);
 				float rumbleWave = std::sin(rumblePhase);
-				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.15f;
+				float rumbleIntensity = speedNorm * Settings::FFBRumbleStrip * 0.25f;
 				totalForce += rumbleWave * rumbleIntensity;
 			}
 			else
@@ -811,7 +814,7 @@ namespace FFB
 				slipPhase = std::fmod(slipPhase + 22.0f / 60.0f * 6.2832f, 6.2832f);
 				float slipWave = std::sin(slipPhase);
 				float slipAmount = std::clamp((lateralMag - 12.0f) / 18.0f, 0.0f, 1.0f);
-				float slipRumble = slipWave * slipAmount * Settings::FFBTireSlip * 0.10f;
+				float slipRumble = slipWave * slipAmount * Settings::FFBTireSlip * 0.15f;
 				totalForce += slipRumble;
 			}
 			else
@@ -819,25 +822,28 @@ namespace FFB
 				slipPhase = 0.0f;
 			}
 
-			// --- Engine rev vibration (stationary + low speed) ---
-			// Sine wave at 15 Hz for smooth idle rumble (not buzzy square wave).
-			if (speed < 0.15f)
+			// --- Engine rev vibration (throttle-responsive) ---
+			// Sine wave whose frequency and amplitude scale with the XInput
+			// vibration motors (which the game drives from RPM/throttle).
+			// Active at low speed (dominant) and fades with speed (subtle at high speed).
 			{
-				enginePhase = std::fmod(enginePhase + 15.0f / 60.0f * 6.2832f, 6.2832f);
-				float engineWave = std::sin(enginePhase);
-
-				float engineIntensity = 0.6f;
 				float motorVal = std::max(VibrationLeftMotor, VibrationRightMotor);
-				if (motorVal > 0.05f)
-					engineIntensity = motorVal;
+				if (motorVal > 0.02f)
+				{
+					// Frequency scales with motor intensity: 12 Hz idle → 25 Hz high rev
+					float revFreq = 12.0f + motorVal * 13.0f;
+					enginePhase = std::fmod(enginePhase + revFreq / 60.0f * 6.2832f, 6.2832f);
+					float engineWave = std::sin(enginePhase);
 
-				float speedFade = 1.0f - (speed / 0.15f);
-				float revForce = engineWave * engineIntensity * speedFade * 0.04f;
-				totalForce += revForce;
-			}
-			else
-			{
-				enginePhase = 0.0f;
+					// Amplitude: strong at low speed, fades to subtle at high speed
+					float speedFade = std::clamp(1.0f - (speed / 0.5f), 0.05f, 1.0f);
+					float revForce = engineWave * motorVal * speedFade * 0.12f;
+					totalForce += revForce;
+				}
+				else
+				{
+					enginePhase = 0.0f;
+				}
 			}
 
 			// Apply inversion if configured
@@ -904,12 +910,30 @@ namespace FFB
 
 		__try
 		{
-			if (constantForceEffect)
+			if (ffbDevice)
 			{
-				// Zero force so wheel doesn't stay stuck
-				SetConstantForce(0);
-				constantForceEffect->Stop();
-				constantForceEffect->Release();
+				// Zero force through existing effect
+				if (constantForceEffect)
+				{
+					SetConstantForce(0);
+					constantForceEffect->Stop();
+				}
+
+				// Stop all effects and reset device
+				ffbDevice->SendForceFeedbackCommand(DISFFC_STOPALL);
+				ffbDevice->SendForceFeedbackCommand(DISFFC_RESET);
+
+				// Re-enable autocenter to return wheel to neutral
+				DIPROPDWORD dipdw = {};
+				dipdw.diph.dwSize = sizeof(DIPROPDWORD);
+				dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+				dipdw.diph.dwObj = 0;
+				dipdw.diph.dwHow = DIPH_DEVICE;
+				dipdw.dwData = TRUE; // DIPAUTOCENTER_ON
+				ffbDevice->SetProperty(DIPROP_AUTOCENTER, &dipdw.diph);
+
+				if (constantForceEffect)
+					constantForceEffect->Release();
 			}
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
