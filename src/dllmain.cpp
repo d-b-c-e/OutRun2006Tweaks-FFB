@@ -145,6 +145,11 @@ namespace Settings
 		spdlog::info(" - FFBGearShift: {}", FFBGearShift);
 		spdlog::info(" - FFBRoadTexture: {}", FFBRoadTexture);
 		spdlog::info(" - FFBTireSlip: {}", FFBTireSlip);
+		spdlog::info(" - FFBGripLoss: {}", FFBGripLoss);
+		spdlog::info(" - FFBWeightTransfer: {}", FFBWeightTransfer);
+		spdlog::info(" - FFBLateralDeadzone: {}", FFBLateralDeadzone);
+		spdlog::info(" - FFBEngineIdle: {}", FFBEngineIdle);
+		spdlog::info(" - FFBUsePeriodicEffects: {}", FFBUsePeriodicEffects);
 		spdlog::info(" - FFBWheelTorqueNm: {}", FFBWheelTorqueNm);
 		spdlog::info(" - FFBInvertForce: {}", FFBInvertForce);
 
@@ -343,6 +348,15 @@ namespace Settings
 		FFBRoadTexture = std::clamp(FFBRoadTexture, 0.0f, 2.0f);
 		FFBTireSlip = ini.Get("FFB", "FFBTireSlip", FFBTireSlip);
 		FFBTireSlip = std::clamp(FFBTireSlip, 0.0f, 2.0f);
+		FFBGripLoss = ini.Get("FFB", "FFBGripLoss", FFBGripLoss);
+		FFBGripLoss = std::clamp(FFBGripLoss, 0.0f, 1.0f);
+		FFBWeightTransfer = ini.Get("FFB", "FFBWeightTransfer", FFBWeightTransfer);
+		FFBWeightTransfer = std::clamp(FFBWeightTransfer, 0.0f, 2.0f);
+		FFBLateralDeadzone = ini.Get("FFB", "FFBLateralDeadzone", FFBLateralDeadzone);
+		FFBLateralDeadzone = std::clamp(FFBLateralDeadzone, 0.0f, 10.0f);
+		FFBEngineIdle = ini.Get("FFB", "FFBEngineIdle", FFBEngineIdle);
+		FFBEngineIdle = std::clamp(FFBEngineIdle, 0.0f, 1.0f);
+		FFBUsePeriodicEffects = ini.Get("FFB", "FFBUsePeriodicEffects", FFBUsePeriodicEffects);
 		FFBWheelTorqueNm = ini.Get("FFB", "FFBWheelTorqueNm", FFBWheelTorqueNm);
 		FFBWheelTorqueNm = std::clamp(FFBWheelTorqueNm, 0.0f, 100.0f);
 		FFBInvertForce = ini.Get("FFB", "FFBInvertForce", FFBInvertForce);

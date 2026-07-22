@@ -47,6 +47,11 @@ namespace DInputRemap
 	// GUIDs of devices already opened — used to skip during auto-detect
 	static std::vector<GUID> openedGuids;
 
+	// GUID of the opened primary device — shared with the FFB engine so it can
+	// open a separate EXCLUSIVE handle on the same physical device
+	static GUID primaryGuid = {};
+	static bool primaryGuidValid = false;
+
 	// ---------- H-pattern shifter state machine ----------
 
 	struct HPatternState
@@ -242,13 +247,11 @@ namespace DInputRemap
 			return false;
 		}
 
-		// Primary slot uses EXCLUSIVE mode when FFB is enabled (DirectInput requires
-		// exclusive access to send force feedback effects). Other slots stay non-exclusive.
-		DWORD coopFlags = DISCL_BACKGROUND;
-		if (isPrimary && Settings::DirectInputFFB)
-			coopFlags |= DISCL_EXCLUSIVE;
-		else
-			coopFlags |= DISCL_NONEXCLUSIVE;
+		// All slots poll NONEXCLUSIVE. The FFB engine opens its OWN exclusive
+		// handle on the primary device GUID (see hooks_dinputffb.cpp) -- when
+		// FFB shared this polling handle, any poll-side re-Acquire() destroyed
+		// the downloaded FFB effects (felt as random jerks on effect recreation).
+		DWORD coopFlags = DISCL_BACKGROUND | DISCL_NONEXCLUSIVE;
 		hr = slot.device->SetCooperativeLevel(Game::GameHwnd(), coopFlags);
 		if (FAILED(hr))
 		{
@@ -279,6 +282,14 @@ namespace DInputRemap
 
 		// Track opened GUID so other slots skip it during auto-detect
 		openedGuids.push_back(targetGuid);
+
+		// Remember the primary GUID so the FFB engine can open its own
+		// exclusive handle on the same physical device
+		if (isPrimary)
+		{
+			primaryGuid = targetGuid;
+			primaryGuidValid = true;
+		}
 
 		slot.initialized = true;
 		return true;
@@ -728,6 +739,13 @@ namespace DInputRemap
 	// Accessors for the FFB engine to share the primary device handle
 	IDirectInputDevice8A* GetPrimaryDevice() { return primary.device; }
 	bool IsPrimaryInitialized() { return primary.initialized; }
+	bool GetPrimaryDeviceGuid(GUID* out)
+	{
+		if (!primaryGuidValid || !out)
+			return false;
+		*out = primaryGuid;
+		return true;
+	}
 }
 
 class DirectInputRemapHook : public Hook

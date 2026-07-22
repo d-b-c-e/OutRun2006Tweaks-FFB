@@ -200,14 +200,19 @@ namespace Settings
 	inline bool DirectInputFFB = false;
 	inline int FFBDevice = -1;
 	inline float FFBGlobalStrength = 1.0f;
-	inline float FFBSpringStrength = 0.7f;
-	inline float FFBDamperStrength = 0.5f;
-	inline float FFBSteeringWeight = 1.0f;
+	inline float FFBSpringStrength = 0.45f;   // virtual centering spring on steering position
+	inline float FFBDamperStrength = 0.10f;   // virtual damper on steering derivative
+	inline float FFBSteeringWeight = 0.55f;   // lateral road load (secondary term)
 	inline float FFBWallImpact = 1.0f;
-	inline float FFBRumbleStrip = 0.6f;
+	inline float FFBRumbleStrip = 0.35f;
 	inline float FFBGearShift = 0.3f;
-	inline float FFBRoadTexture = 0.2f;
-	inline float FFBTireSlip = 0.8f;
+	inline float FFBRoadTexture = 0.6f;       // periodic: surface roughness LUT gain
+	inline float FFBTireSlip = 0.35f;         // periodic: drift chatter
+	inline float FFBGripLoss = 0.6f;          // drift lightening 0-1 (wheel goes light in a slide)
+	inline float FFBWeightTransfer = 0.8f;    // brake/throttle load modulation
+	inline float FFBLateralDeadzone = 1.5f;   // lateral slide noise-floor clip (was hardcoded 5.0)
+	inline float FFBEngineIdle = 0.08f;       // idle/launch rumble (replaces at-speed engine vib)
+	inline bool FFBUsePeriodicEffects = true; // hardware Sine effects; false = CF-synthesis fallback
 	inline float FFBWheelTorqueNm = 0.0f;
 	inline bool FFBInvertForce = false;
 	inline bool FFBDiagnosticLog = false;
