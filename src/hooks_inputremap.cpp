@@ -106,7 +106,32 @@ namespace DInputRemap
 		GUID guid;
 		char name[MAX_PATH];
 		DWORD axisCount;
+		int   score;
 	};
+
+	// Virtual / emulated gamepads that present themselves to DirectInput as ordinary
+	// controllers. They are never the wheel, but they can easily out-rank one: a default
+	// vJoy device reports 8 axes and 128 buttons and often enumerates first, and several
+	// of them advertise force-feedback capability, so anything that picks "the first
+	// FFB-capable device" or "the device with the most axes" will bind to them instead.
+	// Explicitly configuring DeviceGuid always overrides this list.
+	static bool IsVirtualDevice(const std::string& name)
+	{
+		static const char* kVirtualNames[] = {
+			"vJoy",        // vJoy virtual joystick
+			"ViGEm",       // ViGEm Bus virtual pads
+			"XOutput",     // XOutput / XOutputRedux virtual pad
+			"vXbox",       // ScpVBus / vXbox
+			"vGamepad",    // ViGEm client naming
+			"Emulated",    // "Emulated ..." pads
+		};
+		for (const char* v : kVirtualNames)
+		{
+			if (name.find(v) != std::string::npos)
+				return true;
+		}
+		return false;
+	}
 
 	struct EnumContext
 	{
@@ -126,9 +151,9 @@ namespace DInputRemap
 			inst->guidInstance.Data4[4], inst->guidInstance.Data4[5],
 			inst->guidInstance.Data4[6], inst->guidInstance.Data4[7]);
 
-		// Skip vJoy virtual devices
+		// Skip virtual / emulated pads — see IsVirtualDevice for why these must never win
 		std::string name(inst->tszInstanceName);
-		if (name.find("vJoy") != std::string::npos)
+		if (IsVirtualDevice(name))
 		{
 			spdlog::info("DInputRemap:   (skipping virtual device)");
 			return DIENUM_CONTINUE;
@@ -144,8 +169,10 @@ namespace DInputRemap
 			}
 		}
 
-		// Query axis count to rank candidates — wheels have 3+ axes
+		// Query capabilities to rank candidates — wheels have 3+ axes, and a real wheel
+		// also reports force-feedback support.
 		DWORD axisCount = 0;
+		bool  hasFfb    = false;
 		IDirectInputDevice8A* tmpDev = nullptr;
 		if (SUCCEEDED(ec->di->CreateDevice(inst->guidInstance, &tmpDev, nullptr)))
 		{
@@ -153,17 +180,25 @@ namespace DInputRemap
 			DIDEVCAPS caps = {};
 			caps.dwSize = sizeof(DIDEVCAPS);
 			if (SUCCEEDED(tmpDev->GetCapabilities(&caps)))
+			{
 				axisCount = caps.dwAxes;
+				hasFfb    = (caps.dwFlags & DIDC_FORCEFEEDBACK) != 0;
+			}
 			tmpDev->Release();
 		}
-		spdlog::info("DInputRemap:   {} axes", axisCount);
+		spdlog::info("DInputRemap:   {} axes, FFB={}", axisCount, hasFfb);
 
-		// Prefer the device with the most axes (steering wheel > shifter > button box)
-		if (!ec->found || axisCount > ec->best.axisCount)
+		// Rank force-feedback devices above everything else, then by axis count. Axis
+		// count alone is not enough to identify a wheel: a rumble gamepad or a virtual
+		// pad can match or beat one, and a plain '>' comparison silently hands ties to
+		// whichever device happened to enumerate first.
+		const int score = (hasFfb ? 1000 : 0) + static_cast<int>(axisCount);
+		if (!ec->found || score > ec->best.score)
 		{
 			ec->best.guid = inst->guidInstance;
 			strncpy_s(ec->best.name, inst->tszInstanceName, _TRUNCATE);
 			ec->best.axisCount = axisCount;
+			ec->best.score = score;
 			ec->found = true;
 		}
 
