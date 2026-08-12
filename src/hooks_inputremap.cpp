@@ -774,6 +774,21 @@ namespace DInputRemap
 	// Accessors for the FFB engine to share the primary device handle
 	IDirectInputDevice8A* GetPrimaryDevice() { return primary.device; }
 	bool IsPrimaryInitialized() { return primary.initialized; }
+
+	// Live pedal positions, 0-255, for the telemetry packet.
+	//
+	// These are the same values the remap layer already feeds the game each
+	// frame - deadzone, inversion and axis choice all applied - so telemetry
+	// consumers see exactly what the car is being told to do. Exposed because
+	// Forza's Accel/Brake bytes were the only thing SimHub needed to drive
+	// brake lights and pedal-based ShakeIt effects, and the numbers were
+	// already sitting here.
+	//
+	// Returns -1 when there is no primary device, so the caller can leave the
+	// packet field alone rather than transmitting a confident zero (which a
+	// brake light would read as "pedal released" rather than "no data").
+	int GetTelemetryAccel() { return primary.initialized ? GetAcceleration() : -1; }
+	int GetTelemetryBrake() { return primary.initialized ? GetBrake() : -1; }
 	bool GetPrimaryDeviceGuid(GUID* out)
 	{
 		if (!primaryGuidValid || !out)

@@ -130,6 +130,18 @@ struct ForzaDashPacket
 static_assert(sizeof(ForzaDashPacket) == 311, "ForzaDashPacket must be 311 bytes");
 
 // Telemetry: shared memory (SimHub) + Forza UDP (Moza Pit House display)
+// Forward declarations from hooks_inputremap.cpp.
+// Declared above Telemetry (not just above FFB) because the telemetry packet
+// now reads live pedal positions from the remap layer.
+namespace DInputRemap
+{
+	IDirectInputDevice8A* GetPrimaryDevice();
+	bool IsPrimaryInitialized();
+	bool GetPrimaryDeviceGuid(GUID* out);
+	int GetTelemetryAccel();   // 0-255, or -1 if no primary device
+	int GetTelemetryBrake();   // 0-255, or -1 if no primary device
+}
+
 namespace Telemetry
 {
 	// Shared memory for SimHub plugin
@@ -264,6 +276,25 @@ namespace Telemetry
 			// Lateral acceleration (for display)
 			pkt.AccelerationX = car->field_264 + car->field_268;
 
+			// Throttle and brake, straight from the wheel's own pedals.
+			//
+			// OutRun's car struct never exposes pedal position -- the game only
+			// keeps the resulting speed -- so these come from the input remap
+			// layer, which is already reading and normalising both axes every
+			// frame for the game itself. That makes them true pedal travel
+			// rather than something inferred from acceleration.
+			//
+			// SimHub surfaces Forza's Accel/Brake bytes as GameData.Throttle
+			// and GameData.Brake, which is what drives brake lights and
+			// pedal-based ShakeIt effects. -1 means no wheel is bound, in which
+			// case the field is left at zero rather than asserting a value.
+			int accelPedal = DInputRemap::GetTelemetryAccel();
+			int brakePedal = DInputRemap::GetTelemetryBrake();
+			if (accelPedal >= 0)
+				pkt.Accel = (uint8_t)accelPedal;
+			if (brakePedal >= 0)
+				pkt.Brake = (uint8_t)brakePedal;
+
 			// Surface rumble (for display indicators)
 			bool offRoad = car->water_flag_24C[0] > 1 || car->water_flag_24C[1] > 1 ||
 			               car->water_flag_24C[2] > 1 || car->water_flag_24C[3] > 1;
@@ -298,14 +329,6 @@ namespace Telemetry
 		initialized = false;
 		spdlog::info("Telemetry: Shared memory closed");
 	}
-}
-
-// Forward declarations from hooks_inputremap.cpp
-namespace DInputRemap
-{
-	IDirectInputDevice8A* GetPrimaryDevice();
-	bool IsPrimaryInitialized();
-	bool GetPrimaryDeviceGuid(GUID* out);
 }
 
 // Forward declaration from Proxy.cpp
