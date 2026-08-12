@@ -705,9 +705,51 @@ namespace FFB
 		spdlog::info("FFB: PanicStop SETACTUATORSOFF => 0x{:08X}", (unsigned)hr);
 		hr = ffbDevice->SendForceFeedbackCommand(DISFFC_RESET);
 		spdlog::info("FFB: PanicStop RESET => 0x{:08X}", (unsigned)hr);
+
+		// Hand the wheel back to the driver's own centring spring.
+		//
+		// This used to live in Shutdown(), which was unreliable: it shared one
+		// SEH block with the effect releases, so an access violation there
+		// (0xC0000005, seen on every exit) skipped the autocenter restore
+		// silently and left the wheel limp for the next application. Here the
+		// device is still known-good -- every call above returned DI_OK -- so
+		// it actually lands. Property writes are legal on an unacquired device,
+		// but doing it before Unacquire() removes any doubt.
+		DIPROPDWORD autoCenter = {};
+		autoCenter.diph.dwSize = sizeof(DIPROPDWORD);
+		autoCenter.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+		autoCenter.diph.dwObj = 0;
+		autoCenter.diph.dwHow = DIPH_DEVICE;
+		autoCenter.dwData = TRUE; // DIPROPAUTOCENTER_ON
+		hr = ffbDevice->SetProperty(DIPROP_AUTOCENTER, &autoCenter.diph);
+		spdlog::info("FFB: PanicStop autocenter restore => 0x{:08X}", (unsigned)hr);
+
 		// Driver-side session close -> wheelbase releases any held torque
 		hr = ffbDevice->Unacquire();
 		spdlog::info("FFB: PanicStop Unacquire => 0x{:08X}", (unsigned)hr);
+	}
+
+	// Release one effect under its OWN exception guard.
+	//
+	// These are three independent COM objects, and at DLL_PROCESS_DETACH the
+	// game may already have torn some of them down. Releasing them inside a
+	// single shared __try meant the first fault skipped the remaining releases
+	// and gave one anonymous "Exception releasing effect" with no indication of
+	// which object was bad. Guarding individually leaks nothing extra -- the
+	// pointer is nulled either way -- and names the culprit in the log.
+	static void SafeReleaseEffect(IDirectInputEffect*& effect, const char* name)
+	{
+		if (!effect)
+			return;
+		__try
+		{
+			effect->Release();
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			spdlog::warn("FFB: Exception releasing {} effect (0x{:X})", name, GetExceptionCode());
+		}
+		effect = nullptr;
 	}
 
 	// Zero all force output without tearing anything down (Alt-Tab, menus, watchdog)
@@ -1392,31 +1434,14 @@ namespace FFB
 		// recovery branch would recreate and restart the effect mid-teardown.
 		PanicStop();
 
-		__try
+		// Autocenter is restored inside PanicStop() now, while the device is
+		// still known-good -- see the comment there. Doing it here meant a fault
+		// releasing an effect silently skipped it.
+		if (ffbDevice)
 		{
-			if (ffbDevice)
-			{
-				// Re-enable autocenter to return wheel to neutral
-				// (property writes work on an unacquired device)
-				DIPROPDWORD dipdw = {};
-				dipdw.diph.dwSize = sizeof(DIPROPDWORD);
-				dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-				dipdw.diph.dwObj = 0;
-				dipdw.diph.dwHow = DIPH_DEVICE;
-				dipdw.dwData = TRUE; // DIPAUTOCENTER_ON
-				ffbDevice->SetProperty(DIPROP_AUTOCENTER, &dipdw.diph);
-
-				if (constantForceEffect)
-					constantForceEffect->Release();
-				if (roadTextureEffect)
-					roadTextureEffect->Release();
-				if (tireSlipEffect)
-					tireSlipEffect->Release();
-			}
-		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			spdlog::warn("FFB: Exception releasing effect (0x{:X})", GetExceptionCode());
+			SafeReleaseEffect(constantForceEffect, "constant-force");
+			SafeReleaseEffect(roadTextureEffect, "road-texture");
+			SafeReleaseEffect(tireSlipEffect, "tire-slip");
 		}
 		constantForceEffect = nullptr;
 		roadTextureEffect = nullptr;
