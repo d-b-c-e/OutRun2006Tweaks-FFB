@@ -1,0 +1,422 @@
+[2026-08-11 21:08:08.186] [info] OutRun2006Tweaks v0.6.1.0 - github.com/emoose/OutRun2006Tweaks
+[2026-08-11 21:08:08.186] [info] EXE module (base address: 0x400000):
+[2026-08-11 21:08:08.186] [info]   File path: E:\Source\launchbox\Launchbox-Racing\Games\Windows\Outrun 2006 Coast to Coast\OutRun2006 Coast 2 Coast (Redux)\OR2006C2C.EXE
+[2026-08-11 21:08:08.186] [info]   Header timestamp: 1148663097
+[2026-08-11 21:08:08.186] [info] DLL module (base address: 0xf1f0000):
+[2026-08-11 21:08:08.186] [info]   File path: E:\Source\launchbox\Launchbox-Racing\Games\Windows\Outrun 2006 Coast to Coast\OutRun2006 Coast 2 Coast (Redux)\DINPUT8.dll
+[2026-08-11 21:08:08.186] [info] Settings::read - reading INI from E:\Source\launchbox\Launchbox-Racing\Games\Windows\Outrun 2006 Coast to Coast\OutRun2006 Coast 2 Coast (Redux)\OutRun2006Tweaks.ini
+[2026-08-11 21:08:08.216] [info] Settings values:
+[2026-08-11 21:08:08.216] [info]  - FramerateLimit: 60
+[2026-08-11 21:08:08.216] [info]  - FramerateLimitMode: false
+[2026-08-11 21:08:08.216] [info]  - FramerateFastLoad: 3
+[2026-08-11 21:08:08.216] [info]  - FramerateUnlockExperimental: true
+[2026-08-11 21:08:08.216] [info]  - VSync: 1
+[2026-08-11 21:08:08.216] [info]  - SingleCoreAffinity: true
+[2026-08-11 21:08:08.216] [info]  - WindowedBorderless: true
+[2026-08-11 21:08:08.216] [info]  - WindowPosition: 0x0
+[2026-08-11 21:08:08.216] [info]  - WindowedHideMouseCursor: true
+[2026-08-11 21:08:08.216] [info]  - DisableDPIScaling: true
+[2026-08-11 21:08:08.216] [info]  - AutoDetectResolution: true
+[2026-08-11 21:08:08.216] [info]  - AllowHorn: true
+[2026-08-11 21:08:08.216] [info]  - AllowWAV: true
+[2026-08-11 21:08:08.216] [info]  - AllowFLAC: true
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherEnable: false
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherDisplayTitle: true
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTitleFont: 2
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTitleFontSizeX: 0.3
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTitleFontSizeY: 0.5
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTitlePositionX: 375
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTitlePositionY: 450
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherShuffleTracks: false
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTrackNext: Back
+[2026-08-11 21:08:08.216] [info]  - CDSwitcherTrackPrevious: RS+Back
+[2026-08-11 21:08:08.216] [info]  - UIScalingMode: 2
+[2026-08-11 21:08:08.216] [info]  - UILetterboxing: 1
+[2026-08-11 21:08:08.216] [info]  - AnisotropicFiltering: 16
+[2026-08-11 21:08:08.216] [info]  - ReflectionResolution: 512
+[2026-08-11 21:08:08.217] [info]  - UseHiDefCharacters: true
+[2026-08-11 21:08:08.217] [info]  - TransparencySupersampling: true
+[2026-08-11 21:08:08.217] [info]  - ScreenEdgeCullFix: true
+[2026-08-11 21:08:08.217] [info]  - DisableVehicleLODs: true
+[2026-08-11 21:08:08.217] [info]  - DisableStageCulling: true
+[2026-08-11 21:08:08.217] [info]  - FixZBufferPrecision: true
+[2026-08-11 21:08:08.217] [info]  - CarBaseShadowOpacity: 1
+[2026-08-11 21:08:08.217] [info]  - DrawDistanceIncrease: 4
+[2026-08-11 21:08:08.217] [info]  - DrawDistanceBehind: 0
+[2026-08-11 21:08:08.217] [info]  - TextureBaseFolder: textures
+[2026-08-11 21:08:08.217] [info]  - SceneTextureReplacement: true
+[2026-08-11 21:08:08.217] [info]  - SceneTextureExtract: false
+[2026-08-11 21:08:08.217] [info]  - UITextureReplacement: true
+[2026-08-11 21:08:08.217] [info]  - UITextureExtract: false
+[2026-08-11 21:08:08.217] [info]  - EnableTextureCache: true
+[2026-08-11 21:08:08.217] [info]  - UseNewTextureAllocator: true
+[2026-08-11 21:08:08.217] [info]  - UseNewInput: false
+[2026-08-11 21:08:08.217] [info]  - SteeringDeadZone: 0
+[2026-08-11 21:08:08.217] [info]  - ControllerHotPlug: false
+[2026-08-11 21:08:08.217] [info]  - DefaultManualTransmission: false
+[2026-08-11 21:08:08.217] [info]  - VibrationMode: 1
+[2026-08-11 21:08:08.217] [info]  - VibrationStrength: 7
+[2026-08-11 21:08:08.217] [info]  - VibrationControllerId: 0
+[2026-08-11 21:08:08.217] [info]  - ImpulseVibrationMode: 2
+[2026-08-11 21:08:08.217] [info]  - ImpulseVibrationLeftMultiplier: 0.2
+[2026-08-11 21:08:08.217] [info]  - ImpulseVibrationRightMultiplier: 0.2
+[2026-08-11 21:08:08.217] [info]  - UseDirectInputRemap: true
+[2026-08-11 21:08:08.217] [info]  - DIRemapDeviceGuid: auto
+[2026-08-11 21:08:08.217] [info]  - DIRemapSteeringAxis: 0
+[2026-08-11 21:08:08.217] [info]  - DIRemapSteeringInvert: false
+[2026-08-11 21:08:08.217] [info]  - DIRemapAccelAxis: 2
+[2026-08-11 21:08:08.217] [info]  - DIRemapAccelInvert: false
+[2026-08-11 21:08:08.217] [info]  - DIRemapBrakeAxis: 5
+[2026-08-11 21:08:08.217] [info]  - DIRemapBrakeInvert: false
+[2026-08-11 21:08:08.217] [info]  - DirectInputFFB: true
+[2026-08-11 21:08:08.217] [info]  - FFBDevice: -1
+[2026-08-11 21:08:08.217] [info]  - FFBGlobalStrength: 1
+[2026-08-11 21:08:08.217] [info]  - FFBSpringStrength: 0.3
+[2026-08-11 21:08:08.217] [info]  - FFBDamperStrength: 0.2
+[2026-08-11 21:08:08.217] [info]  - FFBSteeringWeight: 1
+[2026-08-11 21:08:08.217] [info]  - FFBWallImpact: 1
+[2026-08-11 21:08:08.217] [info]  - FFBRumbleStrip: 0.6
+[2026-08-11 21:08:08.217] [info]  - FFBGearShift: 0.3
+[2026-08-11 21:08:08.217] [info]  - FFBRoadTexture: 0.2
+[2026-08-11 21:08:08.217] [info]  - FFBTireSlip: 0.8
+[2026-08-11 21:08:08.217] [info]  - FFBGripLoss: 0.6
+[2026-08-11 21:08:08.217] [info]  - FFBWeightTransfer: 0.8
+[2026-08-11 21:08:08.217] [info]  - FFBLateralDeadzone: 1.5
+[2026-08-11 21:08:08.217] [info]  - FFBEngineIdle: 0.08
+[2026-08-11 21:08:08.217] [info]  - FFBUsePeriodicEffects: true
+[2026-08-11 21:08:08.217] [info]  - FFBWheelTorqueNm: 0
+[2026-08-11 21:08:08.217] [info]  - FFBInvertForce: false
+[2026-08-11 21:08:08.217] [info]  - EnableHollyCourse2: 3
+[2026-08-11 21:08:08.217] [info]  - SkipIntroLogos: true
+[2026-08-11 21:08:08.217] [info]  - DisableCountdownTimer: false
+[2026-08-11 21:08:08.217] [info]  - EnableLevelSelect: false
+[2026-08-11 21:08:08.217] [info]  - HudToggleKey: 
+[2026-08-11 21:08:08.217] [info]  - RestoreJPClarissa: false
+[2026-08-11 21:08:08.217] [info]  - ShowOutRunMilesOnMenu: true
+[2026-08-11 21:08:08.217] [info]  - AllowCharacterSelection: false
+[2026-08-11 21:08:08.217] [info]  - RandomHighwayAnimSets: false
+[2026-08-11 21:08:08.217] [info]  - DemonwareServerOverride: clarissa.port0.org
+[2026-08-11 21:08:08.217] [info]  - ProtectLoginData: true
+[2026-08-11 21:08:08.217] [info]  - OverlayEnabled: true
+[2026-08-11 21:08:08.217] [info]  - FixPegasusClopping: true
+[2026-08-11 21:08:08.217] [info]  - FixRightSideBunkiAnimations: true
+[2026-08-11 21:08:08.217] [info]  - FixC2CRankings: true
+[2026-08-11 21:08:08.217] [info]  - PreventDESTSaveCorruption: true
+[2026-08-11 21:08:08.217] [info]  - FixLensFlarePath: true
+[2026-08-11 21:08:08.217] [info]  - FixIncorrectShading: true
+[2026-08-11 21:08:08.217] [info]  - FixParticleRendering: true
+[2026-08-11 21:08:08.217] [info]  - FixFullPedalChecks: true
+[2026-08-11 21:08:08.217] [info]  - HideOnlineSigninText: false
+[2026-08-11 21:08:08.217] [info] BGMLoaderHook: apply successful
+[2026-08-11 21:08:08.218] [info] FixRightSideBunkiAnimations: apply successful
+[2026-08-11 21:08:08.218] [info] FixParticleRendering: apply successful
+[2026-08-11 21:08:08.218] [info] FixIncorrectShading: apply successful
+[2026-08-11 21:08:08.218] [info] FixBinkLargeMovies: apply successful
+[2026-08-11 21:08:08.218] [info] FixPegasusClopping: apply successful
+[2026-08-11 21:08:08.218] [info] FixC2CRankings: apply successful
+[2026-08-11 21:08:08.219] [info] PreventDESTSaveCorruption: apply successful
+[2026-08-11 21:08:08.230] [info] FixLensFlarePath: apply successful
+[2026-08-11 21:08:08.230] [info] FixFullPedalChecks: apply successful
+[2026-08-11 21:08:08.230] [info] DirectInputFFB: Hook installed (FFB init deferred to first game tick)
+[2026-08-11 21:08:08.230] [info] DirectInputFFB: apply successful
+[2026-08-11 21:08:08.257] [error] DrawDist_ReadExclusions - failed to locate exclusion INI from path E:\Source\launchbox\Launchbox-Racing\Games\Windows\Outrun 2006 Coast to Coast\OutRun2006 Coast 2 Coast (Redux)\OutRun2006Tweaks.lods.ini
+[2026-08-11 21:08:08.257] [info] DrawDistanceIncrease: apply successful
+[2026-08-11 21:08:08.258] [info] DrawBufferExtension: apply successful
+[2026-08-11 21:08:08.258] [info] PauseMenuVisibility: apply successful
+[2026-08-11 21:08:08.258] [info] AllowFLAC: apply successful
+[2026-08-11 21:08:08.258] [info] Vibration: apply successful
+[2026-08-11 21:08:08.259] [info] ReplaceGameUpdateLoop: apply successful
+[2026-08-11 21:08:08.271] [info] UseHiDefCharacters: apply successful
+[2026-08-11 21:08:08.271] [info] RestoreCarBaseShadow: apply successful
+[2026-08-11 21:08:08.271] [info] ReflectionResolution: apply successful
+[2026-08-11 21:08:08.272] [info] DisableDPIScaling: apply successful
+[2026-08-11 21:08:08.273] [info] ScreenEdgeCullFix: apply successful
+[2026-08-11 21:08:08.273] [info] DisableStageCulling: apply successful
+[2026-08-11 21:08:08.273] [info] DisableVehicleLODs: apply successful
+[2026-08-11 21:08:08.273] [info] FixZBufferPrecision: apply successful
+[2026-08-11 21:08:08.273] [info] TransparencySupersampling: apply successful
+[2026-08-11 21:08:08.274] [info] WindowedBorderless: apply successful
+[2026-08-11 21:08:08.274] [info] AnisotropicFiltering: apply successful
+[2026-08-11 21:08:08.281] [info] ImpulseVibration: apply successful
+[2026-08-11 21:08:08.281] [info] SteeringDeadZone: apply successful
+[2026-08-11 21:08:08.282] [info] DirectInputRemap: Hooks installed, device init deferred to first frame
+[2026-08-11 21:08:08.282] [info] DirectInputRemap: apply successful
+[2026-08-11 21:08:08.283] [info] ProtectLoginData: apply successful
+[2026-08-11 21:08:08.313] [info] EnableHollyCourse2: apply successful
+[2026-08-11 21:08:08.313] [info] ShowOutRunMilesOnMenu: apply successful
+[2026-08-11 21:08:08.313] [info] DemonwareServerOverride: apply successful
+[2026-08-11 21:08:08.313] [warning] SingleCoreAffinity: Auto-disabled on Windows build 26200 (24H2+ deadlocks with D3D9 driver threads)
+[2026-08-11 21:08:08.313] [info] CommandLineArguments: apply successful
+[2026-08-11 21:08:08.313] [info] GameDefaultConfigOverride: default resolution set to 3840x2160, windowed enabled, fog enabled, antialiasing 2
+[2026-08-11 21:08:08.313] [info] GameDefaultConfigOverride: apply successful
+[2026-08-11 21:08:08.571] [info] TextureReplacement: apply successful
+[2026-08-11 21:08:08.587] [info] UIScaling: apply successful
+[2026-08-11 21:08:08.588] [info] CourseReplacement: apply successful
+[2026-08-11 21:08:08.588] [info] Overlay::settings_read - reading INI from E:\Source\launchbox\Launchbox-Racing\Games\Windows\Outrun 2006 Coast to Coast\OutRun2006 Coast 2 Coast (Redux)\OutRun2006Tweaks.overlay.ini
+[2026-08-11 21:08:08.598] [info] D3DHooks: apply successful
+[2026-08-11 21:08:08.598] [info] WndprocHook: apply successful
+[2026-08-11 21:08:08.893] [info] UpdateCheck_IsNewerAvailable: latest version v0.6.1 matches current version 0.6.1.0
+[2026-08-11 21:08:11.976] [info] UPnP: port mappings succeeded
+[2026-08-11 21:08:12.085] [info] DInputRemap: Starting deferred initialization...
+[2026-08-11 21:08:12.085] [info] DInputRemap: Initializing Primary slot...
+[2026-08-11 21:08:12.157] [info] DInputRemap: Found device: 'Controller (TS-UFB01B-X)' GUID={048BA480-601B-11F1-801A-444553540000}
+[2026-08-11 21:08:12.157] [info] DInputRemap:   5 axes, FFB=false
+[2026-08-11 21:08:12.178] [info] DInputRemap: Found device: 'vJoy Device' GUID={D3C818A0-82DF-11F1-8002-444553540000}
+[2026-08-11 21:08:12.178] [info] DInputRemap:   (skipping virtual device)
+[2026-08-11 21:08:12.213] [info] DInputRemap: Found device: 'DS-8X Shifter' GUID={D9B1D890-6F3F-11F1-8002-444553540000}
+[2026-08-11 21:08:12.213] [info] DInputRemap:   0 axes, FFB=false
+[2026-08-11 21:08:12.249] [info] DInputRemap: Found device: 'MOZA R12 Base' GUID={D71B8350-61B7-11F1-8001-444553540000}
+[2026-08-11 21:08:12.252] [info] DInputRemap:   8 axes, FFB=true
+[2026-08-11 21:08:12.268] [info] DInputRemap: Found device: 'Controller (TS-UFB01B-X)' GUID={048E3C90-601B-11F1-801B-444553540000}
+[2026-08-11 21:08:12.269] [info] DInputRemap:   5 axes, FFB=false
+[2026-08-11 21:08:12.272] [info] DInputRemap: Found device: 'MOZA Multi-function Stalk' GUID={0492F780-601B-11F1-8025-444553540000}
+[2026-08-11 21:08:12.272] [info] DInputRemap:   0 axes, FFB=false
+[2026-08-11 21:08:12.274] [info] DInputRemap: Primary auto-selected: 'MOZA R12 Base' (8 axes)
+[2026-08-11 21:08:12.306] [info] DInputRemap: Primary opened — 8 axes, 128 buttons, 1 POVs
+[2026-08-11 21:08:12.306] [info] DInputRemap: Primary mapping — Steering=lX(norm), Accel=lZ(norm), Brake=lRz(norm)
+[2026-08-11 21:08:12.306] [info] DInputRemap: Initializing Shifter slot...
+[2026-08-11 21:08:12.308] [info] DInputRemap: Shifter opened — 0 axes, 11 buttons, 0 POVs
+[2026-08-11 21:08:12.308] [info] DInputRemap: Shifter mode: hpattern
+[2026-08-11 21:08:12.309] [info] DInputRemap: POV[0] changed: 0 -> 4294967295 (0x00000000 -> 0xFFFFFFFF)
+[2026-08-11 21:08:12.309] [info] DInputRemap: POV[1] changed: 0 -> 4294967295 (0x00000000 -> 0xFFFFFFFF)
+[2026-08-11 21:08:12.309] [info] DInputRemap: POV[2] changed: 0 -> 4294967295 (0x00000000 -> 0xFFFFFFFF)
+[2026-08-11 21:08:12.309] [info] DInputRemap: POV[3] changed: 0 -> 4294967295 (0x00000000 -> 0xFFFFFFFF)
+[2026-08-11 21:08:30.404] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:34.455] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:37.372] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:40.189] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:42.089] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:43.106] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:08:49.116] [info] DInputRemap: Button 5 pressed on primary device
+[2026-08-11 21:08:49.683] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:49.933] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:50.450] [info] DInputRemap: Button 5 pressed on primary device
+[2026-08-11 21:08:50.783] [info] DInputRemap: Button 9 pressed on primary device
+[2026-08-11 21:08:50.833] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:51.416] [info] DInputRemap: Button 5 pressed on primary device
+[2026-08-11 21:08:51.433] [info] DInputRemap: Button 11 pressed on primary device
+[2026-08-11 21:08:51.700] [info] DInputRemap: Button 5 pressed on primary device
+[2026-08-11 21:08:52.133] [info] DInputRemap: Button 9 pressed on primary device
+[2026-08-11 21:08:52.250] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:52.483] [info] DInputRemap: Button 9 pressed on primary device
+[2026-08-11 21:08:52.616] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:52.783] [info] DInputRemap: Button 9 pressed on primary device
+[2026-08-11 21:08:53.066] [info] DInputRemap: Button 7 pressed on primary device
+[2026-08-11 21:08:57.917] [info] DInputRemap: Button 33 pressed on primary device
+[2026-08-11 21:09:01.718] [info] DInputRemap: Button 33 pressed on primary device
+[2026-08-11 21:09:02.184] [info] DInputRemap: Button 33 pressed on primary device
+[2026-08-11 21:09:02.701] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:09:03.668] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:09:05.241] [info] DInputRemap: Button 31 pressed on primary device
+[2026-08-11 21:09:18.707] [info] FFB: Starting deferred initialization (DirectInput)...
+[2026-08-11 21:09:18.711] [info] FFB: Opened dedicated FFB handle on remap primary device
+[2026-08-11 21:09:18.717] [info] FFB: Constant force effect created (gain: 100%)
+[2026-08-11 21:09:18.717] [info] FFB: Driver periodic effect available: 'GUID_Square'
+[2026-08-11 21:09:18.717] [info] FFB: Driver periodic effect available: 'GUID_Sine'
+[2026-08-11 21:09:18.717] [info] FFB: Driver periodic effect available: 'GUID_Triangle'
+[2026-08-11 21:09:18.717] [info] FFB: Driver periodic effect available: 'GUID_SawtoothUp'
+[2026-08-11 21:09:18.717] [info] FFB: Driver periodic effect available: 'GUID_SawtoothDown'
+[2026-08-11 21:09:18.721] [info] FFB: RoadTexture(Sine) periodic effect created
+[2026-08-11 21:09:18.724] [info] FFB: TireSlip(Sine) periodic effect created
+[2026-08-11 21:09:18.724] [info] FFB: Exit guard installed (WndProc subclass)
+[2026-08-11 21:09:18.725] [info] FFB: Exit guard installed (ExitProcess hook)
+[2026-08-11 21:09:18.725] [info] FFB: Initialization complete (DirectInput)
+[2026-08-11 21:09:18.725] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.00 drift=0.00 rough=0.31 constLvl=0 periodics=true warmup=1/30
+[2026-08-11 21:09:20.716] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.03 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:09:21.145] [info] FFB: Periodic update strategy: SetParameters without DIEP_START
+[2026-08-11 21:09:22.712] [info] FFB DIAG: spd=0.001 steer=0.000 rate=[0.00000..0.00000] lat=0.03 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:09:24.712] [info] FFB DIAG: spd=0.396 steer=0.003 rate=[0.00000..0.00339] lat=0.02 drift=0.00 rough=0.25 constLvl=-76 periodics=true warmup=30/30
+[2026-08-11 21:09:26.712] [info] FFB DIAG: spd=0.721 steer=-0.011 rate=[-0.00206..0.00335] lat=12.37 drift=0.03 rough=0.35 constLvl=3513 periodics=true warmup=30/30
+[2026-08-11 21:09:26.745] [info] FFB: CRASH impulse! windowDelta=0.041 dir=-1 latPre=10.78 force=-1.50
+[2026-08-11 21:09:28.712] [info] FFB DIAG: spd=0.751 steer=0.003 rate=[-0.01097..0.00413] lat=-5.31 drift=0.00 rough=0.25 constLvl=-1163 periodics=true warmup=30/30
+[2026-08-11 21:09:30.712] [info] FFB DIAG: spd=1.031 steer=0.002 rate=[-0.00027..0.00269] lat=-7.27 drift=0.00 rough=0.25 constLvl=-2328 periodics=true warmup=30/30
+[2026-08-11 21:09:32.713] [info] FFB DIAG: spd=1.235 steer=0.002 rate=[-0.00177..0.00194] lat=-6.65 drift=0.00 rough=0.25 constLvl=-2037 periodics=true warmup=30/30
+[2026-08-11 21:09:34.713] [info] FFB DIAG: spd=1.384 steer=0.001 rate=[-0.00176..0.00182] lat=-7.82 drift=0.00 rough=0.25 constLvl=-2493 periodics=true warmup=30/30
+[2026-08-11 21:09:36.713] [info] FFB DIAG: spd=1.542 steer=0.001 rate=[0.00000..0.00144] lat=-4.13 drift=0.00 rough=0.25 constLvl=-1089 periodics=true warmup=30/30
+[2026-08-11 21:09:38.713] [info] FFB DIAG: spd=1.681 steer=0.001 rate=[-0.00167..0.00164] lat=17.40 drift=0.45 rough=0.25 constLvl=4265 periodics=true warmup=30/30
+[2026-08-11 21:09:40.713] [info] FFB DIAG: spd=1.798 steer=0.001 rate=[0.00000..0.00125] lat=16.01 drift=0.33 rough=0.25 constLvl=4246 periodics=true warmup=30/30
+[2026-08-11 21:09:42.714] [info] FFB DIAG: spd=1.919 steer=0.001 rate=[0.00000..0.00121] lat=7.61 drift=0.00 rough=0.25 constLvl=2365 periodics=true warmup=30/30
+[2026-08-11 21:09:44.714] [info] FFB DIAG: spd=2.038 steer=0.001 rate=[0.00000..0.00120] lat=-0.97 drift=0.00 rough=0.25 constLvl=-42 periodics=true warmup=30/30
+[2026-08-11 21:09:46.714] [info] FFB DIAG: spd=2.123 steer=0.001 rate=[-0.00159..0.00109] lat=-3.98 drift=0.00 rough=0.25 constLvl=-1049 periodics=true warmup=30/30
+[2026-08-11 21:09:48.714] [info] FFB DIAG: spd=2.115 steer=-0.000 rate=[-0.00161..0.00091] lat=2.47 drift=0.00 rough=0.25 constLvl=434 periodics=true warmup=30/30
+[2026-08-11 21:09:50.714] [info] FFB DIAG: spd=2.110 steer=-0.001 rate=[-0.00168..0.00120] lat=-9.19 drift=0.00 rough=0.25 constLvl=-3104 periodics=true warmup=30/30
+[2026-08-11 21:09:52.715] [info] FFB DIAG: spd=2.070 steer=-0.000 rate=[-0.00562..0.00113] lat=6.76 drift=0.00 rough=0.25 constLvl=2181 periodics=true warmup=30/30
+[2026-08-11 21:09:54.715] [info] FFB DIAG: spd=2.070 steer=-0.001 rate=[-0.00087..0.00157] lat=-2.18 drift=0.00 rough=0.25 constLvl=-265 periodics=true warmup=30/30
+[2026-08-11 21:09:56.715] [info] FFB DIAG: spd=2.111 steer=0.001 rate=[-0.00089..0.00126] lat=-10.01 drift=0.00 rough=0.25 constLvl=-3342 periodics=true warmup=30/30
+[2026-08-11 21:09:58.716] [info] FFB DIAG: spd=2.001 steer=-0.000 rate=[-0.00238..0.00108] lat=-4.16 drift=0.00 rough=0.25 constLvl=-1104 periodics=true warmup=30/30
+[2026-08-11 21:10:00.716] [info] FFB DIAG: spd=2.005 steer=-0.000 rate=[-0.00090..0.00096] lat=-3.59 drift=0.00 rough=0.25 constLvl=-864 periodics=true warmup=30/30
+[2026-08-11 21:10:02.716] [info] FFB DIAG: spd=2.017 steer=0.001 rate=[-0.00051..0.00119] lat=-15.53 drift=0.29 rough=0.25 constLvl=-4356 periodics=true warmup=30/30
+[2026-08-11 21:10:04.716] [info] FFB DIAG: spd=2.121 steer=0.001 rate=[0.00000..0.00133] lat=9.78 drift=0.00 rough=0.25 constLvl=3143 periodics=true warmup=30/30
+[2026-08-11 21:10:06.717] [info] FFB DIAG: spd=2.104 steer=0.001 rate=[-0.00257..0.00118] lat=18.17 drift=0.51 rough=0.35 constLvl=4358 periodics=true warmup=30/30
+[2026-08-11 21:10:08.717] [info] FFB DIAG: spd=2.114 steer=0.000 rate=[-0.00163..0.00136] lat=10.88 drift=0.00 rough=0.25 constLvl=3635 periodics=true warmup=30/30
+[2026-08-11 21:10:10.717] [info] FFB DIAG: spd=2.181 steer=-0.001 rate=[-0.00197..0.00133] lat=33.07 drift=1.00 rough=0.25 constLvl=3911 periodics=true warmup=30/30
+[2026-08-11 21:10:12.720] [info] FFB DIAG: spd=2.101 steer=-0.000 rate=[-0.00237..0.00093] lat=33.06 drift=1.00 rough=0.25 constLvl=3906 periodics=true warmup=30/30
+[2026-08-11 21:10:14.720] [info] FFB DIAG: spd=2.087 steer=-0.000 rate=[-0.00194..0.00101] lat=-4.72 drift=0.00 rough=0.25 constLvl=-1335 periodics=true warmup=30/30
+[2026-08-11 21:10:16.721] [info] FFB DIAG: spd=2.093 steer=0.001 rate=[-0.00112..0.00096] lat=-10.23 drift=0.00 rough=0.35 constLvl=-3399 periodics=true warmup=30/30
+[2026-08-11 21:10:18.725] [info] FFB DIAG: spd=2.116 steer=-0.001 rate=[-0.00158..0.00131] lat=4.48 drift=0.00 rough=0.25 constLvl=1307 periodics=true warmup=30/30
+[2026-08-11 21:10:20.725] [info] FFB DIAG: spd=2.121 steer=-0.000 rate=[-0.00240..0.00096] lat=-2.05 drift=0.00 rough=0.25 constLvl=-243 periodics=true warmup=30/30
+[2026-08-11 21:10:22.725] [info] FFB DIAG: spd=2.117 steer=0.000 rate=[-0.00161..0.00099] lat=11.01 drift=0.00 rough=0.35 constLvl=3779 periodics=true warmup=30/30
+[2026-08-11 21:10:24.725] [info] FFB DIAG: spd=2.057 steer=0.000 rate=[-0.00161..0.00054] lat=6.49 drift=0.00 rough=0.25 constLvl=2019 periodics=true warmup=30/30
+[2026-08-11 21:10:26.726] [info] FFB DIAG: spd=2.122 steer=0.001 rate=[-0.00160..0.00113] lat=10.18 drift=0.00 rough=0.25 constLvl=3424 periodics=true warmup=30/30
+[2026-08-11 21:10:28.726] [info] FFB DIAG: spd=2.098 steer=-0.000 rate=[-0.00167..0.00098] lat=20.05 drift=0.67 rough=0.25 constLvl=4355 periodics=true warmup=30/30
+[2026-08-11 21:10:30.743] [info] FFB DIAG: spd=2.090 steer=0.000 rate=[-0.00111..0.00042] lat=12.98 drift=0.08 rough=0.25 constLvl=4254 periodics=true warmup=30/30
+[2026-08-11 21:10:32.743] [info] FFB DIAG: spd=2.109 steer=-0.001 rate=[-0.00159..0.00112] lat=-1.10 drift=0.00 rough=0.25 constLvl=68 periodics=true warmup=30/30
+[2026-08-11 21:10:34.743] [info] FFB DIAG: spd=2.068 steer=0.000 rate=[-0.00199..0.00115] lat=-3.63 drift=0.00 rough=0.25 constLvl=-889 periodics=true warmup=30/30
+[2026-08-11 21:10:36.743] [info] FFB DIAG: spd=2.089 steer=-0.000 rate=[-0.00120..0.00086] lat=-12.73 drift=0.06 rough=0.25 constLvl=-4263 periodics=true warmup=30/30
+[2026-08-11 21:10:38.743] [info] FFB DIAG: spd=2.113 steer=-0.001 rate=[-0.00164..0.00108] lat=2.39 drift=0.00 rough=0.25 constLvl=452 periodics=true warmup=30/30
+[2026-08-11 21:10:40.743] [info] FFB DIAG: spd=2.122 steer=0.001 rate=[-0.00161..0.00110] lat=-2.34 drift=0.00 rough=0.25 constLvl=-368 periodics=true warmup=30/30
+[2026-08-11 21:10:42.744] [info] FFB DIAG: spd=2.078 steer=-0.001 rate=[-0.00255..0.00095] lat=-7.00 drift=0.00 rough=0.25 constLvl=-2283 periodics=true warmup=30/30
+[2026-08-11 21:10:44.744] [info] FFB DIAG: spd=2.086 steer=-0.000 rate=[-0.00075..0.00098] lat=-4.38 drift=0.00 rough=0.25 constLvl=-1196 periodics=true warmup=30/30
+[2026-08-11 21:10:46.744] [info] FFB DIAG: spd=2.074 steer=0.000 rate=[-0.00134..0.00065] lat=-11.42 drift=0.00 rough=0.25 constLvl=-3855 periodics=true warmup=30/30
+[2026-08-11 21:10:48.744] [info] FFB DIAG: spd=2.110 steer=0.001 rate=[-0.00093..0.00128] lat=10.12 drift=0.00 rough=0.25 constLvl=3314 periodics=true warmup=30/30
+[2026-08-11 21:10:50.744] [info] FFB DIAG: spd=2.015 steer=-0.000 rate=[-0.00517..0.00125] lat=3.37 drift=0.00 rough=0.25 constLvl=819 periodics=true warmup=30/30
+[2026-08-11 21:10:52.745] [info] FFB DIAG: spd=2.029 steer=0.000 rate=[-0.00077..0.00080] lat=3.56 drift=0.00 rough=0.25 constLvl=850 periodics=true warmup=30/30
+[2026-08-11 21:10:54.745] [info] FFB DIAG: spd=2.067 steer=0.001 rate=[-0.00022..0.00130] lat=3.21 drift=0.00 rough=0.25 constLvl=623 periodics=true warmup=30/30
+[2026-08-11 21:10:56.745] [info] FFB DIAG: spd=2.072 steer=-0.000 rate=[-0.00152..0.00130] lat=-11.01 drift=0.00 rough=0.25 constLvl=-3807 periodics=true warmup=30/30
+[2026-08-11 21:10:58.754] [info] FFB DIAG: spd=2.086 steer=-0.001 rate=[-0.00159..0.00124] lat=5.83 drift=0.00 rough=0.25 constLvl=1922 periodics=true warmup=30/30
+[2026-08-11 21:11:00.754] [info] FFB DIAG: spd=2.051 steer=0.001 rate=[-0.00186..0.00137] lat=-5.95 drift=0.00 rough=0.25 constLvl=-1804 periodics=true warmup=30/30
+[2026-08-11 21:11:02.727] [info] FFB: Watchdog zeroed forces (no Update for 265ms)
+[2026-08-11 21:11:34.104] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[-0.00161..0.00134] lat=0.00 drift=0.00 rough=0.31 constLvl=599 periodics=true warmup=30/30
+[2026-08-11 21:11:36.111] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.00 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:11:38.108] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.00 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:11:40.108] [info] FFB DIAG: spd=0.377 steer=0.003 rate=[-0.00003..0.00340] lat=-0.08 drift=0.00 rough=0.25 constLvl=-84 periodics=true warmup=30/30
+[2026-08-11 21:11:42.108] [info] FFB DIAG: spd=0.741 steer=-0.002 rate=[-0.00131..0.00337] lat=4.42 drift=0.00 rough=0.25 constLvl=949 periodics=true warmup=30/30
+[2026-08-11 21:11:44.108] [info] FFB DIAG: spd=1.030 steer=-0.001 rate=[-0.00185..0.00309] lat=-8.53 drift=0.00 rough=0.25 constLvl=-2886 periodics=true warmup=30/30
+[2026-08-11 21:11:46.109] [info] FFB DIAG: spd=1.315 steer=-0.000 rate=[-0.00172..0.00268] lat=12.92 drift=0.08 rough=0.25 constLvl=4586 periodics=true warmup=30/30
+[2026-08-11 21:11:48.109] [info] FFB DIAG: spd=1.509 steer=0.002 rate=[-0.00153..0.00209] lat=12.93 drift=0.08 rough=0.25 constLvl=3888 periodics=true warmup=30/30
+[2026-08-11 21:11:50.109] [info] FFB DIAG: spd=1.682 steer=0.001 rate=[-0.00156..0.00189] lat=18.85 drift=0.57 rough=0.25 constLvl=4172 periodics=true warmup=30/30
+[2026-08-11 21:11:52.109] [info] FFB DIAG: spd=1.844 steer=0.001 rate=[0.00000..0.00145] lat=1.60 drift=0.00 rough=0.25 constLvl=-16 periodics=true warmup=30/30
+[2026-08-11 21:11:54.109] [info] FFB DIAG: spd=1.993 steer=0.001 rate=[0.00000..0.00136] lat=-0.91 drift=0.00 rough=0.25 constLvl=-49 periodics=true warmup=30/30
+[2026-08-11 21:11:56.110] [info] FFB DIAG: spd=2.137 steer=0.001 rate=[0.00000..0.00137] lat=-0.95 drift=0.00 rough=0.25 constLvl=-56 periodics=true warmup=30/30
+[2026-08-11 21:11:58.110] [info] FFB DIAG: spd=2.146 steer=0.001 rate=[-0.00230..0.00106] lat=9.34 drift=0.00 rough=0.25 constLvl=2996 periodics=true warmup=30/30
+[2026-08-11 21:12:00.110] [info] FFB DIAG: spd=2.119 steer=0.001 rate=[-0.00229..0.00120] lat=10.20 drift=0.00 rough=0.25 constLvl=3462 periodics=true warmup=30/30
+[2026-08-11 21:12:02.112] [info] FFB DIAG: spd=2.032 steer=-0.002 rate=[-0.00317..0.00086] lat=15.59 drift=0.30 rough=0.25 constLvl=4826 periodics=true warmup=30/30
+[2026-08-11 21:12:04.110] [info] FFB DIAG: spd=1.897 steer=-0.001 rate=[-0.00390..0.00174] lat=-16.54 drift=0.38 rough=0.35 constLvl=-4595 periodics=true warmup=30/30
+[2026-08-11 21:12:06.110] [info] FFB DIAG: spd=1.824 steer=-0.000 rate=[-0.00344..0.00079] lat=26.64 drift=1.00 rough=0.30 constLvl=3863 periodics=true warmup=30/30
+[2026-08-11 21:12:08.111] [info] FFB DIAG: spd=1.830 steer=0.001 rate=[-0.00052..0.00181] lat=-0.95 drift=0.00 rough=0.25 constLvl=-21 periodics=true warmup=30/30
+[2026-08-11 21:12:10.111] [info] FFB DIAG: spd=1.975 steer=0.001 rate=[0.00000..0.00171] lat=5.50 drift=0.00 rough=0.25 constLvl=1534 periodics=true warmup=30/30
+[2026-08-11 21:12:12.111] [info] FFB DIAG: spd=2.101 steer=0.001 rate=[0.00000..0.00115] lat=6.83 drift=0.00 rough=0.25 constLvl=2064 periodics=true warmup=30/30
+[2026-08-11 21:12:14.111] [info] FFB DIAG: spd=2.119 steer=-0.001 rate=[-0.00160..0.00097] lat=15.30 drift=0.27 rough=0.25 constLvl=4520 periodics=true warmup=30/30
+[2026-08-11 21:12:16.112] [info] FFB DIAG: spd=2.192 steer=0.001 rate=[-0.00162..0.00121] lat=8.09 drift=0.00 rough=0.25 constLvl=2549 periodics=true warmup=30/30
+[2026-08-11 21:12:18.112] [info] FFB DIAG: spd=2.111 steer=-0.000 rate=[-0.00236..0.00155] lat=-2.48 drift=0.00 rough=0.25 constLvl=-408 periodics=true warmup=30/30
+[2026-08-11 21:12:20.112] [info] FFB DIAG: spd=2.086 steer=0.000 rate=[-0.00252..0.00108] lat=1.34 drift=0.00 rough=0.25 constLvl=-15 periodics=true warmup=30/30
+[2026-08-11 21:12:22.112] [info] FFB DIAG: spd=1.977 steer=-0.000 rate=[-0.00507..0.00131] lat=15.98 drift=0.33 rough=0.25 constLvl=4506 periodics=true warmup=30/30
+[2026-08-11 21:12:24.114] [info] FFB DIAG: spd=1.944 steer=0.001 rate=[-0.00143..0.00082] lat=15.62 drift=0.30 rough=0.25 constLvl=4319 periodics=true warmup=30/30
+[2026-08-11 21:12:26.113] [info] FFB DIAG: spd=1.849 steer=0.001 rate=[-0.00490..0.00197] lat=18.88 drift=0.57 rough=0.25 constLvl=4296 periodics=true warmup=30/30
+[2026-08-11 21:12:28.113] [info] FFB DIAG: spd=1.897 steer=0.001 rate=[-0.00040..0.00165] lat=4.98 drift=0.00 rough=0.25 constLvl=1354 periodics=true warmup=30/30
+[2026-08-11 21:12:30.113] [info] FFB DIAG: spd=2.034 steer=0.001 rate=[0.00000..0.00136] lat=8.34 drift=0.00 rough=0.25 constLvl=2589 periodics=true warmup=30/30
+[2026-08-11 21:12:32.113] [info] FFB DIAG: spd=2.166 steer=-0.001 rate=[-0.00214..0.00151] lat=32.20 drift=1.00 rough=0.25 constLvl=4039 periodics=true warmup=30/30
+[2026-08-11 21:12:34.113] [info] FFB DIAG: spd=2.087 steer=-0.001 rate=[-0.00258..0.00106] lat=-5.85 drift=0.00 rough=0.25 constLvl=-1808 periodics=true warmup=30/30
+[2026-08-11 21:12:36.104] [info] FFB DIAG: spd=2.073 steer=0.000 rate=[-0.00193..0.00095] lat=-1.83 drift=0.00 rough=0.25 constLvl=-153 periodics=true warmup=30/30
+[2026-08-11 21:12:38.104] [info] FFB DIAG: spd=2.140 steer=-0.002 rate=[-0.00147..0.00130] lat=-1.58 drift=0.00 rough=0.25 constLvl=29 periodics=true warmup=30/30
+[2026-08-11 21:12:40.108] [info] FFB DIAG: spd=2.121 steer=0.001 rate=[-0.00230..0.00095] lat=-2.41 drift=0.00 rough=0.25 constLvl=-390 periodics=true warmup=30/30
+[2026-08-11 21:12:42.108] [info] FFB DIAG: spd=2.091 steer=-0.001 rate=[-0.00171..0.00094] lat=5.85 drift=0.00 rough=0.25 constLvl=1884 periodics=true warmup=30/30
+[2026-08-11 21:12:43.908] [info] FFB: CRASH impulse from flags8 0x1000! dir=-1 latPre=5.71 force=-1.20
+[2026-08-11 21:12:44.108] [info] FFB DIAG: spd=2.061 steer=-0.001 rate=[-0.00146..0.00096] lat=4.76 drift=0.00 rough=0.25 constLvl=-2062 periodics=true warmup=30/30
+[2026-08-11 21:12:46.108] [info] FFB DIAG: spd=2.105 steer=0.000 rate=[-0.00148..0.00137] lat=-0.70 drift=0.00 rough=0.25 constLvl=1 periodics=true warmup=30/30
+[2026-08-11 21:12:48.108] [info] FFB DIAG: spd=2.119 steer=-0.001 rate=[-0.00161..0.00106] lat=3.71 drift=0.00 rough=0.25 constLvl=1012 periodics=true warmup=30/30
+[2026-08-11 21:12:50.109] [info] FFB DIAG: spd=2.118 steer=0.000 rate=[-0.00232..0.00097] lat=6.48 drift=0.00 rough=0.25 constLvl=2103 periodics=true warmup=30/30
+[2026-08-11 21:12:52.109] [info] FFB DIAG: spd=2.081 steer=-0.000 rate=[-0.00194..0.00095] lat=1.73 drift=0.00 rough=0.25 constLvl=118 periodics=true warmup=30/30
+[2026-08-11 21:12:54.109] [info] FFB DIAG: spd=2.119 steer=0.001 rate=[-0.00070..0.00148] lat=1.83 drift=0.00 rough=0.25 constLvl=126 periodics=true warmup=30/30
+[2026-08-11 21:12:56.109] [info] FFB DIAG: spd=2.134 steer=0.000 rate=[-0.00159..0.00116] lat=-1.65 drift=0.00 rough=0.25 constLvl=-57 periodics=true warmup=30/30
+[2026-08-11 21:12:58.110] [info] FFB DIAG: spd=2.124 steer=-0.001 rate=[-0.00231..0.00098] lat=0.87 drift=0.00 rough=0.25 constLvl=11 periodics=true warmup=30/30
+[2026-08-11 21:13:00.110] [info] FFB DIAG: spd=2.121 steer=-0.001 rate=[-0.00230..0.00102] lat=0.78 drift=0.00 rough=0.25 constLvl=10 periodics=true warmup=30/30
+[2026-08-11 21:13:02.110] [info] FFB DIAG: spd=2.121 steer=-0.000 rate=[-0.00161..0.00092] lat=1.50 drift=0.00 rough=0.25 constLvl=39 periodics=true warmup=30/30
+[2026-08-11 21:13:04.110] [info] FFB DIAG: spd=2.120 steer=-0.001 rate=[-0.00229..0.00096] lat=0.55 drift=0.00 rough=0.25 constLvl=11 periodics=true warmup=30/30
+[2026-08-11 21:13:06.110] [info] FFB DIAG: spd=2.121 steer=-0.000 rate=[-0.00161..0.00091] lat=-1.76 drift=0.00 rough=0.25 constLvl=-128 periodics=true warmup=30/30
+[2026-08-11 21:13:08.110] [info] FFB DIAG: spd=2.097 steer=-0.000 rate=[-0.00180..0.00151] lat=6.07 drift=0.00 rough=0.25 constLvl=1906 periodics=true warmup=30/30
+[2026-08-11 21:13:10.111] [info] FFB DIAG: spd=2.078 steer=0.000 rate=[-0.00088..0.00056] lat=10.47 drift=0.00 rough=0.25 constLvl=3559 periodics=true warmup=30/30
+[2026-08-11 21:13:11.177] [info] FFB: CRASH impulse! windowDelta=0.033 dir=1 latPre=-9.45 force=1.50
+[2026-08-11 21:13:12.111] [info] FFB DIAG: spd=1.825 steer=0.001 rate=[-0.01175..0.00264] lat=-3.85 drift=0.00 rough=0.71 constLvl=-982 periodics=true warmup=30/30
+[2026-08-11 21:13:14.111] [info] FFB DIAG: spd=1.955 steer=0.001 rate=[0.00000..0.00150] lat=4.59 drift=0.00 rough=0.71 constLvl=1191 periodics=true warmup=30/30
+[2026-08-11 21:13:16.111] [info] FFB DIAG: spd=1.931 steer=-0.000 rate=[-0.00273..0.00137] lat=-3.84 drift=0.00 rough=0.25 constLvl=-973 periodics=true warmup=30/30
+[2026-08-11 21:13:18.111] [info] FFB DIAG: spd=1.881 steer=-0.000 rate=[-0.00481..0.00048] lat=9.10 drift=0.00 rough=0.25 constLvl=3097 periodics=true warmup=30/30
+[2026-08-11 21:13:20.112] [info] FFB DIAG: spd=1.915 steer=0.000 rate=[-0.00078..0.00257] lat=-1.93 drift=0.00 rough=0.25 constLvl=-189 periodics=true warmup=30/30
+[2026-08-11 21:13:22.112] [info] FFB DIAG: spd=2.044 steer=0.001 rate=[0.00000..0.00192] lat=1.69 drift=0.00 rough=0.25 constLvl=32 periodics=true warmup=30/30
+[2026-08-11 21:13:24.112] [info] FFB DIAG: spd=2.001 steer=-0.000 rate=[-0.00378..0.00104] lat=-1.07 drift=0.00 rough=0.25 constLvl=6 periodics=true warmup=30/30
+[2026-08-11 21:13:26.112] [info] FFB DIAG: spd=1.945 steer=0.000 rate=[-0.00066..0.00010] lat=-0.60 drift=0.00 rough=0.25 constLvl=7 periodics=true warmup=30/30
+[2026-08-11 21:13:28.112] [info] FFB DIAG: spd=1.792 steer=0.002 rate=[-0.00359..0.00211] lat=9.24 drift=0.00 rough=0.25 constLvl=2918 periodics=true warmup=30/30
+[2026-08-11 21:13:29.865] [info] FFB: Watchdog zeroed forces (no Update for 266ms)
+[2026-08-11 21:13:47.831] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00236] lat=0.00 drift=0.00 rough=0.31 constLvl=599 periodics=true warmup=30/30
+[2026-08-11 21:13:49.835] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.00 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:13:51.824] [info] FFB DIAG: spd=0.000 steer=0.000 rate=[0.00000..0.00000] lat=0.00 drift=0.00 rough=0.25 constLvl=0 periodics=true warmup=30/30
+[2026-08-11 21:13:53.825] [info] FFB DIAG: spd=0.379 steer=0.003 rate=[0.00000..0.00339] lat=0.16 drift=0.00 rough=0.25 constLvl=-87 periodics=true warmup=30/30
+[2026-08-11 21:13:55.825] [info] FFB DIAG: spd=0.746 steer=0.003 rate=[-0.00184..0.00337] lat=1.21 drift=0.00 rough=0.25 constLvl=64 periodics=true warmup=30/30
+[2026-08-11 21:13:57.825] [info] FFB DIAG: spd=1.064 steer=0.003 rate=[-0.00171..0.00307] lat=4.95 drift=0.00 rough=0.25 constLvl=1153 periodics=true warmup=30/30
+[2026-08-11 21:13:59.826] [info] FFB DIAG: spd=1.333 steer=0.002 rate=[-0.00149..0.00265] lat=5.56 drift=0.00 rough=0.25 constLvl=1455 periodics=true warmup=30/30
+[2026-08-11 21:14:01.826] [info] FFB DIAG: spd=1.572 steer=0.002 rate=[0.00000..0.00215] lat=3.87 drift=0.00 rough=0.25 constLvl=838 periodics=true warmup=30/30
+[2026-08-11 21:14:03.827] [info] FFB DIAG: spd=1.714 steer=0.001 rate=[-0.00156..0.00181] lat=9.65 drift=0.00 rough=0.25 constLvl=3072 periodics=true warmup=30/30
+[2026-08-11 21:14:05.828] [info] FFB DIAG: spd=1.886 steer=0.002 rate=[0.00000..0.00197] lat=7.67 drift=0.00 rough=0.25 constLvl=2271 periodics=true warmup=30/30
+[2026-08-11 21:14:07.828] [info] FFB DIAG: spd=2.045 steer=0.001 rate=[0.00000..0.00187] lat=1.69 drift=0.00 rough=0.25 constLvl=22 periodics=true warmup=30/30
+[2026-08-11 21:14:09.828] [info] FFB DIAG: spd=2.106 steer=-0.000 rate=[-0.00244..0.00118] lat=-4.12 drift=0.00 rough=0.25 constLvl=-1098 periodics=true warmup=30/30
+[2026-08-11 21:14:11.828] [info] FFB DIAG: spd=2.077 steer=0.000 rate=[-0.00175..0.00044] lat=-15.17 drift=0.26 rough=0.35 constLvl=-4396 periodics=true warmup=30/30
+[2026-08-11 21:14:13.062] [info] FFB: CRASH impulse from flags8 0x1000! dir=1 latPre=-7.60 force=1.20
+[2026-08-11 21:14:13.828] [info] FFB DIAG: spd=2.042 steer=0.001 rate=[-0.00215..0.00068] lat=-7.49 drift=0.00 rough=0.25 constLvl=-2423 periodics=true warmup=30/30
+[2026-08-11 21:14:15.828] [info] FFB DIAG: spd=2.020 steer=-0.001 rate=[-0.00151..0.00167] lat=12.51 drift=0.04 rough=0.25 constLvl=4380 periodics=true warmup=30/30
+[2026-08-11 21:14:17.829] [info] FFB DIAG: spd=2.093 steer=0.001 rate=[-0.00088..0.00157] lat=-1.23 drift=0.00 rough=0.25 constLvl=-35 periodics=true warmup=30/30
+[2026-08-11 21:14:19.829] [info] FFB DIAG: spd=2.119 steer=-0.002 rate=[-0.00238..0.00106] lat=-0.83 drift=0.00 rough=0.25 constLvl=43 periodics=true warmup=30/30
+[2026-08-11 21:14:21.829] [info] FFB DIAG: spd=2.113 steer=-0.000 rate=[-0.00165..0.00093] lat=-1.23 drift=0.00 rough=0.25 constLvl=-27 periodics=true warmup=30/30
+[2026-08-11 21:14:23.829] [info] FFB DIAG: spd=2.113 steer=-0.000 rate=[-0.00243..0.00122] lat=-12.82 drift=0.07 rough=0.25 constLvl=-4228 periodics=true warmup=30/30
+[2026-08-11 21:14:25.829] [info] FFB DIAG: spd=2.083 steer=0.001 rate=[-0.00160..0.00090] lat=-4.35 drift=0.00 rough=0.25 constLvl=-1185 periodics=true warmup=30/30
+[2026-08-11 21:14:27.830] [info] FFB DIAG: spd=1.979 steer=-0.000 rate=[-0.00385..0.00144] lat=-4.76 drift=0.00 rough=0.25 constLvl=-1352 periodics=true warmup=30/30
+[2026-08-11 21:14:29.230] [info] FFB: CRASH impulse from flags8 0x1000! dir=1 latPre=-7.69 force=1.20
+[2026-08-11 21:14:29.830] [info] FFB DIAG: spd=1.932 steer=0.001 rate=[-0.00191..0.00064] lat=0.13 drift=0.00 rough=0.25 constLvl=-20 periodics=true warmup=30/30
+[2026-08-11 21:14:30.730] [info] FFB: CRASH impulse! windowDelta=0.040 dir=-1 latPre=15.00 force=-1.50
+[2026-08-11 21:14:31.830] [info] FFB DIAG: spd=1.614 steer=-0.001 rate=[-0.01158..0.00416] lat=3.07 drift=0.00 rough=0.25 constLvl=714 periodics=true warmup=30/30
+[2026-08-11 21:14:33.830] [info] FFB DIAG: spd=1.662 steer=0.002 rate=[-0.00154..0.00231] lat=-3.54 drift=0.00 rough=0.25 constLvl=-860 periodics=true warmup=30/30
+[2026-08-11 21:14:35.830] [info] FFB DIAG: spd=1.730 steer=0.000 rate=[-0.00012..0.00168] lat=-1.15 drift=0.00 rough=0.25 constLvl=-21 periodics=true warmup=30/30
+[2026-08-11 21:14:37.830] [info] FFB DIAG: spd=1.777 steer=0.001 rate=[-0.00278..0.00223] lat=6.00 drift=0.00 rough=0.25 constLvl=1728 periodics=true warmup=30/30
+[2026-08-11 21:14:37.914] [info] FFB: CRASH impulse from flags8 0x1000! dir=-1 latPre=5.98 force=-1.20
+[2026-08-11 21:14:39.831] [info] FFB DIAG: spd=1.811 steer=-0.000 rate=[-0.00047..0.00113] lat=-11.28 drift=0.00 rough=0.25 constLvl=-3866 periodics=true warmup=30/30
+[2026-08-11 21:14:41.547] [info] FFB: CRASH impulse! windowDelta=0.031 dir=-1 latPre=12.57 force=-1.50
+[2026-08-11 21:14:41.831] [info] FFB DIAG: spd=1.566 steer=-0.011 rate=[-0.01154..0.00205] lat=15.82 drift=0.32 rough=0.25 constLvl=30 periodics=true warmup=30/30
+[2026-08-11 21:14:43.831] [info] FFB DIAG: spd=1.587 steer=0.000 rate=[-0.01143..0.00332] lat=-0.65 drift=0.00 rough=0.25 constLvl=-33 periodics=true warmup=30/30
+[2026-08-11 21:14:45.832] [info] FFB DIAG: spd=1.684 steer=0.001 rate=[-0.00220..0.00211] lat=37.85 drift=1.00 rough=0.25 constLvl=3573 periodics=true warmup=30/30
+[2026-08-11 21:14:47.833] [info] FFB DIAG: spd=1.856 steer=0.001 rate=[0.00000..0.00162] lat=-3.78 drift=0.00 rough=0.25 constLvl=-941 periodics=true warmup=30/30
+[2026-08-11 21:14:49.834] [info] FFB DIAG: spd=1.918 steer=-0.000 rate=[-0.00024..0.00147] lat=-3.41 drift=0.00 rough=0.25 constLvl=-792 periodics=true warmup=30/30
+[2026-08-11 21:14:51.834] [info] FFB DIAG: spd=2.011 steer=0.001 rate=[-0.00004..0.00160] lat=-6.74 drift=0.00 rough=0.25 constLvl=-2102 periodics=true warmup=30/30
+[2026-08-11 21:14:53.834] [info] FFB DIAG: spd=2.127 steer=-0.001 rate=[-0.00019..0.00119] lat=2.24 drift=0.00 rough=0.25 constLvl=322 periodics=true warmup=30/30
+[2026-08-11 21:14:55.834] [info] FFB DIAG: spd=2.117 steer=0.000 rate=[-0.00231..0.00098] lat=-2.92 drift=0.00 rough=0.25 constLvl=-582 periodics=true warmup=30/30
+[2026-08-11 21:14:57.835] [info] FFB DIAG: spd=2.010 steer=-0.000 rate=[-0.00593..0.00134] lat=-2.15 drift=0.00 rough=0.25 constLvl=-262 periodics=true warmup=30/30
+[2026-08-11 21:14:59.835] [info] FFB DIAG: spd=2.047 steer=0.001 rate=[-0.00049..0.00117] lat=10.30 drift=0.00 rough=0.25 constLvl=3355 periodics=true warmup=30/30
+[2026-08-11 21:15:01.835] [info] FFB DIAG: spd=2.122 steer=0.000 rate=[-0.00160..0.00106] lat=0.38 drift=0.00 rough=0.25 constLvl=-37 periodics=true warmup=30/30
+[2026-08-11 21:15:03.836] [info] FFB DIAG: spd=2.076 steer=0.000 rate=[-0.00212..0.00090] lat=0.34 drift=0.00 rough=0.25 constLvl=-20 periodics=true warmup=30/30
+[2026-08-11 21:15:05.836] [info] FFB DIAG: spd=2.101 steer=0.000 rate=[-0.00055..0.00052] lat=-4.43 drift=0.00 rough=0.25 constLvl=-1226 periodics=true warmup=30/30
+[2026-08-11 21:15:07.836] [info] FFB DIAG: spd=2.093 steer=0.000 rate=[-0.00158..0.00115] lat=-4.40 drift=0.00 rough=0.25 constLvl=-1205 periodics=true warmup=30/30
+[2026-08-11 21:15:09.838] [info] FFB DIAG: spd=2.074 steer=-0.003 rate=[-0.00265..0.00140] lat=-15.05 drift=0.25 rough=0.70 constLvl=-4786 periodics=true warmup=30/30
+[2026-08-11 21:15:09.936] [info] FFB: CRASH impulse! windowDelta=0.031 dir=1 latPre=-14.56 force=1.50
+[2026-08-11 21:15:11.438] [info] FFB: CRASH impulse! windowDelta=0.541 dir=-1 latPre=11.50 force=-1.50
+[2026-08-11 21:15:11.838] [info] FFB DIAG: spd=1.404 steer=0.001 rate=[-0.54290..0.00216] lat=16.74 drift=0.40 rough=0.70 constLvl=4230 periodics=true warmup=30/30
+[2026-08-11 21:15:13.838] [info] FFB DIAG: spd=1.367 steer=0.002 rate=[-0.00645..0.00254] lat=-1.87 drift=0.00 rough=0.25 constLvl=-222 periodics=true warmup=30/30
+[2026-08-11 21:15:15.838] [info] FFB DIAG: spd=1.556 steer=0.001 rate=[0.00000..0.00222] lat=7.42 drift=0.00 rough=0.25 constLvl=2216 periodics=true warmup=30/30
+[2026-08-11 21:15:17.839] [info] FFB DIAG: spd=1.673 steer=0.001 rate=[-0.00173..0.00168] lat=5.56 drift=0.00 rough=0.25 constLvl=1592 periodics=true warmup=30/30
+[2026-08-11 21:15:19.839] [info] FFB DIAG: spd=1.819 steer=0.001 rate=[0.00000..0.00155] lat=1.38 drift=0.00 rough=0.25 constLvl=-48 periodics=true warmup=30/30
+[2026-08-11 21:15:21.839] [info] FFB DIAG: spd=1.948 steer=0.000 rate=[0.00000..0.00132] lat=-7.16 drift=0.00 rough=0.25 constLvl=-2306 periodics=true warmup=30/30
+[2026-08-11 21:15:23.839] [info] FFB DIAG: spd=2.030 steer=-0.000 rate=[-0.00042..0.00170] lat=8.75 drift=0.00 rough=0.25 constLvl=2989 periodics=true warmup=30/30
+[2026-08-11 21:15:25.840] [info] FFB DIAG: spd=2.082 steer=0.001 rate=[-0.00050..0.00145] lat=-2.61 drift=0.00 rough=0.25 constLvl=-486 periodics=true warmup=30/30
+[2026-08-11 21:15:27.840] [info] FFB DIAG: spd=2.109 steer=-0.001 rate=[-0.00163..0.00106] lat=4.52 drift=0.00 rough=0.25 constLvl=1262 periodics=true warmup=30/30
+[2026-08-11 21:15:29.840] [info] FFB DIAG: spd=1.864 steer=-0.005 rate=[-0.00667..0.00041] lat=-21.30 drift=0.77 rough=0.90 constLvl=-4694 periodics=true warmup=30/30
+[2026-08-11 21:15:31.840] [info] FFB DIAG: spd=1.814 steer=0.001 rate=[-0.00537..0.00193] lat=-3.46 drift=0.00 rough=0.25 constLvl=-827 periodics=true warmup=30/30
+[2026-08-11 21:15:33.840] [info] FFB DIAG: spd=1.889 steer=-0.000 rate=[-0.00125..0.00192] lat=5.24 drift=0.00 rough=0.25 constLvl=1581 periodics=true warmup=30/30
+[2026-08-11 21:15:34.357] [info] FFB: CRASH impulse from flags8 0x1000! dir=-1 latPre=1.43 force=-1.20
+[2026-08-11 21:15:35.841] [info] FFB DIAG: spd=1.920 steer=-0.002 rate=[-0.00128..0.00173] lat=3.52 drift=0.00 rough=0.25 constLvl=934 periodics=true warmup=30/30
+[2026-08-11 21:15:36.007] [info] FFB: CRASH impulse! windowDelta=0.030 dir=-1 latPre=2.23 force=-1.50
+[2026-08-11 21:15:37.841] [info] FFB DIAG: spd=1.773 steer=-0.000 rate=[-0.00738..0.00047] lat=13.10 drift=0.09 rough=0.35 constLvl=4293 periodics=true warmup=30/30
+[2026-08-11 21:15:39.841] [info] FFB DIAG: spd=1.790 steer=0.001 rate=[-0.00120..0.00223] lat=3.59 drift=0.00 rough=0.25 constLvl=772 periodics=true warmup=30/30
+[2026-08-11 21:15:41.851] [info] FFB DIAG: spd=1.725 steer=0.000 rate=[-0.00540..0.00189] lat=-5.08 drift=0.00 rough=0.25 constLvl=-1475 periodics=true warmup=30/30
+[2026-08-11 21:15:43.852] [info] FFB DIAG: spd=1.698 steer=-0.001 rate=[-0.00103..0.00026] lat=-12.29 drift=0.02 rough=0.25 constLvl=-4267 periodics=true warmup=30/30
+[2026-08-11 21:15:45.852] [info] FFB DIAG: spd=1.801 steer=0.001 rate=[-0.00109..0.00235] lat=10.67 drift=0.00 rough=0.25 constLvl=3504 periodics=true warmup=30/30
+[2026-08-11 21:15:47.389] [info] FFB: Watchdog zeroed forces (no Update for 265ms)
+[2026-08-11 21:16:20.815] [info] FFB: PanicStop -- zeroing forces before window teardown
+[2026-08-11 21:16:20.815] [info] FFB: PanicStop constant-force zero => 0x00000000
+[2026-08-11 21:16:20.817] [info] FFB: PanicStop constant-force Stop => 0x00000000
+[2026-08-11 21:16:20.819] [info] FFB: PanicStop road-texture Stop => 0x00000000
+[2026-08-11 21:16:20.821] [info] FFB: PanicStop tire-slip Stop => 0x00000000
+[2026-08-11 21:16:20.822] [info] FFB: PanicStop STOPALL => 0x00000000
+[2026-08-11 21:16:20.823] [info] FFB: PanicStop SETACTUATORSOFF => 0x00000000
+[2026-08-11 21:16:20.830] [info] FFB: PanicStop RESET => 0x00000000
+[2026-08-11 21:16:20.832] [info] FFB: PanicStop Unacquire => 0x00000000
+[2026-08-11 21:16:20.846] [info] Telemetry: Shared memory closed
+[2026-08-11 21:16:20.846] [info] FFB: Shutting down...
+[2026-08-11 21:16:20.846] [warning] FFB: Exception releasing effect (0xC0000005)
+[2026-08-11 21:16:20.846] [info] FFB: Shutdown complete
