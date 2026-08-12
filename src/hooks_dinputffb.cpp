@@ -729,27 +729,28 @@ namespace FFB
 		hr = ffbDevice->SendForceFeedbackCommand(DISFFC_RESET);
 		spdlog::info("FFB: PanicStop RESET => 0x{:08X}", (unsigned)hr);
 
+		// Driver-side session close -> wheelbase releases any held torque
+		hr = ffbDevice->Unacquire();
+		spdlog::info("FFB: PanicStop Unacquire => 0x{:08X}", (unsigned)hr);
+
 		// Hand the wheel back to the driver's own centring spring.
 		//
-		// This used to live in Shutdown(), which was unreliable: it shared one
-		// SEH block with the effect releases, so an access violation there
-		// (0xC0000005, seen on every exit) skipped the autocenter restore
-		// silently and left the wheel limp for the next application. Here the
-		// device is still known-good -- every call above returned DI_OK -- so
-		// it actually lands. Property writes are legal on an unacquired device,
-		// but doing it before Unacquire() removes any doubt.
+		// Order matters twice over:
+		//   * AFTER Unacquire, because DIPROP_AUTOCENTER may only be written on
+		//     an unacquired device. Setting it earlier returns 0x800700AA
+		//     (ERROR_BUSY) -- observed, not theorised.
+		//   * HERE rather than in Shutdown(), because there it shared an SEH
+		//     block with the effect releases. Those reliably fault at teardown
+		//     (0xC0000005 on all three), so the restore was skipped silently and
+		//     the wheel was left without autocenter for whatever ran next.
 		DIPROPDWORD autoCenter = {};
 		autoCenter.diph.dwSize = sizeof(DIPROPDWORD);
 		autoCenter.diph.dwHeaderSize = sizeof(DIPROPHEADER);
 		autoCenter.diph.dwObj = 0;
 		autoCenter.diph.dwHow = DIPH_DEVICE;
-		autoCenter.dwData = TRUE; // DIPROPAUTOCENTER_ON
+		autoCenter.dwData = DIPROPAUTOCENTER_ON;
 		hr = ffbDevice->SetProperty(DIPROP_AUTOCENTER, &autoCenter.diph);
 		spdlog::info("FFB: PanicStop autocenter restore => 0x{:08X}", (unsigned)hr);
-
-		// Driver-side session close -> wheelbase releases any held torque
-		hr = ffbDevice->Unacquire();
-		spdlog::info("FFB: PanicStop Unacquire => 0x{:08X}", (unsigned)hr);
 	}
 
 	// Release one effect under its OWN exception guard.
