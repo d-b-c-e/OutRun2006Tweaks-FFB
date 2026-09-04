@@ -350,6 +350,7 @@ target_include_directories(outrun2006tweaks PUBLIC
 	"shared/"
 	"src/"
 	"include/"
+	"lib/toolkit/include/"
 	"external/ModUtils/"
 	"external/ini-cpp/ini/"
 	"external/xxHash/"

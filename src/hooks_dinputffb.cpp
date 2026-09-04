@@ -15,6 +15,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "comctl32.lib")
 #include <cmath>
+#include <cstdio>
 #include <algorithm>
 #include <string>
 
@@ -33,101 +34,13 @@ extern float VibrationRightMotor;
 // asphalt up to 0.9 for rough surfaces; sets *a3 |= 1 on water surfaces.
 extern double __cdecl sub_1149C0(unsigned int surfaceMask, int loadColiType, DWORD* waterFlag);
 
-// Forza Motorsport "Dash" UDP packet (311 bytes, little-endian)
-// Emitted to localhost:8000 for Moza Pit House wheel display
-#pragma pack(push, 1)
-struct ForzaDashPacket
-{
-	// SLED section (0-231)
-	int32_t  IsRaceOn;                    //   0
-	uint32_t TimestampMS;                 //   4
-	float    EngineMaxRpm;                //   8
-	float    EngineIdleRpm;               //  12
-	float    CurrentEngineRpm;            //  16
-	float    AccelerationX;               //  20
-	float    AccelerationY;               //  24
-	float    AccelerationZ;               //  28
-	float    VelocityX;                   //  32
-	float    VelocityY;                   //  36
-	float    VelocityZ;                   //  40
-	float    AngularVelocityX;            //  44
-	float    AngularVelocityY;            //  48
-	float    AngularVelocityZ;            //  52
-	float    Yaw;                         //  56
-	float    Pitch;                       //  60
-	float    Roll;                        //  64
-	float    NormSuspTravelFL;            //  68
-	float    NormSuspTravelFR;            //  72
-	float    NormSuspTravelRL;            //  76
-	float    NormSuspTravelRR;            //  80
-	float    TireSlipRatioFL;             //  84
-	float    TireSlipRatioFR;             //  88
-	float    TireSlipRatioRL;             //  92
-	float    TireSlipRatioRR;             //  96
-	float    WheelRotSpeedFL;             // 100
-	float    WheelRotSpeedFR;             // 104
-	float    WheelRotSpeedRL;             // 108
-	float    WheelRotSpeedRR;             // 112
-	int32_t  WheelOnRumbleFL;             // 116
-	int32_t  WheelOnRumbleFR;             // 120
-	int32_t  WheelOnRumbleRL;             // 124
-	int32_t  WheelOnRumbleRR;             // 128
-	float    WheelPuddleFL;              // 132
-	float    WheelPuddleFR;              // 136
-	float    WheelPuddleRL;              // 140
-	float    WheelPuddleRR;              // 144
-	float    SurfaceRumbleFL;             // 148
-	float    SurfaceRumbleFR;             // 152
-	float    SurfaceRumbleRL;             // 156
-	float    SurfaceRumbleRR;             // 160
-	float    TireSlipAngleFL;             // 164
-	float    TireSlipAngleFR;             // 168
-	float    TireSlipAngleRL;             // 172
-	float    TireSlipAngleRR;             // 176
-	float    TireCombinedSlipFL;          // 180
-	float    TireCombinedSlipFR;          // 184
-	float    TireCombinedSlipRL;          // 188
-	float    TireCombinedSlipRR;          // 192
-	float    SuspTravelMetersFL;          // 196
-	float    SuspTravelMetersFR;          // 200
-	float    SuspTravelMetersRL;          // 204
-	float    SuspTravelMetersRR;          // 208
-	int32_t  CarOrdinal;                  // 212
-	int32_t  CarClass;                    // 216
-	int32_t  CarPerformanceIndex;         // 220
-	int32_t  DrivetrainType;              // 224
-	int32_t  NumCylinders;                // 228
-	// DASH section (232-310)
-	float    PositionX;                   // 232
-	float    PositionY;                   // 236
-	float    PositionZ;                   // 240
-	float    Speed;                       // 244 (m/s)
-	float    Power;                       // 248
-	float    Torque;                      // 252
-	float    TireTempFL;                  // 256
-	float    TireTempFR;                  // 260
-	float    TireTempRL;                  // 264
-	float    TireTempRR;                  // 268
-	float    Boost;                       // 272
-	float    Fuel;                        // 276
-	float    DistanceTraveled;            // 280
-	float    BestLap;                     // 284
-	float    LastLap;                     // 288
-	float    CurrentLap;                  // 292
-	float    CurrentRaceTime;             // 296
-	uint16_t LapNumber;                   // 300
-	uint8_t  RacePosition;               // 302
-	uint8_t  Accel;                       // 303 (throttle 0-255)
-	uint8_t  Brake;                       // 304 (0-255)
-	uint8_t  Clutch;                      // 305
-	uint8_t  HandBrake;                   // 306
-	uint8_t  Gear;                        // 307 (0=R, 1-10=fwd)
-	int8_t   Steer;                       // 308 (-127..127)
-	int8_t   NormDrivingLine;             // 309
-	int8_t   NormAIBrakeDiff;             // 310
-};
-#pragma pack(pop)
-static_assert(sizeof(ForzaDashPacket) == 311, "ForzaDashPacket must be 311 bytes");
+// Forza "Data Out" telemetry, emitted to localhost:8000 for the Moza Pit
+// House display and SimHub. The 311-byte FM7 "Dash" layout and its encoder
+// now come from dbce-wheel-mod-toolkit rather than a local struct, so the
+// sizes every receiver validates against (232 sled / 311 FM7 / 324 Horizon)
+// are pinned in one place with a conformance test. The struct fields are the
+// same ones, lower-cased: IsRaceOn -> isRaceOn, Speed -> speed and so on.
+#include "forza_packet.h"
 
 // Telemetry: shared memory (SimHub) + Forza UDP (Moza Pit House display)
 // Forward declarations from hooks_inputremap.cpp.
@@ -246,18 +159,19 @@ namespace Telemetry
 		// Send Forza UDP (Moza Pit House wheel display)
 		if (udpInitialized && udpSocket != INVALID_SOCKET)
 		{
-			ForzaDashPacket pkt = {};
+			dbce::forza::Sled sled = {};
+			dbce::forza::Dash dash = {};
 
-			pkt.IsRaceOn = inGameplay ? 1 : 0;
-			pkt.TimestampMS = GetTickCount();
+			sled.isRaceOn = inGameplay ? 1 : 0;
+			sled.timestampMs = GetTickCount();
 
 			// Speed: convert normalized (0-2+) to m/s
 			float speedMps = car->field_1C4 * MaxSpeedMps;
-			pkt.Speed = speedMps;
+			dash.speed = speedMps;
 
 			// Gear
 			uint32_t gear = car->cur_gear_208;
-			pkt.Gear = (uint8_t)std::clamp(gear, 0u, 10u);
+			dash.gear = (uint8_t)std::clamp(gear, 0u, 10u);
 
 			// Synthesize RPM from speed and gear
 			// OutRun doesn't expose RPM, so we calculate a plausible value
@@ -266,15 +180,15 @@ namespace Telemetry
 			float rpm = IdleRPM + speedNorm * gearRatio * (MaxRPM - IdleRPM);
 			rpm = std::clamp(rpm, IdleRPM, MaxRPM);
 
-			pkt.CurrentEngineRpm = rpm;
-			pkt.EngineMaxRpm = MaxRPM;
-			pkt.EngineIdleRpm = IdleRPM;
+			sled.currentEngineRpm = rpm;
+			sled.engineMaxRpm = MaxRPM;
+			sled.engineIdleRpm = IdleRPM;
 
 			// Steering angle mapped to Forza's -127..127 range
-			pkt.Steer = (int8_t)std::clamp((int)(car->field_1D0 * 127.0f), -127, 127);
+			dash.steer = dbce::forza::steer11(car->field_1D0);
 
 			// Lateral acceleration (for display)
-			pkt.AccelerationX = car->field_264 + car->field_268;
+			sled.accX = car->field_264 + car->field_268;
 
 			// Throttle and brake, straight from the wheel's own pedals.
 			//
@@ -291,20 +205,25 @@ namespace Telemetry
 			int accelPedal = DInputRemap::GetTelemetryAccel();
 			int brakePedal = DInputRemap::GetTelemetryBrake();
 			if (accelPedal >= 0)
-				pkt.Accel = (uint8_t)accelPedal;
+				dash.accel = (uint8_t)accelPedal;
 			if (brakePedal >= 0)
-				pkt.Brake = (uint8_t)brakePedal;
+				dash.brake = (uint8_t)brakePedal;
 
 			// Surface rumble (for display indicators)
 			bool offRoad = car->water_flag_24C[0] > 1 || car->water_flag_24C[1] > 1 ||
 			               car->water_flag_24C[2] > 1 || car->water_flag_24C[3] > 1;
 			if (offRoad)
 			{
-				pkt.SurfaceRumbleFL = pkt.SurfaceRumbleFR = 1.0f;
-				pkt.SurfaceRumbleRL = pkt.SurfaceRumbleRR = 1.0f;
+				for (int i = 0; i < 4; i++)
+					sled.surfaceRumble[i] = 1.0f;
 			}
 
-			sendto(udpSocket, (const char*)&pkt, sizeof(pkt), 0,
+			// FM7 "Dash": 232-byte sled + the 79-byte dash block. build() zeroes
+			// the buffer, so a field this game has no source for stays 0.
+			uint8_t frame[dbce::forza::FORZA_FM7_DASH_311];
+			int n = dbce::forza::build(dbce::forza::FORZA_FM7_DASH_311, sled, dash,
+			                           frame, sizeof(frame));
+			sendto(udpSocket, (const char*)frame, n, 0,
 				(sockaddr*)&udpAddr, sizeof(udpAddr));
 		}
 	}
@@ -411,6 +330,31 @@ namespace FFB
 	// Diagnostic: observed steering-derivative (field_1D4) range since last log
 	static float diagSteerRateMin = 0.0f;
 	static float diagSteerRateMax = 0.0f;
+
+	// Which EVWORK_CAR field actually carries steering position.
+	//
+	// field_1D0 has been read as "signed steering position, -1..1" and field_1D4
+	// as its derivative, but the 2026-08-11 validation drive disagrees: across
+	// 170 samples |1D0| never exceeded 0.011 and sat at or below 0.001 in 92% of
+	// them, while 1D4 - tracked as a true min/max, not sampled - reached 0.54. A
+	// derivative cannot outrun its own integral by fifty times, so at least one
+	// label is wrong, and either way the spring and damper terms of the
+	// centre-out model have been running on almost nothing. That is why the
+	// lateral term still does all the work the redesign meant to demote.
+	//
+	// Rather than guess an offset, scan the neighbouring floats: one lap with
+	// FFBDiagnosticLog=true prints the real range of each. The steering field is
+	// the one that reaches roughly +-1 (or +-full lock in whatever unit), changes
+	// sign with the corner, and returns to zero on the straights.
+	struct FieldProbe { const char* name; float lo; float hi; };
+	static FieldProbe steerProbe[] = {
+		{ "1C8", 0.0f, 0.0f },
+		{ "1CC", 0.0f, 0.0f },
+		{ "1D0", 0.0f, 0.0f },   // read as steering position today
+		{ "1D4", 0.0f, 0.0f },   // read as steering rate today
+		{ "1DC", 0.0f, 0.0f },
+		{ "1E0", 0.0f, 0.0f },
+	};
 
 	// ---------- DirectInput FFB helpers ----------
 
@@ -1105,8 +1049,12 @@ namespace FFB
 		float lateralForce1 = car->field_264;              // Lateral slide component
 		float lateralForce2 = car->field_268;              // Lateral slide component (opposite sign convention)
 		uint32_t curGear = car->cur_gear_208;              // Current gear number
-		float steer = car->field_1D0;                      // Signed steering position, post-sensitivity (-1..1)
-		float steerRate = car->field_1D4;                  // Steering derivative (game's own, no differentiation noise)
+		// UNCONFIRMED: 1D0 is read as steering position and 1D4 as its rate, but
+		// the drive log says |1D0| stays under 0.011 while 1D4 reaches 0.54. Both
+		// terms below are therefore suspect. Run one lap with FFBDiagnosticLog
+		// and read the FFB STEERSCAN line before tuning either.
+		float steer = car->field_1D0;                      // scale unverified
+		float steerRate = car->field_1D4;                  // scale unverified
 
 		// ---- Surface roughness from the game's own per-surface table ----
 		// sub_1149C0 is the exact LUT the game's Xbox vibration code shipped
@@ -1422,6 +1370,19 @@ namespace FFB
 			diagSteerRateMin = std::min(diagSteerRateMin, steerRate);
 			diagSteerRateMax = std::max(diagSteerRateMax, steerRate);
 
+			// Min/max, not an instantaneous sample: the old line sampled steer
+			// once every two seconds, which is what made a signal 100x too small
+			// look merely quiet.
+			const float probed[] = { car->field_1C8, car->field_1CC, car->field_1D0,
+			                         car->field_1D4, car->field_1DC, car->field_1E0 };
+			static_assert(sizeof(probed) / sizeof(probed[0]) == sizeof(steerProbe) / sizeof(steerProbe[0]),
+				"steerProbe names and probed values must line up");
+			for (size_t pi = 0; pi < sizeof(probed) / sizeof(probed[0]); pi++)
+			{
+				steerProbe[pi].lo = std::min(steerProbe[pi].lo, probed[pi]);
+				steerProbe[pi].hi = std::max(steerProbe[pi].hi, probed[pi]);
+			}
+
 			static DWORD lastDiagTime = 0;
 			DWORD now = GetTickCount();
 			if (now - lastDiagTime >= 2000)
@@ -1430,6 +1391,20 @@ namespace FFB
 				spdlog::info("FFB DIAG: spd={:.3f} steer={:.3f} rate=[{:.5f}..{:.5f}] lat={:.2f} drift={:.2f} rough={:.2f} constLvl={} periodics={} warmup={}/{}",
 					speed, steer, diagSteerRateMin, diagSteerRateMax, smoothedLateral, driftAmt, roughness,
 					(int)prevConstantLevel, periodicsActive, warmupFrames, WARMUP_THRESHOLD);
+
+				char scan[256];
+				int at = 0;
+				for (size_t pi = 0; pi < sizeof(probed) / sizeof(probed[0]) && at >= 0 && at < (int)sizeof(scan); pi++)
+				{
+					int wrote = snprintf(scan + at, sizeof(scan) - at, "%s[%.4f..%.4f] ",
+						steerProbe[pi].name, steerProbe[pi].lo, steerProbe[pi].hi);
+					if (wrote < 0) break;
+					at += wrote;
+					steerProbe[pi].lo = 0.0f;
+					steerProbe[pi].hi = 0.0f;
+				}
+				spdlog::info("FFB STEERSCAN: {}", scan);
+
 				diagSteerRateMin = 0.0f;
 				diagSteerRateMax = 0.0f;
 			}

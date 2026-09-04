@@ -80,7 +80,7 @@ sources = ["*.ini", "src/**.cpp", "src/**.c", "src/**.def", "src/Resource.rc",
 	"external/IXWebSocket/ixwebsocket/**"
 ]
 headers = ["src/**.hpp", "src/**.h", "external/ModUtils/Patterns.h", "external/ModUtils/MemoryMgr.h", "external/xxHash/xxhash.h", "external/miniz/miniz.h", "external/ini-cpp/ini/ini.h"]
-include-directories = ["shared/", "src/", "include/", 
+include-directories = ["shared/", "src/", "include/", "lib/toolkit/include/", 
     "external/ModUtils/",
     "external/ini-cpp/ini/",
     "external/xxHash/",

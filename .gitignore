@@ -33,3 +33,8 @@ build_x86/*
 out/*
 .vs/*
 rel/*
+
+# Vendored dbce-wheel-mod-toolkit artifacts are committed on purpose: a consumer
+# pins a BUILT version (lib/toolkit/VERSION) rather than referencing the toolkit
+# repo, so a toolkit change never reaches the game without a diffable bump.
+!lib/toolkit/native/**/*.dll
