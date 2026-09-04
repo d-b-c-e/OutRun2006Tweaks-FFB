@@ -141,7 +141,7 @@ try {
         $src = @{
             native       = Join-Path $LocalRepo 'native\wheelffb\build'
             'native-x86' = Join-Path $LocalRepo 'native\wheelffb\build\x86'
-            include      = @((Join-Path $LocalRepo 'native\wheelffb\include'), (Join-Path $LocalRepo 'native\forza'), (Join-Path $LocalRepo 'native\forcemodel'))
+            include      = @((Join-Path $LocalRepo 'native\wheelffb\include'), (Join-Path $LocalRepo 'native\forza'), (Join-Path $LocalRepo 'native\forcemodel'), (Join-Path $LocalRepo 'native\dinput-proxy'))
             profiles     = Join-Path $LocalRepo 'profiles'
             powershell   = Join-Path $LocalRepo 'tools\powershell'
             dotnet       = Join-Path $LocalRepo 'dotnet\Dbce.Wheel.Ffb\bin\Release\netstandard2.0'

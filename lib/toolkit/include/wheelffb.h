@@ -24,7 +24,17 @@
  *
  * All functions are __cdecl (the x86 .def exports them undecorated). Force
  * magnitudes are DirectInput's -10000..10000; frequencies for the periodic
- * effects are millihertz (25 Hz = 25000). Never call FreeLibrary on the module
+ * effects are millihertz (25 Hz = 25000); condition coefficients, saturations,
+ * deadbands and offsets are also -10000..10000.
+ *
+ * Three families of effect, and they are not interchangeable:
+ *   constant   SetDeviceForcesXY - the force your model computes
+ *   periodic   CreatePeriodicEffect - a waveform the base renders itself
+ *   condition  CreateConditionEffect - spring, damper, inertia, friction, where
+ *              the base computes force from axis position or velocity
+ *              continuously. A hardware damper is smoother and more stable than
+ *              damping synthesised at 60 Hz, and is usually the right answer to
+ *              a direct-drive base that oscillates. Never call FreeLibrary on the module
  * from DllMain - unload from your own shutdown path, after PanicStop.
  */
 #ifndef DBCE_WHEELFFB_H
@@ -60,6 +70,8 @@ extern "C" {
     X(int,  ReadDeviceState,        (int slot, int* axes, unsigned char* buttons, int buttonCount)) \
     X(void, CloseReadDevices,       (void)) \
     X(int,  GetDeviceInfo,          (int index, int* axes, int* buttons)) \
+    X(int,  GetDeviceGuid,          (int index, void* guid16)) \
+    X(int,  GetAnyDeviceGuid,       (int index, void* guid16)) \
     X(int,  GetAnyDeviceInfo,       (int index, int* axes, int* buttons, int* ffb)) \
     X(void, PanicStop,              (void)) \
     X(void, ZeroForces,             (void)) \
@@ -70,7 +82,10 @@ extern "C" {
     X(int,  GetWheelFfbVersion,     (void)) \
     X(int,  CreatePeriodicEffect,   (int freqHz)) \
     X(int,  UpdatePeriodicEffect,   (int slot, int magnitude, int freqMilliHz)) \
-    X(void, ReleasePeriodicEffects, (void))
+    X(void, ReleasePeriodicEffects, (void)) \
+    X(int,  CreateConditionEffect,  (int type)) \
+    X(int,  UpdateConditionEffect,  (int slot, int coefficient, int saturation, int deadband, int offset)) \
+    X(void, ReleaseConditionEffects,(void))
 
 #define WHEELFFB_TYPEDEF(ret, name, args) typedef ret (__cdecl *WheelFfb_##name##_t) args;
 WHEELFFB_API_LIST(WHEELFFB_TYPEDEF)
