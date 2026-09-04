@@ -119,7 +119,7 @@ it is upstream's section rather than ours to delete;
 ## Keep the config and the code in step
 
 ```powershell
-.	ools\Check-IniCoverage.ps1
+.\tools\Check-IniCoverage.ps1
 ```
 
 It compares every `ini.Get("<section>", "<key>")` in `dllmain.cpp` against the
@@ -130,5 +130,5 @@ and the telemetry output from anyone installing the mod. Point it at a deployed
 copy to audit an install:
 
 ```powershell
-.	ools\Check-IniCoverage.ps1 -Ini "<game folder>\OutRun2006Tweaks.ini"
+.\tools\Check-IniCoverage.ps1 -Ini "<game folder>\OutRun2006Tweaks.ini"
 ```
