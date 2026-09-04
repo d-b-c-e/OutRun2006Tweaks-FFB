@@ -1,50 +1,114 @@
 # OutRun2006Tweaks — FFB Fork
 
-> **Fork of [emoose/OutRun2006Tweaks](https://github.com/emoose/OutRun2006Tweaks)** adding DirectInput force feedback for steering wheels via SDL3 Haptic API. Part of the [OutRun 2006 Redux](../outrun2006-redux) project.
+> **Fork of [emoose/OutRun2006Tweaks](https://github.com/emoose/OutRun2006Tweaks)** adding force feedback and telemetry for steering wheels. Part of the [OutRun 2006 Redux](../outrun2006-redux) project.
 
 ## FFB Fork Changes
 
-### Force Feedback Engine (`src/hooks_dinputffb.cpp`)
+### Force feedback (`src/hooks_dinputffb.cpp`)
 
-Adds real force feedback to steering wheels using the SDL3 Haptic API. The original PC port has no FFB — this fork extracts physics telemetry from the game's `EVWORK_CAR` structure and drives 5 SDL haptic effects that produce 8 distinct game feel effects:
+The PC port ships no force feedback at all. This fork reads the game's own
+physics out of `EVWORK_CAR` and drives a wheel from it.
 
-| Effect | SDL Type | Source | Description |
-|--------|----------|--------|-------------|
-| Center Spring | SPRING | Speed | Self-centering force, heavier at speed |
-| Damper | DAMPER | Speed | Resistance to rapid steering |
-| Steering Weight | CONSTANT | Lateral forces | Cornering force feel |
-| Wall Impact | CONSTANT | Collision flags | Sharp jolt on collision |
-| Rumble Strip | SINE | Surface flags | Grass/sand/curb vibration |
-| Gear Shift | SINE | Gear changes | Brief gear change kick |
-| Road Texture | SINE | Stage number | Subtle road surface feel |
-| Tire Slip | FRICTION | Lateral derivatives | Loss of grip communication |
+Forces are produced through **DirectInput**, in `WheelFfb.dll` from
+[dbce-wheel-mod-toolkit](https://github.com/d-b-c-e/dbce-wheel-mod-toolkit)
+(vendored under `lib/toolkit`, pinned in `lib/toolkit/VERSION`). SDL3's haptic
+API was tried first and abandoned: `SDL_UpdateHapticEffect` is silently ignored
+by MOZA and other direct-drive bases, and destroying and recreating an effect at
+60 Hz just vibrates.
 
-### Direct Drive Wheel Support
+The model is **centre-out**. A virtual spring on steering position is the
+backbone — it is what the arcade cabinet's mechanical centring did — damped by
+the game's own steering derivative. Lateral road load is a *secondary* term that
+**lightens** as grip is lost, rather than the whole force, which had the
+relationship backwards: the wheel was heaviest exactly when the tyres let go.
 
-Auto-detects 30+ wheel models (Moza, Fanatec, Logitech, Thrustmaster, Simagic, etc.) and scales force output to prevent over-torque on direct drive bases. Reference torque is 2.2 Nm (Logitech G29); a 12 Nm Moza R12 gets ~18% strength automatically.
+| Channel | How it is rendered | Source |
+|---|---|---|
+| Centring spring | constant force | steering position × speed curve |
+| Damper | constant force | the game's steering derivative |
+| Cornering load | constant force | lateral slide, × grip factor |
+| Weight transfer | modulates the above | speed delta over 6 frames |
+| Wall impact | constant-force impulse | speed loss + contact flag, direction from 8 frames before the hit |
+| Gear shift | symmetric double pulse | gear change; nets to zero, because a real shift jolt is longitudinal |
+| Road texture | hardware `GUID_Sine` | the game's own decompiled surface LUT × speed |
+| Tyre slip / idle | hardware `GUID_Sine` | drift depth, or throttle at a standstill |
 
-### Configuration (`[FFB]` section in OutRun2006Tweaks.ini)
+Vibration runs on hardware periodic effects because synthesising 25–40 Hz
+through 60 Hz constant-force updates loses about a quarter to zero-order-hold
+roll-off and more again to the compressor. If the driver offers no periodics,
+a constant-force fallback synthesises them, capped at 15 Hz.
+
+### Telemetry
+
+A 311-byte Forza "Data Out" packet to `127.0.0.1:8000` (SimHub, MOZA Pit House)
+plus a shared-memory struct. RPM is synthesised — OutRun exposes none. Throttle
+and brake come from the input remap layer's own reads, so they are true pedal
+travel; when no wheel is bound they are reported as absent rather than as zero,
+which a brake light would read as "released".
+
+### Installing
+
+Copy **both** DLLs next to `OR2006C2C.EXE`:
+
+```
+dinput8.dll        the mod
+WheelFfb.dll       the force-feedback device layer
+```
+
+`WheelFfb.dll` is loaded at runtime, so if it is missing the game still starts —
+it just has no force feedback, and says so in the log. The build copies it next
+to `dinput8.dll` automatically.
+
+You also need the [x86 VC redist](https://aka.ms/vs/17/release/vc_redist.x86.exe).
+
+### Configuration (`[FFB]` section in `OutRun2006Tweaks.ini`)
 
 ```ini
 [FFB]
-DirectInputFFB = true       ; Master enable
-FFBDevice = -1              ; -1 = auto (first haptic device)
-FFBGlobalStrength = 1.0     ; 0.0 - 2.0
-FFBSpringStrength = 0.7     ; Center spring multiplier
-FFBDamperStrength = 0.5     ; Damper multiplier
-FFBSteeringWeight = 1.0     ; Cornering force multiplier
-FFBWallImpact = 1.0         ; Collision jolt multiplier
-FFBRumbleStrip = 0.6        ; Surface rumble multiplier
-FFBGearShift = 0.3          ; Gear shift kick multiplier
-FFBRoadTexture = 0.2        ; Road texture vibration multiplier
-FFBTireSlip = 0.8           ; Tire slip feedback multiplier
-FFBWheelTorqueNm = 0.0      ; 0 = auto-detect from wheel name
-FFBInvertForce = false       ; Reverse force direction
+DirectInputFFB = false      ; master enable
+FFBDevice = -1              ; -1 = the device the input remap layer chose
+FFBGlobalStrength = 1.0     ; overall scale
+FFBSpringStrength = 0.45    ; centring spring on steering position
+FFBDamperStrength = 0.10    ; damper on the steering derivative
+FFBSteeringWeight = 0.55    ; lateral road load (the secondary term)
+FFBGripLoss = 0.6           ; how much the wheel lightens in a drift, 0-1
+FFBWeightTransfer = 0.8     ; brake/throttle load modulation
+FFBLateralDeadzone = 1.5    ; lateral noise-floor clip
+FFBWallImpact = 1.0         ; collision jolt
+FFBGearShift = 0.3          ; shift thunk
+FFBRoadTexture = 0.6        ; periodic: surface roughness
+FFBTireSlip = 0.35          ; periodic: drift chatter
+FFBEngineIdle = 0.08        ; idle/launch rumble
+FFBUsePeriodicEffects = true ; false forces the constant-force fallback
+FFBInvertForce = false
+FFBDiagnosticLog = false    ; signal ranges every 2 s - see below
 ```
 
-### Architecture Note
+### Known issue: the steering field is unverified
 
-SDL_Init creates threads internally, which deadlocks if called during DllMain (Windows loader lock). The FFB engine uses **deferred initialization** — the hook installs during DllMain but SDL_Init runs on the first `GamePlCar_Ctrl` tick during gameplay.
+`FFBSpringStrength` and `FFBDamperStrength` are almost certainly doing far less
+than their values suggest. The field read as steering position (`field_1D0`)
+never exceeds 0.011 in the validation log, while the field read as its
+derivative (`field_1D4`) reaches 0.54 — a derivative cannot outrun its own
+integral by fifty times, so at least one label is wrong.
+
+Set `FFBDiagnosticLog = true` and drive one lap. The `FFB STEERSCAN` line
+reports the observed range of the six candidate fields; the steering one is
+whichever reaches about ±1, changes sign with the corner, and returns to zero on
+the straights. Do not tune the spring or damper before that.
+
+### Architecture note
+
+Force-feedback initialisation is **deferred to the first `GamePlCar_Ctrl` tick**,
+not done in `DllMain`: DirectInput needs a valid window handle, and the loader
+lock forbids most of what setup wants to do. The same rule is why teardown only
+zeroes the wheel and does not release COM objects — that path reliably faulted
+and used to swallow the autocentre restore.
+
+The wheel is opened on its **own exclusive handle**, selected by the DirectInput
+instance GUID the remap layer already chose, while that layer keeps polling the
+same device non-exclusively. Sharing one handle meant a poll-side re-`Acquire()`
+destroyed the downloaded effects mid-corner.
 
 ---
 
