@@ -24,6 +24,7 @@
 #include "game_addrs.hpp"
 #include "game.hpp"
 #include "telemetry.hpp"
+#include "wheelffb.h"   // dbce-wheel-mod-toolkit C ABI (lib/toolkit/include)
 
 // External vibration data from hooks_forcefeedback.cpp
 extern float VibrationLeftMotor;
@@ -255,10 +256,11 @@ extern IDirectInput8A* g_RealDirectInput8;
 
 namespace FFB
 {
-	// DirectInput FFB state
-	static IDirectInputDevice8A* ffbDevice = nullptr;
-	static IDirectInputEffect* constantForceEffect = nullptr;
-	static bool ownsDevice = false;  // true if FFB created its own device handle
+	// DirectInput FFB state. The device, the effects and their whole lifecycle
+	// live in WheelFfb.dll (dbce-wheel-mod-toolkit) now; what stays here is the
+	// force model, which is the part that is actually about OutRun.
+	static WheelFfbApi ffb = {};
+	static bool ffbLoaded = false;
 	static bool initialized = false;
 	static bool initAttempted = false;
 
@@ -266,26 +268,15 @@ namespace FFB
 	// synthesized through 60 Hz constant-force updates loses ~26% to zero-order-
 	// hold rolloff, more to wheelbase driver smoothing, and 30-60% to tanh
 	// compression when riding on steering load. Hardware periodics render inside
-	// the wheelbase at full fidelity regardless of our update rate.
-	static IDirectInputEffect* roadTextureEffect = nullptr; // GUID_Sine, surface LUT driven
-	static IDirectInputEffect* tireSlipEffect = nullptr;    // GUID_Sine, drift chatter / engine idle
+	// the wheelbase at full fidelity regardless of our update rate. Slot ids
+	// from the DLL; -1 means the driver offers none and the constant-force
+	// synthesis fallback carries the vibration instead.
+	static int slotRoadTexture = -1;   // GUID_Sine, surface LUT driven
+	static int slotTireSlip = -1;      // GUID_Sine, drift chatter / engine idle
 	static bool periodicsActive = false;
-	static bool periodicsProbed = false;
-	static int periodicStrategy = -1; // -1=untested, 0=SetParameters w/o DIEP_START (ideal), 1=with DIEP_START
-	struct PeriodicState { DWORD lastMag = 0; DWORD lastPeriod = 0; };
-	static PeriodicState roadTextureState;
-	static PeriodicState tireSlipState;
 
 	// Panic flag: once set (process exit path), no further DI output is issued
 	static volatile bool panicStopped = false;
-
-	// Post-recreation ramp-in + recreation backoff (anti-jerk):
-	// after an effect is recreated, fade force back in over ~250ms instead of
-	// stepping straight to the requested magnitude; if recreation fails, hold
-	// off retries for 500ms instead of thrashing the driver at 60 Hz.
-	static int recreateRampFrames = 0;
-	static const int RECREATE_RAMP_FRAMES = 15;
-	static DWORD recreateHoldoffUntil = 0;
 
 	// Watchdog: timestamp of last Update() call for staleness detection
 	static volatile DWORD lastUpdateTick = 0;
@@ -356,368 +347,70 @@ namespace FFB
 		{ "1E0", 0.0f, 0.0f },
 	};
 
-	// ---------- DirectInput FFB helpers ----------
+	// ---------- Force output, through the toolkit ----------
+	//
+	// Everything that used to sit here - open the device exclusively, create the
+	// constant force, recreate it and ramp back in when the handle dies, two
+	// GUID_Sine periodics with the driver strategy probe, re-acquire after a
+	// focus change, zero and release in the right order at exit - is WheelFfb.dll
+	// now. This project donated most of those rules to it; keeping a second copy
+	// is how this repo and art-of-sim-rally came to fix the same bug on
+	// different days.
 
-	static bool CreateConstantForceEffect()
+	// FFBGlobalStrength used to be the DirectInput effect gain (dwGain). The DLL
+	// runs its effect at full gain, so the strength is applied to the magnitude
+	// instead. Both are the same linear scale, so the feel is unchanged.
+	static float StrengthScale()
 	{
-		if (!ffbDevice) return false;
-
-		// Mirror the test bench (FfbTestService.cs) exactly:
-		// Single axis (X = steering), cartesian, infinite duration, gain from INI
-		DWORD axes[1] = { DIJOFS_X };
-		LONG directions[1] = { 0 };
-		DICONSTANTFORCE cf = {};
-		cf.lMagnitude = 0;
-
-		DIEFFECT eff = {};
-		eff.dwSize = sizeof(DIEFFECT);
-		eff.dwFlags = DIEFF_CARTESIAN | DIEFF_OBJECTOFFSETS;
-		eff.dwDuration = INFINITE;
-		eff.dwSamplePeriod = 0;
-		eff.dwGain = (DWORD)(std::clamp(Settings::FFBGlobalStrength, 0.0f, 1.0f) * 10000.0f);
-		eff.dwTriggerButton = DIEB_NOTRIGGER;
-		eff.dwTriggerRepeatInterval = 0;
-		eff.cAxes = 1;
-		eff.rgdwAxes = axes;
-		eff.rglDirection = directions;
-		eff.cbTypeSpecificParams = sizeof(DICONSTANTFORCE);
-		eff.lpvTypeSpecificParams = &cf;
-		eff.dwStartDelay = 0;
-
-		HRESULT hr = ffbDevice->CreateEffect(
-			GUID_ConstantForce, &eff, &constantForceEffect, nullptr);
-
-		if (FAILED(hr))
-		{
-			spdlog::error("FFB: CreateEffect(ConstantForce) failed (HRESULT 0x{:08X})", (unsigned)hr);
-			return false;
-		}
-
-		spdlog::info("FFB: Constant force effect created (gain: {}%)",
-			(int)(Settings::FFBGlobalStrength * 100.0f));
-		return true;
-	}
-
-	// ---------- Periodic effect helpers (hardware-rendered vibration) ----------
-
-	static IDirectInputEffect* CreatePeriodicEffect(REFGUID guidType, const char* name)
-	{
-		if (!ffbDevice) return nullptr;
-
-		DWORD axes[1] = { DIJOFS_X };
-		LONG directions[1] = { 0 };
-		DIPERIODIC pf = {};
-		pf.dwMagnitude = 0;
-		pf.lOffset = 0;
-		pf.dwPhase = 0;
-		pf.dwPeriod = 1000000 / 25; // 25 Hz initial; retuned by envelope updates
-
-		DIEFFECT eff = {};
-		eff.dwSize = sizeof(DIEFFECT);
-		eff.dwFlags = DIEFF_CARTESIAN | DIEFF_OBJECTOFFSETS;
-		eff.dwDuration = INFINITE;
-		eff.dwSamplePeriod = 0;
-		eff.dwGain = (DWORD)(std::clamp(Settings::FFBGlobalStrength, 0.0f, 1.0f) * 10000.0f);
-		eff.dwTriggerButton = DIEB_NOTRIGGER;
-		eff.dwTriggerRepeatInterval = 0;
-		eff.cAxes = 1;
-		eff.rgdwAxes = axes;
-		eff.rglDirection = directions;
-		eff.cbTypeSpecificParams = sizeof(DIPERIODIC);
-		eff.lpvTypeSpecificParams = &pf;
-		eff.dwStartDelay = 0;
-
-		IDirectInputEffect* fx = nullptr;
-		HRESULT hr = ffbDevice->CreateEffect(guidType, &eff, &fx, nullptr);
-		if (FAILED(hr))
-		{
-			spdlog::warn("FFB: CreateEffect({}) failed (HRESULT 0x{:08X})", name, (unsigned)hr);
-			return nullptr;
-		}
-
-		// Start silently (magnitude 0) so envelope updates only need SetParameters
-		hr = fx->Start(1, 0);
-		if (FAILED(hr))
-			spdlog::warn("FFB: {} Start failed (HRESULT 0x{:08X})", name, (unsigned)hr);
-
-		spdlog::info("FFB: {} periodic effect created", name);
-		return fx;
-	}
-
-	static void CreatePeriodicEffects()
-	{
-		if (!Settings::FFBUsePeriodicEffects || !ffbDevice)
-		{
-			periodicsActive = false;
-			return;
-		}
-
-		// One-time probe: log which periodic effect types the driver exposes
-		if (!periodicsProbed)
-		{
-			periodicsProbed = true;
-			ffbDevice->EnumEffects([](LPCDIEFFECTINFOA info, LPVOID) -> BOOL {
-				spdlog::info("FFB: Driver periodic effect available: '{}'", info->tszName);
-				return DIENUM_CONTINUE;
-			}, nullptr, DIEFT_PERIODIC);
-		}
-
-		if (!roadTextureEffect)
-		{
-			roadTextureEffect = CreatePeriodicEffect(GUID_Sine, "RoadTexture(Sine)");
-			roadTextureState = {};
-		}
-		if (!tireSlipEffect)
-		{
-			tireSlipEffect = CreatePeriodicEffect(GUID_Sine, "TireSlip(Sine)");
-			tireSlipState = {};
-		}
-
-		periodicsActive = (roadTextureEffect != nullptr && tireSlipEffect != nullptr);
-		if (!periodicsActive)
-			spdlog::warn("FFB: Periodic effects unavailable -- using constant-force vibration fallback (15 Hz cap, post-compressor injection)");
-	}
-
-	// Envelope update for a hardware periodic effect. Caller rate-limits to
-	// ~15 Hz; additionally skips the DI call unless magnitude moved >5%,
-	// period moved >10%, or the effect must be silenced.
-	static void UpdatePeriodicEffect(IDirectInputEffect*& fx, PeriodicState& st, float magnitude01, float freqHz)
-	{
-		if (!fx || panicStopped) return;
-
-		DWORD mag = (DWORD)(std::clamp(magnitude01, 0.0f, 1.0f) * 10000.0f);
-		freqHz = std::clamp(freqHz, 1.0f, 100.0f);
-		DWORD period = (DWORD)(1000000.0f / freqHz);
-
-		bool silence = (mag == 0 && st.lastMag != 0);
-		bool magChanged = std::abs((long)mag - (long)st.lastMag) > 500;                            // >5%
-		bool periodChanged = (st.lastPeriod != 0) &&
-			(std::abs((long)period - (long)st.lastPeriod) * 10 > (long)st.lastPeriod);             // >10%
-		if (!magChanged && !periodChanged && !silence)
-			return;
-
-		DIPERIODIC pf = {};
-		pf.dwMagnitude = mag;
-		pf.dwPeriod = period;
-
-		DIEFFECT eff = {};
-		eff.dwSize = sizeof(DIEFFECT);
-		eff.cbTypeSpecificParams = sizeof(DIPERIODIC);
-		eff.lpvTypeSpecificParams = &pf;
-
-		// Update-strategy matrix (driver behavior differs per wheelbase):
-		// prefer SetParameters WITHOUT DIEP_START (no phase reset); fall back
-		// to DIEP_START if the driver rejects parameter-only updates.
-		DWORD flags = DIEP_TYPESPECIFICPARAMS | ((periodicStrategy == 1) ? DIEP_START : 0);
-		HRESULT hr = fx->SetParameters(&eff, flags);
-
-		if (periodicStrategy == -1)
-		{
-			if (SUCCEEDED(hr))
-			{
-				periodicStrategy = 0;
-				spdlog::info("FFB: Periodic update strategy: SetParameters without DIEP_START");
-			}
-			else
-			{
-				hr = fx->SetParameters(&eff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-				if (SUCCEEDED(hr))
-				{
-					periodicStrategy = 1;
-					spdlog::info("FFB: Periodic update strategy: SetParameters with DIEP_START");
-				}
-			}
-		}
-
-		if (hr == E_HANDLE || hr == DIERR_NOTDOWNLOADED)
-		{
-			// Effect died (device re-acquired) -- recreated later, rate-limited
-			spdlog::warn("FFB: Periodic effect handle lost (HRESULT 0x{:08X}), scheduling recreation", (unsigned)hr);
-			fx->Release();
-			fx = nullptr;
-			periodicsActive = false;
-			recreateHoldoffUntil = GetTickCount() + 500;
-			return;
-		}
-		else if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED)
-		{
-			ffbDevice->Acquire();
-			hr = fx->SetParameters(&eff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			st.lastMag = mag;
-			st.lastPeriod = period;
-		}
+		return std::clamp(Settings::FFBGlobalStrength, 0.0f, 1.0f);
 	}
 
 	static void SetConstantForce(LONG magnitude)
 	{
-		if (!ffbDevice || panicStopped) return;
+		if (!ffbLoaded || panicStopped)
+			return;
+		magnitude = std::clamp(magnitude, (LONG)-10000, (LONG)10000);
+		LONG scaled = (LONG)std::clamp((float)magnitude * StrengthScale(), -10000.0f, 10000.0f);
+		// Y is always zero: OutRun steers on one axis. The DLL decides how to
+		// encode that for the wheel in front of it - three wheels disagreed
+		// about direction versus magnitude sign, and it carries the encoding
+		// all three accept.
+		ffb.SetDeviceForcesXY(scaled, 0);
+		prevConstantLevel = magnitude;
+	}
 
-		DICONSTANTFORCE cf;
-		cf.lMagnitude = std::clamp(magnitude, (LONG)-10000, (LONG)10000);
-
-		DIEFFECT eff = {};
-		eff.dwSize = sizeof(DIEFFECT);
-		eff.cbTypeSpecificParams = sizeof(DICONSTANTFORCE);
-		eff.lpvTypeSpecificParams = &cf;
-
-		HRESULT hr = E_FAIL;
-
-		// Try existing effect first
-		if (constantForceEffect)
-		{
-			hr = constantForceEffect->SetParameters(
-				&eff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-		}
-
-		// If handle is invalid (E_HANDLE / 0x80070006), the device was re-acquired
-		// somewhere, which invalidates all downloaded effects. Recreate on the fly.
-		if (hr == E_HANDLE || hr == DIERR_NOTDOWNLOADED || !constantForceEffect)
-		{
-			if (constantForceEffect)
-			{
-				constantForceEffect->Release();
-				constantForceEffect = nullptr;
-			}
-
-			// Back off: retrying CreateEffect at 60 Hz thrashes the driver
-			// during focus transitions
-			DWORD now = GetTickCount();
-			if (now < recreateHoldoffUntil)
-				return;
-
-			if (CreateConstantForceEffect())
-			{
-				// Anti-jerk: do NOT jump to the requested magnitude. The wheel
-				// just went torque -> 0 when the old effect died; stepping
-				// straight back to full force is the felt "random jerk"
-				// (and the slew limiter can't help -- prevConstantLevel never
-				// saw the 0). Restart at zero and let the ramp-in fade the
-				// force back over ~250ms.
-				DICONSTANTFORCE zeroCf = {};
-				DIEFFECT zeroEff = {};
-				zeroEff.dwSize = sizeof(DIEFFECT);
-				zeroEff.cbTypeSpecificParams = sizeof(DICONSTANTFORCE);
-				zeroEff.lpvTypeSpecificParams = &zeroCf;
-				constantForceEffect->SetParameters(&zeroEff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-				recreateRampFrames = RECREATE_RAMP_FRAMES;
-				cf.lMagnitude = 0;
-				spdlog::info("FFB: Recreated constant force effect after handle loss (ramping in over {} frames)", RECREATE_RAMP_FRAMES);
-			}
-			else
-			{
-				recreateHoldoffUntil = now + 500;
-				spdlog::error("FFB: Failed to recreate constant force effect (retrying in 500ms)");
-				return;
-			}
-		}
-		else if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED)
-		{
-			ffbDevice->Acquire();
-			hr = constantForceEffect->SetParameters(
-				&eff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-		}
-
-		prevConstantLevel = cf.lMagnitude;
+	// Envelope update for a hardware periodic effect. Caller rate-limits to
+	// ~15 Hz; the DLL additionally drops an update whose magnitude moved less
+	// than 5% and period less than 10%, and recreates a slot whose handle died.
+	static void UpdatePeriodic(int slot, float magnitude01, float freqHz)
+	{
+		if (slot < 0 || !ffbLoaded || panicStopped)
+			return;
+		float mag = std::clamp(magnitude01, 0.0f, 1.0f) * StrengthScale();
+		ffb.UpdatePeriodicEffect(slot, (int)(mag * 10000.0f),
+			(int)(std::clamp(freqHz, 1.0f, 100.0f) * 1000.0f));
 	}
 
 	// ---------- Exit-path guards (fixes exit stuck-force) ----------
 
-	// Emergency zero-torque for process exit. Non-allocating, never recreates
-	// effects, logs every HRESULT. Must run while the game window still exists:
-	// by DLL_PROCESS_DETACH the window is gone, the exclusive device has been
-	// force-unacquired by the OS, and none of these calls can reach the wheel --
-	// which is exactly how the "stuck force after Alt+F4" bug happened.
+	// Emergency zero-torque for process exit. The ordering that matters - zero,
+	// stop, STOPALL, actuators off, RESET, unacquire, and only then restore
+	// autocentre, which may only be written on an unacquired device - is inside
+	// the DLL. What still matters here is WHEN: while the game window exists.
+	// By DLL_PROCESS_DETACH the OS has force-unacquired the exclusive device and
+	// none of it reaches the wheel, which is exactly how the stuck-force-after-
+	// Alt+F4 bug happened.
 	void PanicStop()
 	{
 		if (panicStopped)
 			return;
-		panicStopped = true; // stop Update()/watchdog from issuing further DI calls
+		panicStopped = true;   // stop Update()/watchdog issuing anything further
 
-		if (!ffbDevice)
+		if (!ffbLoaded)
 			return;
 
 		spdlog::info("FFB: PanicStop -- zeroing forces before window teardown");
-
-		HRESULT hr;
-		if (constantForceEffect)
-		{
-			DICONSTANTFORCE cf = {};
-			DIEFFECT eff = {};
-			eff.dwSize = sizeof(DIEFFECT);
-			eff.cbTypeSpecificParams = sizeof(DICONSTANTFORCE);
-			eff.lpvTypeSpecificParams = &cf;
-			hr = constantForceEffect->SetParameters(&eff, DIEP_TYPESPECIFICPARAMS | DIEP_START);
-			spdlog::info("FFB: PanicStop constant-force zero => 0x{:08X}", (unsigned)hr);
-			hr = constantForceEffect->Stop();
-			spdlog::info("FFB: PanicStop constant-force Stop => 0x{:08X}", (unsigned)hr);
-		}
-		if (roadTextureEffect)
-		{
-			hr = roadTextureEffect->Stop();
-			spdlog::info("FFB: PanicStop road-texture Stop => 0x{:08X}", (unsigned)hr);
-		}
-		if (tireSlipEffect)
-		{
-			hr = tireSlipEffect->Stop();
-			spdlog::info("FFB: PanicStop tire-slip Stop => 0x{:08X}", (unsigned)hr);
-		}
-
-		hr = ffbDevice->SendForceFeedbackCommand(DISFFC_STOPALL);
-		spdlog::info("FFB: PanicStop STOPALL => 0x{:08X}", (unsigned)hr);
-		hr = ffbDevice->SendForceFeedbackCommand(DISFFC_SETACTUATORSOFF);
-		spdlog::info("FFB: PanicStop SETACTUATORSOFF => 0x{:08X}", (unsigned)hr);
-		hr = ffbDevice->SendForceFeedbackCommand(DISFFC_RESET);
-		spdlog::info("FFB: PanicStop RESET => 0x{:08X}", (unsigned)hr);
-
-		// Driver-side session close -> wheelbase releases any held torque
-		hr = ffbDevice->Unacquire();
-		spdlog::info("FFB: PanicStop Unacquire => 0x{:08X}", (unsigned)hr);
-
-		// Hand the wheel back to the driver's own centring spring.
-		//
-		// Order matters twice over:
-		//   * AFTER Unacquire, because DIPROP_AUTOCENTER may only be written on
-		//     an unacquired device. Setting it earlier returns 0x800700AA
-		//     (ERROR_BUSY) -- observed, not theorised.
-		//   * HERE rather than in Shutdown(), because there it shared an SEH
-		//     block with the effect releases. Those reliably fault at teardown
-		//     (0xC0000005 on all three), so the restore was skipped silently and
-		//     the wheel was left without autocenter for whatever ran next.
-		DIPROPDWORD autoCenter = {};
-		autoCenter.diph.dwSize = sizeof(DIPROPDWORD);
-		autoCenter.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-		autoCenter.diph.dwObj = 0;
-		autoCenter.diph.dwHow = DIPH_DEVICE;
-		autoCenter.dwData = DIPROPAUTOCENTER_ON;
-		hr = ffbDevice->SetProperty(DIPROP_AUTOCENTER, &autoCenter.diph);
-		spdlog::info("FFB: PanicStop autocenter restore => 0x{:08X}", (unsigned)hr);
-	}
-
-	// Release one effect under its OWN exception guard.
-	//
-	// These are three independent COM objects, and at DLL_PROCESS_DETACH the
-	// game may already have torn some of them down. Releasing them inside a
-	// single shared __try meant the first fault skipped the remaining releases
-	// and gave one anonymous "Exception releasing effect" with no indication of
-	// which object was bad. Guarding individually leaks nothing extra -- the
-	// pointer is nulled either way -- and names the culprit in the log.
-	static void SafeReleaseEffect(IDirectInputEffect*& effect, const char* name)
-	{
-		if (!effect)
-			return;
-		__try
-		{
-			effect->Release();
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER)
-		{
-			spdlog::warn("FFB: Exception releasing {} effect (0x{:X})", name, GetExceptionCode());
-		}
-		effect = nullptr;
+		ffb.PanicStop();
 	}
 
 	// Zero all force output without tearing anything down (Alt-Tab, menus, watchdog)
@@ -725,13 +418,13 @@ namespace FFB
 	{
 		if (!initialized || panicStopped)
 			return;
-		if (constantForceEffect && prevConstantLevel != 0)
+		if (prevConstantLevel != 0)
 			SetConstantForce(0);
 		prevStructLevel = 0;
 		if (periodicsActive)
 		{
-			UpdatePeriodicEffect(roadTextureEffect, roadTextureState, 0.0f, 25.0f);
-			UpdatePeriodicEffect(tireSlipEffect, tireSlipState, 0.0f, 40.0f);
+			UpdatePeriodic(slotRoadTexture, 0.0f, 25.0f);
+			UpdatePeriodic(slotTireSlip, 0.0f, 40.0f);
 		}
 	}
 
@@ -784,159 +477,104 @@ namespace FFB
 		}
 	}
 
-	// Open a dedicated EXCLUSIVE|BACKGROUND device handle for FFB output.
-	// Kept separate from the remap layer's NONEXCLUSIVE polling handle so
-	// poll-side Acquire() churn can never invalidate our downloaded effects.
-	static IDirectInputDevice8A* OpenFfbDevice(const GUID& guid, IDirectInput8A* di)
-	{
-		IDirectInputDevice8A* dev = nullptr;
-		HRESULT hr = di->CreateDevice(guid, &dev, nullptr);
-		if (FAILED(hr))
-		{
-			spdlog::error("FFB: CreateDevice for dedicated FFB handle failed (HRESULT 0x{:08X})", (unsigned)hr);
-			return nullptr;
-		}
-
-		dev->SetDataFormat(&c_dfDIJoystick2);
-		hr = dev->SetCooperativeLevel(Game::GameHwnd(), DISCL_EXCLUSIVE | DISCL_BACKGROUND);
-		if (FAILED(hr))
-			spdlog::warn("FFB: SetCooperativeLevel(EXCLUSIVE|BACKGROUND) failed (HRESULT 0x{:08X})", (unsigned)hr);
-		hr = dev->Acquire();
-		if (FAILED(hr))
-			spdlog::warn("FFB: Initial Acquire failed (HRESULT 0x{:08X}), will retry on first force", (unsigned)hr);
-
-		return dev;
-	}
-
-	// Deferred initialization -- called from Update() on first game tick.
+	// Deferred initialization -- called from Update() on first game tick,
+	// because DirectInput needs a valid HWND.
 	bool DeferredInit()
 	{
 		if (initAttempted)
 			return initialized;
 		initAttempted = true;
 
-		spdlog::info("FFB: Starting deferred initialization (DirectInput)...");
+		spdlog::info("FFB: Starting deferred initialization (WheelFfb)...");
 
-		IDirectInput8A* di = g_RealDirectInput8 ? g_RealDirectInput8 : Game::DirectInput8();
-		if (!di)
+		// Loaded at runtime from beside this DLL, never imported: a missing
+		// WheelFfb.dll has to disable force feedback, not stop the game from
+		// starting, and a static import would do the latter.
+		if (!WheelFfb_LoadBeside(&ffb, Module::DllHandle, L"WheelFfb.dll"))
 		{
-			spdlog::error("FFB: No DirectInput8 interface available");
+			const char* missing = WheelFfb_MissingExport(&ffb);
+			spdlog::error("FFB: WheelFfb.dll unusable ({}) -- force feedback disabled. "
+				"Copy WheelFfb.dll next to dinput8.dll.", missing ? missing : "?");
+			WheelFfb_Unload(&ffb);
 			return false;
 		}
+		ffbLoaded = true;
 
-		// Path A: Open our OWN handle on the remap layer's primary device GUID.
-		// (Previously FFB shared the remap polling handle in EXCLUSIVE mode;
-		// any poll-side re-Acquire() then destroyed the downloaded effects,
-		// producing torque->0->full-step transients. The remap handle is now
-		// NONEXCLUSIVE; this one is EXCLUSIVE|BACKGROUND.)
-		if (Settings::UseDirectInputRemap && DInputRemap::IsPrimaryInitialized())
+		// Keep the DLL's own log beside the game, with everything else worth
+		// reading after a bad session. Set DBCE_FFB_LOG=0 to silence it.
 		{
-			GUID guid;
-			if (DInputRemap::GetPrimaryDeviceGuid(&guid))
+			char logPath[MAX_PATH] = {};
+			if (GetModuleFileNameA(Module::DllHandle, logPath, MAX_PATH))
 			{
-				auto* dev = OpenFfbDevice(guid, di);
-				if (dev)
+				char* slash = strrchr(logPath, '\\');
+				if (slash)
 				{
-					DIDEVCAPS caps = {};
-					caps.dwSize = sizeof(DIDEVCAPS);
-					dev->GetCapabilities(&caps);
-					if (caps.dwFlags & DIDC_FORCEFEEDBACK)
-					{
-						ffbDevice = dev;
-						ownsDevice = true;
-						spdlog::info("FFB: Opened dedicated FFB handle on remap primary device");
-					}
-					else
-					{
-						spdlog::warn("FFB: Remap primary device does not support FFB, trying enumeration...");
-						dev->Unacquire();
-						dev->Release();
-					}
+					strncpy_s(slash + 1, sizeof(logPath) - (slash + 1 - logPath), "OutRun2006Tweaks.ffb.log", _TRUNCATE);
+					ffb.SetLogPath(logPath);
 				}
 			}
-			else
-			{
-				spdlog::warn("FFB: DInputRemap primary GUID not available, trying enumeration...");
-			}
 		}
 
-		// Path B: Enumerate first FFB-capable device (standalone / fallback)
-		if (!ffbDevice)
+		spdlog::info("FFB: WheelFfb.dll loaded (version {})", ffb.GetWheelFfbVersion());
+
+		// The same physical device the remap layer polls, but our OWN exclusive
+		// handle - poll-side Acquire() churn must never invalidate our downloaded
+		// effects. Selected by instance GUID rather than by name, because a
+		// Fanatec base presents two identically named devices and only one of
+		// them has the actuator.
+		GUID guid = {};
+		if (Settings::UseDirectInputRemap && DInputRemap::IsPrimaryInitialized() &&
+			DInputRemap::GetPrimaryDeviceGuid(&guid))
 		{
-
-			// Enumerate FFB-capable devices
-			struct EnumCtx { IDirectInput8A* di; IDirectInputDevice8A* bestDevice; };
-			EnumCtx ctx = { di, nullptr };
-
-			di->EnumDevices(DI8DEVCLASS_GAMECTRL,
-				[](LPCDIDEVICEINSTANCEA inst, LPVOID pCtx) -> BOOL {
-					auto* c = static_cast<EnumCtx*>(pCtx);
-					IDirectInputDevice8A* dev = nullptr;
-					if (SUCCEEDED(c->di->CreateDevice(inst->guidInstance, &dev, nullptr)))
-					{
-						DIDEVCAPS caps = {};
-						caps.dwSize = sizeof(DIDEVCAPS);
-						dev->GetCapabilities(&caps);
-						if (caps.dwFlags & DIDC_FORCEFEEDBACK)
-						{
-							spdlog::info("FFB: Found FFB device: '{}'", inst->tszInstanceName);
-							c->bestDevice = dev;
-							return DIENUM_STOP;
-						}
-						dev->Release();
-					}
-					return DIENUM_CONTINUE;
-				},
-				&ctx, DIEDFL_FORCEFEEDBACK);
-
-			if (!ctx.bestDevice)
-			{
-				spdlog::warn("FFB: No FFB-capable devices found");
-				return false;
-			}
-
-			ffbDevice = ctx.bestDevice;
-			ownsDevice = true;
-
-			ffbDevice->SetDataFormat(&c_dfDIJoystick2);
-			ffbDevice->SetCooperativeLevel(Game::GameHwnd(),
-				DISCL_EXCLUSIVE | DISCL_BACKGROUND);
-			ffbDevice->Acquire();
+			ffb.SetPreferredDeviceGuid(&guid);
+			spdlog::info("FFB: requesting the remap layer's primary device by GUID");
+		}
+		else if (Settings::FFBDevice >= 0)
+		{
+			ffb.SetPreferredDeviceIndex(Settings::FFBDevice);
+			spdlog::info("FFB: requesting device index {}", Settings::FFBDevice);
 		}
 
-		// Disable autocenter
-		DIPROPDWORD dipdw = {};
-		dipdw.diph.dwSize = sizeof(DIPROPDWORD);
-		dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-		dipdw.diph.dwObj = 0;
-		dipdw.diph.dwHow = DIPH_DEVICE;
-		dipdw.dwData = FALSE; // DIPAUTOCENTER_OFF = 0
-		ffbDevice->SetProperty(DIPROP_AUTOCENTER, &dipdw.diph);
-
-		// Create the constant force effect
-		if (!CreateConstantForceEffect())
+		int count = ffb.EnumerateDevices();
+		for (int i = 0; i < count; i++)
 		{
-			spdlog::error("FFB: Failed to create constant force effect");
-			if (ownsDevice)
-			{
-				ffbDevice->Unacquire();
-				ffbDevice->Release();
-			}
-			ffbDevice = nullptr;
+			char name[260] = {};
+			ffb.GetDeviceName(i, name, sizeof(name));
+			spdlog::info("FFB: force-feedback device [{}]: '{}'", i, name);
+		}
+
+		if (!ffb.InitDirectInput((int)(INT_PTR)Game::GameHwnd()))
+		{
+			spdlog::error("FFB: no usable force-feedback device (last HRESULT 0x{:08X})",
+				(unsigned)ffb.GetLastHResult());
 			return false;
 		}
+		ffb.StartEffect();
 
-		// Hardware periodic effects for road texture / tire slip (falls back
-		// to constant-force synthesis if the driver rejects them)
-		CreatePeriodicEffects();
+		// Hardware periodics for road texture and tyre slip. -1 from either means
+		// the driver exposes no periodic effects, and the constant-force synthesis
+		// fallback below carries the vibration instead.
+		if (Settings::FFBUsePeriodicEffects)
+		{
+			slotRoadTexture = ffb.CreatePeriodicEffect(25);
+			slotTireSlip = ffb.CreatePeriodicEffect(40);
+			periodicsActive = (slotRoadTexture >= 0 && slotTireSlip >= 0);
+			if (periodicsActive)
+				spdlog::info("FFB: periodic effects on slots {} and {}", slotRoadTexture, slotTireSlip);
+			else
+				spdlog::warn("FFB: Periodic effects unavailable -- using constant-force vibration fallback (15 Hz cap, post-compressor injection)");
+		}
 
-		// Exit guards: zero the wheel while the window still exists
+		// Exit guards: zero the wheel while the window still exists. Kept here
+		// rather than using the DLL's own InstallExitGuards, because this one
+		// also hooks ExitProcess for the paths that never see WM_CLOSE.
 		InstallExitGuards();
 
 		initialized = true;
-		spdlog::info("FFB: Initialization complete (DirectInput)");
+		spdlog::info("FFB: Initialization complete (WheelFfb)");
 		return true;
 	}
+
 
 	int updateCounter = 0;
 
@@ -961,7 +599,7 @@ namespace FFB
 	// been called recently (handles menu transitions where GamePlCar_Ctrl stops).
 	void CheckWatchdog()
 	{
-		if (!initialized || !constantForceEffect || panicStopped)
+		if (!initialized || !ffbLoaded || panicStopped)
 			return;
 
 		DWORD now = GetTickCount();
@@ -1025,15 +663,10 @@ namespace FFB
 			warmupScale = static_cast<float>(warmupFrames) / static_cast<float>(WARMUP_THRESHOLD);
 		}
 
-		// Post-recreation ramp-in: after the constant-force effect had to be
-		// recreated, fade the force back over ~250ms instead of stepping to
-		// full torque (a 250ms fade from zero is imperceptible; a step is a jerk)
-		float recreateScale = 1.0f;
-		if (recreateRampFrames > 0)
-		{
-			recreateScale = static_cast<float>(RECREATE_RAMP_FRAMES - recreateRampFrames) / static_cast<float>(RECREATE_RAMP_FRAMES);
-			recreateRampFrames--;
-		}
+		// The post-recreation ramp-in (fade back over ~250 ms instead of stepping
+		// to full torque after an effect had to be recreated) now happens inside
+		// the DLL, which is the only layer that knows a recreation occurred.
+		const float recreateScale = 1.0f;
 
 		// Update rates:
 		// - Constant force: every frame (60 Hz) for responsive steering feel.
@@ -1207,7 +840,7 @@ namespace FFB
 		// the slide deepens; weight transfer modulates; events pulse on top.
 		// ================================================================
 
-		if (constantForceEffect)
+		if (ffbLoaded)
 		{
 			// --- Backbone: virtual spring ---
 			// speedCurve rises fast (full effect by 25% speed) then keeps growing
@@ -1351,18 +984,11 @@ namespace FFB
 
 		if (periodicsActive && updateEnvelopes)
 		{
-			UpdatePeriodicEffect(roadTextureEffect, roadTextureState, roadAmp, roadFreq);
-			UpdatePeriodicEffect(tireSlipEffect, tireSlipState, slipAmp, slipFreq);
+			UpdatePeriodic(slotRoadTexture, roadAmp, roadFreq);
+			UpdatePeriodic(slotTireSlip, slipAmp, slipFreq);
 		}
-
-		// Recreate dead periodic effects (rate-limited, respects holdoff)
-		if (Settings::FFBUsePeriodicEffects && (!roadTextureEffect || !tireSlipEffect)
-			&& (updateCounter % 60 == 0) && GetTickCount() >= recreateHoldoffUntil)
-		{
-			CreatePeriodicEffects();
-			if (!periodicsActive)
-				recreateHoldoffUntil = GetTickCount() + 500;
-		}
+		// A slot whose handle dies is recreated inside the DLL, behind its own
+		// 500 ms hold-off, so there is nothing to retry from here.
 
 		// Diagnostic logging: every 2 seconds (gated behind FFBDiagnosticLog)
 		if (Settings::FFBDiagnosticLog)
@@ -1420,50 +1046,20 @@ namespace FFB
 	{
 		Telemetry::Shutdown();
 
-		if (!constantForceEffect && !ffbDevice)
+		if (!initialized)
 			return;
 
 		spdlog::info("FFB: Shutting down...");
 
-		// Zero/stop everything first. If an exit guard (WM_CLOSE subclass or
-		// ExitProcess hook) already ran, this is a no-op. If we only got here
-		// via DLL_PROCESS_DETACH it is best-effort -- the window may already be
-		// gone and the DI calls may fail (which is why the exit guards exist).
-		// Note: PanicStop never routes through SetConstantForce, whose E_HANDLE
-		// recovery branch would recreate and restart the effect mid-teardown.
+		// This runs from DLL_PROCESS_DETACH, under the loader lock. PanicStop is
+		// the part that must happen and is a no-op if an exit guard already ran.
+		// Nothing else is torn down deliberately: FreeLibrary from DllMain is
+		// forbidden, and releasing COM objects here is what used to fault
+		// (0xC0000005 on all three effects) and silently skip the autocentre
+		// restore. The process is exiting; the OS reclaims the rest.
 		PanicStop();
 
-		// Autocenter is restored inside PanicStop() now, while the device is
-		// still known-good -- see the comment there. Doing it here meant a fault
-		// releasing an effect silently skipped it.
-		if (ffbDevice)
-		{
-			SafeReleaseEffect(constantForceEffect, "constant-force");
-			SafeReleaseEffect(roadTextureEffect, "road-texture");
-			SafeReleaseEffect(tireSlipEffect, "tire-slip");
-		}
-		constantForceEffect = nullptr;
-		roadTextureEffect = nullptr;
-		tireSlipEffect = nullptr;
-		periodicsActive = false;
-
-		__try
-		{
-			if (ffbDevice && ownsDevice)
-			{
-				// PanicStop already called Unacquire()
-				ffbDevice->Release();
-			}
-			// If !ownsDevice, the remap code owns the device lifetime
-		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			spdlog::warn("FFB: Exception releasing device (0x{:X})", GetExceptionCode());
-		}
-
-		ffbDevice = nullptr;
 		initialized = false;
-
 		spdlog::info("FFB: Shutdown complete");
 	}
 }

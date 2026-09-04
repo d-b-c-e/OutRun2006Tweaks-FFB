@@ -47,6 +47,7 @@ extern "C" {
     X(int,  SetAutoCenter,          (int enable)) \
     X(void, FreeDirectInput,        (void)) \
     X(void, SetPreferredDevice,     (const char* name)) \
+    X(void, SetPreferredDeviceGuid, (const void* guid16)) \
     X(void, SetPreferredDeviceIndex,(int index)) \
     X(int,  EnumerateDevices,       (void)) \
     X(int,  GetDeviceName,          (int index, char* buffer, int size)) \
