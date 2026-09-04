@@ -107,5 +107,28 @@ migration.
 
 ## Other debt, recorded not fixed
 
-Speed over-reads roughly 2×. Three dead INI settings. Four INI sections read by
-code but absent from the shipped template. No tests.
+Speed over-reads roughly 2x. No tests.
+
+**`[CDTracks]` does nothing.** `Settings::CDTracks` is declared in `plugin.hpp`
+and read in `hooks_audio.cpp`, but nothing in this fork ever populates it, so
+its size is always zero and the custom-BGM feature is inert. The 28 entries the
+template ships are therefore 28 settings that do nothing. Left in place because
+it is upstream's section rather than ours to delete;
+`tools\Check-IniCoverage.ps1` exempts it by name with that reason.
+
+## Keep the config and the code in step
+
+```powershell
+.	ools\Check-IniCoverage.ps1
+```
+
+It compares every `ini.Get("<section>", "<key>")` in `dllmain.cpp` against the
+shipped `OutRun2006Tweaks.ini`, both ways. Four whole sections were once
+missing from the template - `[DirectInput]`, `[DirectInput.Shifter]`,
+`[DirectInput.Aux]` and `[Telemetry]` - which hid the entire wheel remap layer
+and the telemetry output from anyone installing the mod. Point it at a deployed
+copy to audit an install:
+
+```powershell
+.	ools\Check-IniCoverage.ps1 -Ini "<game folder>\OutRun2006Tweaks.ini"
+```
