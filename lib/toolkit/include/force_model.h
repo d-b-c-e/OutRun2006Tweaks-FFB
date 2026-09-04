@@ -141,7 +141,9 @@ public:
         last_was_event = false; last_structural = 0.f;
     }
 
-    // One tick. Returns a normalised force, -1..1, before conditioning.
+    // One tick. Normalised against the profile's references, but NOT bounded:
+    // a force past full scale is real information. Shaper::shape bounds the
+    // output at the device edge.
     float compute(const Inputs& i, float dt) {
         const ModelSettings& s = settings;
         dt = clampf(dt, 0.f, 0.1f);
@@ -225,7 +227,11 @@ public:
         }
 
         last_was_event = is_event;
-        return clampf(structural + texture + ev, -1.f, 1.f);
+        // Deliberately NOT clamped; see the note on the C# ForceModel.Compute.
+        // The clamp is a device limit and belongs at the edge, in Shaper::shape.
+        // Applied here it also defeated the soft saturation, which received an
+        // already-clamped value and so had nothing left to compress.
+        return structural + texture + ev;
     }
 
 private:
