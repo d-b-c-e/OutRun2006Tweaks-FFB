@@ -1,0 +1,11 @@
+# Written by Sync-Toolkit.ps1. SHA-256 of every vendored file as it was
+# placed here. The next sync compares against this to tell a routine
+# update apart from something edited locally, and refuses to overwrite
+# the second kind. Do not edit by hand.
+# toolkit v0.3.0  2026-09-04T13:29:54
+1E889D4C183F4DEC373834B63CFD2534B41B2B121459FDDF292E84BA0A9B9501  include\force_model.h
+4DD03EA92405C9BB157755B1B506036E469AFAC335253A2A40E0D4B32FA13999  include\force_profile.h
+F921D64422F943F13ADEFE41A4201249C32A19425933F8A64A3F4B5D46DE12B8  include\forza_packet.h
+94663BCEA807AEA85DE6A69C8874423D0E793B10EC5FEB0C1BD739EA3993F86C  include\wheelffb.h
+00BF60FD641A70E0075A15CCEBA52A587E328CD9AE01F18C4BBC9B3E3AA24AC6  native\x86\WheelFfb.dll
+4F365B524C7C321FCB0C462A07B1F41201D2164FDCE20F7A1F19338E7BFBFB80  profiles\force-profiles.ini
