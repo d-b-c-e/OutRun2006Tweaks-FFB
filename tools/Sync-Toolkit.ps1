@@ -26,9 +26,11 @@
 .PARAMETER Parts
     Which artifact groups to copy: native (x64 WheelFfb.dll), native-x86 (the
     32-bit build, for 32-bit games), include (wheelffb.h C ABI + loader,
-    forza_packet.h), powershell (DbceWheel.psm1 installer helpers), dotnet,
-    tools, knowledge. Default native,dotnet. A native mod typically takes
-    native-x86,include or native,include; an installer takes powershell.
+    forza_packet.h, force_model.h, force_profile.h), profiles
+    (force-profiles.ini, which the game DEPLOYS and reads at runtime),
+    powershell (DbceWheel.psm1 installer helpers), dotnet, tools, knowledge.
+    Default native,dotnet. A native mod that produces force typically takes
+    native-x86,include,profiles; an installer takes powershell.
 
 .EXAMPLE
     .\tools\Sync-Toolkit.ps1 -Version v0.1.0
@@ -58,7 +60,8 @@ try {
         $src = @{
             native     = Join-Path $LocalRepo 'native\wheelffb\build'
             'native-x86' = Join-Path $LocalRepo 'native\wheelffb\build\x86'
-            include    = @((Join-Path $LocalRepo 'native\wheelffb\include'), (Join-Path $LocalRepo 'native\forza'))
+            include    = @((Join-Path $LocalRepo 'native\wheelffb\include'), (Join-Path $LocalRepo 'native\forza'), (Join-Path $LocalRepo 'native\forcemodel'))
+            profiles   = Join-Path $LocalRepo 'profiles'
             powershell = Join-Path $LocalRepo 'tools\powershell'
             dotnet     = Join-Path $LocalRepo 'dotnet\Dbce.Wheel.Ffb\bin\Release\netstandard2.0'
             tools      = Join-Path $LocalRepo 'tools'
@@ -78,6 +81,7 @@ try {
             native     = Join-Path $inner.FullName 'native'
             'native-x86' = Join-Path $inner.FullName 'native\x86'
             include    = @((Join-Path $inner.FullName 'native\include'))
+            profiles   = Join-Path $inner.FullName 'profiles'
             powershell = Join-Path $inner.FullName 'tools\powershell'
             dotnet     = Join-Path $inner.FullName 'dotnet'
             tools      = Join-Path $inner.FullName 'tools'
@@ -98,6 +102,7 @@ try {
             'native'     { Copy-Item (Join-Path $from 'WheelFfb.dll') $to -Force }
             'native-x86' { Copy-Item (Join-Path $from 'WheelFfb.dll') $to -Force }
             'include'    { foreach ($d in $from) { Copy-Item (Join-Path $d '*.h') $to -Force } }
+            'profiles'   { Copy-Item (Join-Path $from 'force-profiles.ini') $to -Force }
             'powershell' { Copy-Item (Join-Path $from '*.psm1') $to -Force }
             'dotnet'     { Copy-Item (Join-Path $from 'Dbce.Wheel.*.dll') $to -Force; Copy-Item (Join-Path $from 'Dbce.Wheel.*.xml') $to -Force -ErrorAction SilentlyContinue }
             default      { Copy-Item (Join-Path $from '*') $to -Recurse -Force }

@@ -216,6 +216,11 @@ namespace Settings
 	inline float FFBWheelTorqueNm = 0.0f;
 	inline bool FFBInvertForce = false;
 	inline bool FFBDiagnosticLog = false;
+	// Which force model and tuning to use. "legacy" is this fork's own model;
+	// anything else names a profile in force-profiles.ini beside dinput8.dll
+	// (e.g. "arcade-outrun@1"), read at runtime so a tune can be swapped
+	// without rebuilding. See docs/FORCE-PROFILES.md.
+	inline std::string FFBProfile = "legacy";
 
 	// Telemetry shared memory (for SimHub / bass shakers)
 	inline bool TelemetryEnabled = false;

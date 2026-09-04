@@ -24,7 +24,8 @@
 #include "game_addrs.hpp"
 #include "game.hpp"
 #include "telemetry.hpp"
-#include "wheelffb.h"   // dbce-wheel-mod-toolkit C ABI (lib/toolkit/include)
+#include "wheelffb.h"      // dbce-wheel-mod-toolkit C ABI (lib/toolkit/include)
+#include "force_profile.h" // shared force model + versioned tuning profiles
 
 // External vibration data from hooks_forcefeedback.cpp
 extern float VibrationLeftMotor;
@@ -277,6 +278,27 @@ namespace FFB
 
 	// Panic flag: once set (process exit path), no further DI output is issued
 	static volatile bool panicStopped = false;
+
+	// The shared force model, when FFBProfile names one.
+	//
+	// Settings::FFBProfile = legacy          this file's own model (the default)
+	//                      = arcade-outrun@1 the toolkit model, tuned as this game shipped
+	//                      = <name>@<n>      any profile in force-profiles.ini
+	//
+	// The profile file sits beside dinput8.dll and is read at startup, so a tune
+	// is swapped by editing a text file and restarting - no rebuild. Put your own
+	// in force-profiles.user.ini, which an update never overwrites.
+	//
+	// What does NOT move into the toolkit is everything above this line: reading
+	// the car struct, the game's own surface-roughness LUT, crash detection from
+	// the speed window, the drift estimate. Working out what the car is doing is
+	// per game; deciding how that should FEEL is not, and that is what the shared
+	// model owns.
+	static bool useSharedModel = false;
+	static dbce::force::Profile sharedProfile;
+	static dbce::force::Model*  sharedModel = nullptr;
+	static dbce::force::Shaper* sharedShaper = nullptr;
+	static uint32_t sharedPrevGear = 0;
 
 	// Watchdog: timestamp of last Update() call for staleness detection
 	static volatile DWORD lastUpdateTick = 0;
@@ -565,6 +587,36 @@ namespace FFB
 				spdlog::warn("FFB: Periodic effects unavailable -- using constant-force vibration fallback (15 Hz cap, post-compressor injection)");
 		}
 
+		// --- force model: this file's own, or a named profile from the toolkit ---
+		// A profile that will not load must never cost force feedback; fall back
+		// to the built-in model and say so.
+		if (!Settings::FFBProfile.empty() && _stricmp(Settings::FFBProfile.c_str(), "legacy") != 0)
+		{
+			char dir[MAX_PATH] = {};
+			GetModuleFileNameA(Module::DllHandle, dir, MAX_PATH);
+			if (char* slash = strrchr(dir, '\\')) *slash = 0;
+
+			std::string why;
+			if (dbce::force::load_profile_dir(dir, Settings::FFBProfile, sharedProfile, &why))
+			{
+				sharedModel = new dbce::force::Model(sharedProfile.model);
+				sharedShaper = new dbce::force::Shaper(sharedProfile.shaper);
+				useSharedModel = true;
+				spdlog::info("FFB: force profile '{}' - {}", sharedProfile.id(), sharedProfile.description);
+				for (size_t i = 0; i < sharedProfile.unknown_keys.size(); i++)
+					spdlog::warn("FFB: profile key not understood by this build: {}", sharedProfile.unknown_keys[i]);
+			}
+			else
+			{
+				spdlog::error("FFB: force profile '{}' not loaded ({}) -- using the built-in model",
+					Settings::FFBProfile, why);
+			}
+		}
+		else
+		{
+			spdlog::info("FFB: using the built-in (legacy) force model");
+		}
+
 		// Exit guards: zero the wheel while the window still exists. Kept here
 		// rather than using the DLL's own InstallExitGuards, because this one
 		// also hooks ExitProcess for the paths that never see WM_CLOSE.
@@ -840,7 +892,46 @@ namespace FFB
 		// the slide deepens; weight transfer modulates; events pulse on top.
 		// ================================================================
 
-		if (ffbLoaded)
+		if (ffbLoaded && useSharedModel)
+		{
+			// The game's signals, handed to the shared model. Everything here is
+			// already computed above by code that knows OutRun; none of it is
+			// tuning, and all the tuning lives in the profile.
+			dbce::force::Inputs in;
+			in.steer = steer;                       in.has_steer = true;
+			in.steer_rate = steerRate * 60.0f;      in.has_steer_rate = true;   // per frame -> per second
+			in.speed_mps = speed * Telemetry::MaxSpeedMps;
+			// latNorm is already -1..1; the profile's gReference is 1.0 so the
+			// model passes it through unchanged.
+			in.lateral_g = latNorm;                 in.has_lateral_g = true;
+			in.drift_amount = driftAmt;             in.has_drift = true;
+			if (speedHistoryIdx > 6)
+			{
+				in.longitudinal_g = (speed - speedHistory[(speedHistoryIdx - 6) % 8]) * 10.0f;
+				in.has_longitudinal_g = true;
+			}
+			// Texture rides the hardware periodics when the driver has them; the
+			// model's own texture term is the fallback.
+			if (!periodicsActive) in.texture = std::max(roadAmp, slipAmp);
+			if (crashImpulseTimer == 90)            // the tick the crash was detected
+			{
+				in.impact = std::min(1.0f, std::abs(crashImpulseForce));
+				in.impact_direction = crashImpulseForce >= 0.0f ? 1.0f : -1.0f;
+			}
+			in.gear_shift = (curGear != sharedPrevGear && sharedPrevGear != 0);
+			sharedPrevGear = curGear;
+
+			const float dt = 1.0f / 60.0f;
+			float shaped = sharedShaper->shape(sharedModel->compute(in, dt),
+				speed * Telemetry::MaxSpeedMps * 3.6f, dt, sharedModel->last_was_event);
+
+			// FFBGlobalStrength stays the user's master dial on top of the
+			// profile's own shaper.strength, and is applied inside SetConstantForce.
+			LONG diMagnitude = std::clamp((LONG)(shaped * 10000.0f), (LONG)-10000, (LONG)10000);
+			if (std::abs(diMagnitude - prevConstantLevel) > 15 || sharedModel->last_was_event)
+				SetConstantForce(diMagnitude);
+		}
+		else if (ffbLoaded)
 		{
 			// --- Backbone: virtual spring ---
 			// speedCurve rises fast (full effect by 25% speed) then keeps growing

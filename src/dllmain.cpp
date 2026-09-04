@@ -136,6 +136,7 @@ namespace Settings
 
 		spdlog::info(" - DirectInputFFB: {}", DirectInputFFB);
 		spdlog::info(" - FFBDevice: {}", FFBDevice);
+		spdlog::info(" - FFBProfile: {}", FFBProfile);
 		spdlog::info(" - FFBGlobalStrength: {}", FFBGlobalStrength);
 		spdlog::info(" - FFBSpringStrength: {}", FFBSpringStrength);
 		spdlog::info(" - FFBDamperStrength: {}", FFBDamperStrength);
@@ -330,6 +331,7 @@ namespace Settings
 
 		DirectInputFFB = ini.Get("FFB", "DirectInputFFB", DirectInputFFB);
 		FFBDevice = ini.Get("FFB", "FFBDevice", FFBDevice);
+		FFBProfile = ini.Get("FFB", "FFBProfile", FFBProfile);
 		FFBGlobalStrength = ini.Get("FFB", "FFBGlobalStrength", FFBGlobalStrength);
 		FFBGlobalStrength = std::clamp(FFBGlobalStrength, 0.0f, 2.0f);
 		FFBSpringStrength = ini.Get("FFB", "FFBSpringStrength", FFBSpringStrength);
