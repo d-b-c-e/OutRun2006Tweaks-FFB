@@ -241,8 +241,12 @@ private:
 };
 
 // ---------------------------------------------------------------- shaper
-// Deadzone -> EMA -> soft saturation -> slew -> fade -> ramp -> gain/invert ->
+// Deadzone -> EMA -> GAIN/INVERT -> soft saturation -> slew -> fade -> ramp ->
 // clamp -> deadband. The order is fixed; see knowledge/FFB-SIGNAL-DESIGN.md.
+// Gain and invert are the boundary between model units and true output units
+// and sign; every stage after them is a device-side limit. They moved there in
+// 0.8.0, because the slew limiter compares against last_ and could not be
+// correct while last_ and the value being limited disagreed on scale or sign.
 // An event bypasses the EMA and the slew so it arrives as a pulse, not a shove.
 class Shaper {
 public:
@@ -278,35 +282,44 @@ public:
             smoothed_ = v;
         }
 
-        // 3. soft saturation
+        // 3. gain. The line between the two halves of the chain: above it the
+        //    value is in model units, below it in output units, and everything
+        //    below is a device-side limit. Applied last (as it was before 0.8.0)
+        //    Strength re-inflated an already-saturated value into the hard clamp.
+        //    Invert moves with it: the slew limiter below compares against last_,
+        //    the value actually sent, and with invert applied at the end those two
+        //    had opposite signs - a steady input then oscillated near zero and no
+        //    force ever arrived.
+        v *= gain();
+        if (s.invert) v = -v;
+
+        // 4. soft saturation
         if (s.soft_saturation > 0.f) {
             float k = s.soft_saturation;
             v = (1.f - k) * v + k * std::tanh(v);
         }
 
-        // 4. slew (structural only)
+        // 5. slew (structural only). Now in output units.
         if (!is_event && s.slew_per_second > 0.f && dt > 0.f) {
             float step = s.slew_per_second * dt;
             v = clampf(v, last_ - step, last_ + step);
         }
 
-        // 5. low-speed fade
+        // 6. low-speed fade
         if (s.fade_full_kmh > s.fade_start_kmh) {
             float t = (speed_kmh - s.fade_start_kmh) / (s.fade_full_kmh - s.fade_start_kmh);
             t = clampf(t, 0.f, 1.f);
             v *= t * t * (3.f - 2.f * t);   // smoothstep
         }
 
-        // 6. warm-up / restart ramp
+        // 7. warm-up / restart ramp
         if (s.ramp_seconds > 0.f && ramp_t_ < s.ramp_seconds) {
             ramp_t_ += dt; started_ = true;
             float r = ramp_t_ / s.ramp_seconds;
             v *= r > 1.f ? 1.f : r;
         }
 
-        // 7. gain, invert, clamp, peak limit, deadband
-        v *= gain();
-        if (s.invert) v = -v;
+        // 8. clamp, peak limit, deadband
         float limit = clampf(s.peak_limit, 0.f, 1.f);
         v = clampf(v, -limit, limit);
         if (std::fabs(v) < s.output_deadband) v = 0.f;
