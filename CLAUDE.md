@@ -20,6 +20,11 @@ vendored `WheelFfb.dll`.
 [dbce-wheel-mod-toolkit](https://github.com/d-b-c-e/dbce-wheel-mod-toolkit),
 pinned in `lib/toolkit/VERSION`. It carries:
 
+**Component override (2026-09-17):** `NATIVE-VERSION` and
+`NATIVE-PROVENANCE.json` pin only `wheelffb.h` and the x86 DLL to official v0.13.0
+(native 0.6.0) for strict GUID selection. The model, profiles and encoder remain
+v0.8.0 unchanged. Read `docs/NATIVE-PIN-2026-09-17.md` before syncing.
+
 | Path | What it is |
 |---|---|
 | `include/wheelffb.h` | the C ABI of `WheelFfb.dll`, plus its runtime loader |

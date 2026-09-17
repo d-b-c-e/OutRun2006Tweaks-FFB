@@ -27,6 +27,12 @@
  * effects are millihertz (25 Hz = 25000); condition coefficients, saturations,
  * deadbands and offsets are also -10000..10000.
  *
+ * Native 0.6.0 finite bursts: CreatePeriodicBurst(hz, durationMs 1..500)
+ * returns an idle slot; PlayPeriodicBurst(slot, magnitude 0..10000, milliHz)
+ * explicitly restarts one finite iteration (0 stops). StopPeriodicBurst is
+ * idempotent for a valid burst slot. Frequency 1..100 Hz. Shares four periodic
+ * slots; continuous Update rejects burst slots. Failed events are never retried.
+ *
  * Three families of effect, and they are not interchangeable:
  *   constant   SetDeviceForcesXY - the force your model computes
  *   periodic   CreatePeriodicEffect - a waveform the base renders itself
@@ -82,10 +88,14 @@ extern "C" {
     X(int,  GetWheelFfbVersion,     (void)) \
     X(int,  CreatePeriodicEffect,   (int freqHz)) \
     X(int,  UpdatePeriodicEffect,   (int slot, int magnitude, int freqMilliHz)) \
+    X(int,  CreatePeriodicBurst,    (int freqHz, int durationMs)) \
+    X(int,  PlayPeriodicBurst,      (int slot, int magnitude, int freqMilliHz)) \
+    X(int,  StopPeriodicBurst,      (int slot)) \
     X(void, ReleasePeriodicEffects, (void)) \
     X(int,  CreateConditionEffect,  (int type)) \
     X(int,  UpdateConditionEffect,  (int slot, int coefficient, int saturation, int deadband, int offset)) \
-    X(void, ReleaseConditionEffects,(void))
+    X(void, ReleaseConditionEffects,(void)) \
+    X(void, SetStrictDeviceSelection,(int enabled))
 
 #define WHEELFFB_TYPEDEF(ret, name, args) typedef ret (__cdecl *WheelFfb_##name##_t) args;
 WHEELFFB_API_LIST(WHEELFFB_TYPEDEF)

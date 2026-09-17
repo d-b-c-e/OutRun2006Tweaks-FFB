@@ -64,6 +64,7 @@ param(
     [string]$Destination,
     [string[]]$Parts = @('native', 'dotnet'),
     [switch]$Force,
+    [switch]$ReplaceNativeOverride,
     [string]$Repo = 'd-b-c-e/dbce-wheel-mod-toolkit'
 )
 
@@ -74,6 +75,16 @@ $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not $Destination) { $Destination = Join-Path $root 'lib\toolkit' }
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $Destination = (Resolve-Path $Destination).Path
+
+# This consumer deliberately pins the output ABI separately from its force model.
+# A routine include/native sync must not silently erase that reviewed split.
+$nativeOverride = Join-Path $Destination 'NATIVE-VERSION'
+if ((Test-Path -LiteralPath $nativeOverride) -and
+    ($Parts -contains 'include' -or $Parts -contains 'native-x86')) {
+    if (-not $ReplaceNativeOverride -or -not ($Parts -contains 'include' -and $Parts -contains 'native-x86')) {
+        throw 'A reviewed native ABI override is active. Read NATIVE-PROVENANCE.json; replace deliberately with -ReplaceNativeOverride and BOTH include,native-x86, or leave those components untouched.'
+    }
+}
 
 $manifestPath = Join-Path $Destination 'MANIFEST.txt'
 $recorded = @{}
@@ -222,6 +233,11 @@ try {
         exit 1
     }
 
+    if ($ReplaceNativeOverride -and (Test-Path -LiteralPath $nativeOverride)) {
+        Remove-Item -LiteralPath $nativeOverride
+        $provenance = Join-Path $Destination 'NATIVE-PROVENANCE.json'
+        if (Test-Path -LiteralPath $provenance) { Remove-Item -LiteralPath $provenance }
+    }
     Write-Host "Vendored $ver into $Destination" -ForegroundColor Green
     if (-not $hadManifest) {
         Write-Host "Wrote MANIFEST.txt; from the next sync on, local edits are detected and kept." -ForegroundColor DarkGray

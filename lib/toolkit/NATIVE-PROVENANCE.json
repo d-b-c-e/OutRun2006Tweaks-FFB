@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "baselinePackageVersion": "v0.8.0",
+  "overridePackageVersion": "v0.13.0",
+  "nativeVersion": "0.6.0",
+  "architecture": "x86",
+  "exportCount": 41,
+  "sourceCommit": "dd0ef20ad0cdaccc7a67f10a707dbd2a27a6efe9",
+  "archive": "dbce-wheel-mod-toolkit-0.13.0.zip",
+  "archiveSha256": "2f73f5427465cd85e8d969ee7ecaf7d9c2cb08ed923da80c4ac7c7234af1b0cc",
+  "reason": "Strict GUID selection prevents fallback to another actuator after disconnect or open refusal.",
+  "preserved": "force_model.h, force_profile.h, forza_packet.h, dinput_proxy.h, force-profiles.ini remain byte-identical to the existing v0.8.0 baseline.",
+  "files": [
+    {
+      "archivePath": "native/include/wheelffb.h",
+      "sha256": "fba2c0adb660951c3264afb35a590f1ec29fe43df00b6a1c2252ae5063521961",
+      "path": "include/wheelffb.h"
+    },
+    {
+      "archivePath": "native/x86/WheelFfb.dll",
+      "sha256": "95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31",
+      "path": "native/x86/WheelFfb.dll"
+    }
+  ]
+}
