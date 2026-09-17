@@ -199,6 +199,8 @@ namespace Settings
 
 	inline bool DirectInputFFB = false;
 	inline int FFBDevice = -1;
+	inline std::string FFBDeviceGuid = "steering";
+	inline std::string FFBDeviceName;
 	inline float FFBGlobalStrength = 1.0f;
 	inline float FFBSpringStrength = 0.45f;   // virtual centering spring on steering position
 	inline float FFBDamperStrength = 0.10f;   // virtual damper on steering derivative
@@ -238,6 +240,7 @@ namespace Settings
 	inline bool ProtectLoginData = true;
 
 	inline bool OverlayEnabled = true;
+	inline std::string WheelSettingsView = "Simple";
 
 	inline bool FixPegasusClopping = true;
 	inline bool FixRightSideBunkiAnimations = true;

@@ -16,6 +16,7 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "wheel_ui_snapshot.hpp"
 
 // Defined in Proxy.cpp — the real IDirectInput8A before our filtering wrapper
 extern IDirectInput8A* g_RealDirectInput8;
@@ -772,6 +773,29 @@ namespace DInputRemap
 	}
 
 	// Accessors for the FFB engine to share the primary device handle
+	UiSnapshot ReadUiSnapshot()
+	{
+		UiSnapshot snapshot;
+		snapshot.name = primary.name;
+		if (!primary.device || !primary.initialized) return snapshot;
+		// Read the existing handle without enumeration, acquisition or changing
+		// the input backend. Game I/O is suspended while the overlay is open.
+		DIJOYSTATE2 state{};
+		primary.device->Poll();
+		if (FAILED(primary.device->GetDeviceState(sizeof(state), &state))) return snapshot;
+		snapshot.connected = true;
+		wchar_t guidText[40]{};
+		if (primaryGuidValid && StringFromGUID2(primaryGuid, guidText, 40))
+			for (const auto* p = guidText; *p; ++p) snapshot.guid += static_cast<char>(*p);
+		for (int i = 0; i < 8; ++i) snapshot.axes[i] = ReadAxisRaw(state, i);
+		for (int i = 0; i < 128; ++i) snapshot.buttons[i] = (state.rgbButtons[i] & 0x80) != 0;
+		primary.currentState = state;
+		snapshot.steering = GetSteering() / 127.0f;
+		snapshot.throttle = GetAcceleration() / 255.0f;
+		snapshot.brake = GetBrake() / 255.0f;
+		return snapshot;
+	}
+
 	IDirectInputDevice8A* GetPrimaryDevice() { return primary.device; }
 	bool IsPrimaryInitialized() { return primary.initialized; }
 

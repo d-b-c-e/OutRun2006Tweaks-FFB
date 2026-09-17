@@ -8,6 +8,7 @@
 #include "notifications.hpp"
 #include "resource.h"
 #include "overlay.hpp"
+#include "wheel_settings.hpp"
 #include <ini.h>
 
 Notifications Notifications::instance;
@@ -220,7 +221,7 @@ void Overlay::init()
 {
 	Overlay::settings_read();
 
-	Notifications::instance.add("OutRun2006Tweaks v" MODULE_VERSION_STR " by emoose!\nPress F11 to open overlay.", 0,
+	Notifications::instance.add("OutRun2006Tweaks v" MODULE_VERSION_STR "\nF6: Wheel settings | F8: Stop FFB", 0,
 		[]() {
 			std::string url = "https://github.com/emoose/OutRun2006Tweaks";
 			ShellExecuteA(nullptr, "open", url.c_str(), 0, 0, SW_SHOWNORMAL);
@@ -285,14 +286,23 @@ bool Overlay::render()
 		s_hasInited = true;
 	}
 
-	if (ImGui::IsKeyReleased(ImGuiKey_F11))
+	// Start the Dear ImGui frame before reading its current key edges.
+	ImGui::NewFrame();
+	if (ImGui::IsKeyReleased(ImGuiKey_F11) && !WheelSettingsVisible)
 	{
 		overlay_visible = !overlay_visible;
 		ForceShowCursor(overlay_visible);
 	}
 
-	// Start the Dear ImGui frame
-	ImGui::NewFrame();
+	if (ImGui::IsKeyPressed(ImGuiKey_F6, false) && !IsBindingDialogActive && !WheelSettingsUi::IsCapturing())
+	{
+		if (WheelSettingsVisible) WheelSettingsUi::FlushChanges();
+		WheelSettingsVisible = !WheelSettingsVisible;
+		if (WheelSettingsVisible) overlay_visible = false;
+		ForceShowCursor(WheelSettingsVisible || overlay_visible);
+	}
+	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) WheelSettingsUi::StopFfb();
+	IsActive = overlay_visible || WheelSettingsVisible || IsBindingDialogActive;
 
 	// Notifications are rendered before any other window
 	Notifications::instance.render();
@@ -309,14 +319,14 @@ bool Overlay::render()
 
 	if (Overlay::RequestMouseHide)
 	{
-		if (!overlay_visible)
+		if (!overlay_visible && !WheelSettingsVisible)
 			ForceShowCursor(false);
 		Overlay::RequestMouseHide = false;
 	}
 
 	ImGui::EndFrame();
 
-	if (overlay_visible)
+	if (overlay_visible || WheelSettingsVisible || IsBindingDialogActive)
 		IsActive = true;
 
 	return IsActive;

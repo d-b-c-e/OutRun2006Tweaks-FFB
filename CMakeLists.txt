@@ -319,9 +319,13 @@ set(outrun2006tweaks_SOURCES
 	"src/overlay/overlay.hpp"
 	"src/overlay/server_notifications.cpp"
 	"src/overlay/update_check.cpp"
+	"src/overlay/wheel_settings.cpp"
+	"src/overlay/wheel_settings.hpp"
 	"src/plugin.hpp"
 	"src/resource.h"
 	"src/telemetry.hpp"
+	"src/wheel_settings_policy.hpp"
+	"src/wheel_ui_snapshot.hpp"
 )
 
 add_library(outrun2006tweaks SHARED)

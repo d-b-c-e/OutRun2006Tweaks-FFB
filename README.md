@@ -4,6 +4,26 @@
 
 ## FFB Fork Changes
 
+### Wheel settings (development candidate)
+
+Press **F6** for **Wheel settings**, which opens in Simple by default. Choose
+Advanced for detailed tuning; the views share all settings and remember your
+choice. **F8 / Stop FFB** saves Off. Controls provides primary-wheel axis/button
+binding; FFB provides Strength and a real device dropdown following the saved
+Steering wheel unless you choose an explicit override. Changes save into the
+existing user INI without replacing your tune.
+
+This is partial adoption, built and tested with offline fixtures; it has **not
+been driven or deployed**. Guided calibration, independent pedal-device setup,
+custom cameras and the standard installer remain work. See the
+[exact inventory and acceptance gaps](docs/UX-OVERNIGHT-2026-09-16.md).
+The old Off default remains until the force signal is validated.
+
+The native DLL/header have a [separate v0.13.0 pin](docs/NATIVE-PIN-2026-09-17.md)
+for strict saved-device selection. Force model, profile data and encoder remain
+on the existing v0.8.0 baseline. Update both built DLLs together, with the game
+closed, and preserve existing INIs.
+
 ### Force feedback (`src/hooks_dinputffb.cpp`)
 
 The PC port ships no force feedback at all. This fork reads the game's own

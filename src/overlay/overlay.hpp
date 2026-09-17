@@ -44,6 +44,7 @@ public:
 	};
 
 	inline static bool IsActive = false;
+	inline static bool WheelSettingsVisible = false;
 
 	inline static bool RequestBindingDialog = false;
 	inline static bool IsBindingDialogActive = false;

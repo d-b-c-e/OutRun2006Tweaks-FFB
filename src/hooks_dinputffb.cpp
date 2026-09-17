@@ -26,6 +26,8 @@
 #include "telemetry.hpp"
 #include "wheelffb.h"      // dbce-wheel-mod-toolkit C ABI (lib/toolkit/include)
 #include "force_profile.h" // shared force model + versioned tuning profiles
+#include "overlay/overlay.hpp"
+#include "wheel_ui_snapshot.hpp"
 
 // External vibration data from hooks_forcefeedback.cpp
 extern float VibrationLeftMotor;
@@ -70,6 +72,8 @@ namespace Telemetry
 	static sockaddr_in udpAddr = {};
 	static bool udpInitialized = false;
 	static const int FORZA_UDP_PORT = 8000;
+	static DWORD lastSendTick = 0;
+	static bool lastSendFailed = false;
 
 	// Approximate gear ratios for RPM synthesis (OutRun doesn't expose RPM)
 	// These create a believable RPM range on the wheel display
@@ -135,6 +139,7 @@ namespace Telemetry
 
 	static void Write(EVWORK_CAR* car, bool inGameplay)
 	{
+		if (!Settings::TelemetryEnabled) return;
 		// Write to shared memory (SimHub)
 		if (pData)
 		{
@@ -225,8 +230,10 @@ namespace Telemetry
 			uint8_t frame[dbce::forza::FORZA_FM7_DASH_311];
 			int n = dbce::forza::build(dbce::forza::FORZA_FM7_DASH_311, sled, dash,
 			                           frame, sizeof(frame));
-			sendto(udpSocket, (const char*)frame, n, 0,
+			const int sent = sendto(udpSocket, (const char*)frame, n, 0,
 				(sockaddr*)&udpAddr, sizeof(udpAddr));
+			lastSendFailed = sent != n;
+			if (!lastSendFailed) lastSendTick = GetTickCount();
 		}
 	}
 
@@ -250,6 +257,27 @@ namespace Telemetry
 		initialized = false;
 		spdlog::info("Telemetry: Shared memory closed");
 	}
+
+	void SetEnabled(bool enabled)
+	{
+		Settings::TelemetryEnabled = enabled;
+		if (!enabled)
+		{
+			Shutdown();
+			udpInitialized = false;
+			lastSendTick = 0;
+			lastSendFailed = false;
+		}
+	}
+
+	const char* UiStatus()
+	{
+		if (!Settings::TelemetryEnabled) return "Off";
+		if (lastSendFailed) return "Unavailable - UDP send failed. See Help for the log.";
+		if (lastSendTick && GetTickCount() - lastSendTick < 1000) return "Sending (receiver not confirmed)";
+		if (initialized && !udpInitialized) return "Unavailable - UDP initialization failed. See Help for the log.";
+		return "Waiting for a live car update";
+	}
 }
 
 // Forward declaration from Proxy.cpp
@@ -264,6 +292,8 @@ namespace FFB
 	static bool ffbLoaded = false;
 	static bool initialized = false;
 	static bool initAttempted = false;
+	static std::vector<DeviceChoice> uiDevices;
+	static std::string deviceError;
 
 	// Hardware periodic effects (road texture / tire slip). 25-40 Hz content
 	// synthesized through 60 Hz constant-force updates loses ~26% to zero-order-
@@ -489,9 +519,10 @@ namespace FFB
 		else
 			spdlog::warn("FFB: SetWindowSubclass failed -- exit cleanup relies on ExitProcess hook only");
 
-		if (auto* exitProc = GetProcAddress(GetModuleHandleA("kernel32.dll"), "ExitProcess"))
+		if (!ExitProcess_hk)
 		{
-			ExitProcess_hk = safetyhook::create_inline(exitProc, ExitProcess_Hooked);
+			auto* exitProc = GetProcAddress(GetModuleHandleA("kernel32.dll"), "ExitProcess");
+			if (exitProc) ExitProcess_hk = safetyhook::create_inline(exitProc, ExitProcess_Hooked);
 			if (ExitProcess_hk)
 				spdlog::info("FFB: Exit guard installed (ExitProcess hook)");
 			else
@@ -501,13 +532,9 @@ namespace FFB
 
 	// Deferred initialization -- called from Update() on first game tick,
 	// because DirectInput needs a valid HWND.
-	bool DeferredInit()
+	static bool LoadApi()
 	{
-		if (initAttempted)
-			return initialized;
-		initAttempted = true;
-
-		spdlog::info("FFB: Starting deferred initialization (WheelFfb)...");
+		if (ffbLoaded) return true;
 
 		// Loaded at runtime from beside this DLL, never imported: a missing
 		// WheelFfb.dll has to disable force feedback, not stop the game from
@@ -538,6 +565,78 @@ namespace FFB
 		}
 
 		spdlog::info("FFB: WheelFfb.dll loaded (version {})", ffb.GetWheelFfbVersion());
+		ffb.SetStrictDeviceSelection(1);
+		return true;
+	}
+
+	static bool ParseDeviceGuid(const std::string& text, GUID& guid)
+	{
+		std::wstring wide(text.begin(), text.end());
+		return SUCCEEDED(CLSIDFromString(wide.c_str(), &guid));
+	}
+
+	const std::vector<DeviceChoice>& UiDevices() { return uiDevices; }
+
+	void RefreshUiDevices()
+	{
+		uiDevices.clear();
+		if (!LoadApi()) { deviceError = "WheelFfb.dll is missing or incompatible"; return; }
+		const int count = ffb.EnumerateDevices();
+		for (int i = 0; i < count; ++i)
+		{
+			GUID guid{};
+			char name[260]{};
+			wchar_t text[40]{};
+			if (!ffb.GetDeviceGuid(i, &guid) || !ffb.GetDeviceName(i, name, sizeof(name)) ||
+				!StringFromGUID2(guid, text, 40)) continue;
+			std::string identity;
+			for (const auto* p = text; *p; ++p) identity += static_cast<char>(*p);
+			uiDevices.push_back({ identity, name });
+		}
+		if (!initialized) { initAttempted = false; deviceError.clear(); }
+	}
+
+	void SelectionChanged()
+	{
+		ZeroAllForces();
+		if (ffbLoaded && initialized) ffb.FreeDirectInput();
+		initialized = false;
+		initAttempted = false;
+		periodicsActive = false;
+		slotRoadTexture = slotTireSlip = -1;
+		prevConstantLevel = prevStructLevel = 0;
+		warmupFrames = 0;
+		deviceError.clear();
+		delete sharedModel; sharedModel = nullptr;
+		delete sharedShaper; sharedShaper = nullptr;
+		useSharedModel = false;
+	}
+
+	std::string UiDeviceLabel()
+	{
+		if (Settings::FFBDeviceGuid == "steering")
+		{
+			const auto input = DInputRemap::ReadUiSnapshot();
+			return "Use steering wheel - " + (input.connected ? input.name : std::string("unavailable"));
+		}
+		if (Settings::FFBDeviceGuid == "legacy-index") return "Choose a device to replace the old index selection";
+		for (const auto& device : uiDevices)
+			if (device.guid == Settings::FFBDeviceGuid) return device.name;
+		return (Settings::FFBDeviceName.empty() ? std::string("Saved device") : Settings::FFBDeviceName) + " (disconnected)";
+	}
+
+	bool DeferredInit()
+	{
+		if (initAttempted) return initialized;
+		initAttempted = true;
+		if (!LoadApi()) { deviceError = "WheelFfb.dll is missing or incompatible"; return false; }
+		const HWND hwnd = Game::GameHwnd();
+		DWORD owner = 0;
+		if (!hwnd || !IsWindow(hwnd) || !GetWindowThreadProcessId(hwnd, &owner) || owner != GetCurrentProcessId())
+		{
+			deviceError = "Game window unavailable; restart the game";
+			return false;
+		}
 
 		// The same physical device the remap layer polls, but our OWN exclusive
 		// handle - poll-side Acquire() churn must never invalidate our downloaded
@@ -545,17 +644,26 @@ namespace FFB
 		// Fanatec base presents two identically named devices and only one of
 		// them has the actuator.
 		GUID guid = {};
-		if (Settings::UseDirectInputRemap && DInputRemap::IsPrimaryInitialized() &&
-			DInputRemap::GetPrimaryDeviceGuid(&guid))
+		if (Settings::FFBDeviceGuid == "steering")
 		{
-			ffb.SetPreferredDeviceGuid(&guid);
-			spdlog::info("FFB: requesting the remap layer's primary device by GUID");
+			GUID saved{};
+			if (!Settings::UseDirectInputRemap || !DInputRemap::IsPrimaryInitialized() ||
+				!ParseDeviceGuid(Settings::DIRemapDeviceGuid, saved) || !DInputRemap::GetPrimaryDeviceGuid(&guid) ||
+				!IsEqualGUID(saved, guid))
+			{
+				deviceError = "Bind Steering in Controls to save the intended wheel first";
+				return false;
+			}
 		}
-		else if (Settings::FFBDevice >= 0)
+		else if (!ParseDeviceGuid(Settings::FFBDeviceGuid, guid))
 		{
-			ffb.SetPreferredDeviceIndex(Settings::FFBDevice);
-			spdlog::info("FFB: requesting device index {}", Settings::FFBDevice);
+			deviceError = "Choose an FFB device; old index selection cannot identify a wheel safely";
+			return false;
 		}
+		ffb.SetPreferredDevice(nullptr);
+		ffb.SetPreferredDeviceIndex(-1);
+		ffb.SetPreferredDeviceGuid(&guid);
+		ffb.SetStrictDeviceSelection(1);
 
 		int count = ffb.EnumerateDevices();
 		for (int i = 0; i < count; i++)
@@ -565,8 +673,9 @@ namespace FFB
 			spdlog::info("FFB: force-feedback device [{}]: '{}'", i, name);
 		}
 
-		if (!ffb.InitDirectInput((int)(INT_PTR)Game::GameHwnd()))
+		if (!ffb.InitDirectInput((int)(INT_PTR)hwnd))
 		{
+			deviceError = "Selected wheel is unavailable or refused output. Check it, then Refresh devices";
 			spdlog::error("FFB: no usable force-feedback device (last HRESULT 0x{:08X})",
 				(unsigned)ffb.GetLastHResult());
 			return false;
@@ -623,6 +732,7 @@ namespace FFB
 		InstallExitGuards();
 
 		initialized = true;
+		deviceError.clear();
 		spdlog::info("FFB: Initialization complete (WheelFfb)");
 		return true;
 	}
@@ -683,8 +793,14 @@ namespace FFB
 		Telemetry::Write(car, inGameplay);
 
 		// FFB processing only when DirectInputFFB is enabled
-		if (!Settings::DirectInputFFB)
+		if (!Settings::DirectInputFFB || Overlay::IsActive || Overlay::WheelSettingsVisible ||
+			Overlay::IsBindingDialogActive || GetForegroundWindow() != Game::GameHwnd() ||
+			!Game::current_mode || *Game::current_mode != STATE_GAME)
+		{
+			ZeroAllForces();
+			warmupFrames = 0;
 			return;
+		}
 
 		// Lazy initialization: deferred to first game tick
 		if (!initialized)
@@ -1153,6 +1269,19 @@ namespace FFB
 		initialized = false;
 		spdlog::info("FFB: Shutdown complete");
 	}
+
+	const char* UiStatus()
+	{
+		if (!Settings::DirectInputFFB) return "Off - choose On to resume";
+		if (panicStopped) return "Stopped for game exit";
+		if (!deviceError.empty()) return deviceError.c_str();
+		if (initAttempted && !initialized) return "Unavailable - check the wheel and WheelFfb.dll, then restart";
+		if (Overlay::IsActive || Overlay::WheelSettingsVisible || Overlay::IsBindingDialogActive)
+			return "Paused while settings are open";
+		if (GetForegroundWindow() != Game::GameHwnd()) return "Paused while the game is unfocused";
+		if (!Game::current_mode || *Game::current_mode != STATE_GAME) return "Waiting for driving control";
+		return initialized ? "Output enabled (wheel feel not verified)" : "Waiting for the first driving update";
+	}
 }
 
 // ====================================================================
@@ -1177,7 +1306,9 @@ public:
 
 	bool validate() override
 	{
-		return Settings::DirectInputFFB || Settings::TelemetryEnabled;
+		// F6 can enable either feature after startup. This hook alone does not
+		// initialize/acquire the wheel or emit telemetry.
+		return Settings::OverlayEnabled || Settings::DirectInputFFB || Settings::TelemetryEnabled;
 	}
 
 	bool apply() override

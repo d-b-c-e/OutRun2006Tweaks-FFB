@@ -331,6 +331,11 @@ namespace Settings
 
 		DirectInputFFB = ini.Get("FFB", "DirectInputFFB", DirectInputFFB);
 		FFBDevice = ini.Get("FFB", "FFBDevice", FFBDevice);
+		const auto ffbKeys = ini.Keys("FFB");
+		const bool legacySelection = FFBDevice >= 0 && ffbKeys.count("FFBDevice") && !ffbKeys.count("FFBDeviceGuid");
+		if (legacySelection) FFBDeviceGuid = "legacy-index";
+		FFBDeviceGuid = ini.Get("FFB", "FFBDeviceGuid", FFBDeviceGuid);
+		FFBDeviceName = ini.Get("FFB", "FFBDeviceName", FFBDeviceName);
 		FFBProfile = ini.Get("FFB", "FFBProfile", FFBProfile);
 		FFBGlobalStrength = ini.Get("FFB", "FFBGlobalStrength", FFBGlobalStrength);
 		FFBGlobalStrength = std::clamp(FFBGlobalStrength, 0.0f, 2.0f);
@@ -379,6 +384,8 @@ namespace Settings
 		ProtectLoginData = ini.Get("Misc", "ProtectLoginData", ProtectLoginData);
 
 		OverlayEnabled = ini.Get("Overlay", "Enabled", OverlayEnabled);
+		WheelSettingsView = ini.Get("WheelSettings", "View", WheelSettingsView);
+		if (WheelSettingsView != "Advanced") WheelSettingsView = "Simple";
 
 		FixPegasusClopping = ini.Get("Bugfixes", "FixPegasusClopping", FixPegasusClopping);
 		FixRightSideBunkiAnimations = ini.Get("Bugfixes", "FixRightSideBunkiAnimations", FixRightSideBunkiAnimations);
