@@ -452,3 +452,12 @@ nor reset input gates. Independent source review found no blocking issue; the
 x86 build and all four offline suites pass. The actual WndProc/licence entry
 chain and native title input remain unaccepted. See
 [the reproducible comparison plan](NATIVE-INPUT-DIAGNOSIS-2026-09-19.md).
+
+The serialized comparison subsequently reproduced the native title Return
+failure on both stage 6 and the saved pre-session proxy. Actual 3840x2160
+Advanced Help was readable; the candidate saw two Return messages and zero
+release-blocked queries. This narrows the investigation without proving native
+keyboard sampling or camera capabilities. Both runs had vibration zero and no
+WheelFfb DLL in the game search location, exited normally, and restored all
+owner settings/runtime/absence/save state at 21:13:42 UTC. Stock player views
+and real textbox isolation remain unverified; no speculative mount was added.

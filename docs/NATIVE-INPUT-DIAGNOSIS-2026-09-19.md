@@ -64,3 +64,42 @@ Return-message counts alone do not prove DirectInput sampled a key. If neither
 has established native input, player cameras remain unidentified; attract shots
 must not be labeled Bonnet/Bumper. No force, tune or physics comparison is part
 of this test.
+
+## Executed comparison — 2026-09-19
+
+The coordinator granted 21:10–21:18 UTC. Both runs completed and the lease was
+released early at **21:13:42 UTC**. Startup logs from both binaries show
+`UseNewInput=false` and all three vibration settings at zero. WheelFfb.dll was
+absent beside the executable for both runs, with its verified copy retained in
+the evidence directory outside the game.
+
+Both the stage-6 candidate and exact saved pre-session proxy failed two Return
+taps at the settled title. Neither reached a player menu; the ordinary attract
+movie followed. The candidate received **two Return window messages**. Its live
+Advanced Help frame recorded **31,464 queries, 15,896 forwarded, 15,568 UI-blocked
+and zero release-blocked** queries. The current blocking reason was 6, as expected
+with settings/overlay open. Exact single-action Confirm edge counters were all
+zero: this diagnostic does not identify what other aggregate masks the title
+requested, and Return window delivery is not a native DirectInput sample.
+
+The observed release gate did not hold any query. Reproduction on the saved
+baseline also rules out a failure unique to the new UX code in this comparison.
+It does **not** identify whether native setup, the supported automation's key
+delivery, or another shared upstream condition caused the failure. An attended
+ordinary keyboard/controller input check is the next useful discriminator; do
+not add a speculative camera hook or call this a proven game-camera constraint.
+The stock player camera views and actual licence text-entry isolation remain
+unverified. No test licence was created and no driving or torque occurred.
+
+Evidence under `build/camera-live-stage6/`:
+
+- `candidate-help-diagnostics-3840.png`: actual 3840x2160 Advanced Help.
+- `baseline-after-return-3840.png`: baseline still in title/attract flow.
+- `before-baseline/OutRun2006Tweaks.log`, `after/OutRun2006Tweaks.log`: candidate
+  and saved-baseline output gates respectively.
+- `prepared.json`, `preflight.json`, `baseline-ready.json` and
+  `restore-verification.json`: runtime/configuration identities and exact restore.
+
+Both runs exited normally through Alt+F4. Stage-6 proxy/native DLL hashes, all
+five original setting files, absent user/layout overrides and the empty SaveGame
+were restored and checked before release.

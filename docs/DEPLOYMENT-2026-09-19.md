@@ -19,9 +19,19 @@ Both match the package. Backup:
 `.wheel-settings-backups/20260919-210023-261-717cb8e2/receipt.json`.
 All five owner settings remain byte-identical. Game was closed throughout
 deployment. Exact receipt: `build/deployment-stage6-result.json`.
-The next native-title comparison is described in
-[the diagnosis plan](NATIVE-INPUT-DIAGNOSIS-2026-09-19.md); stage 6 has not yet
-run in the game. No force or camera acceptance is implied by this installation.
+The controlled native-title comparison ran **21:10–21:13 UTC** and reproduced
+the same Return failure on both stage 6 and the exact saved pre-session proxy.
+The candidate received two Return messages and recorded zero release-blocked
+queries. Its actual 3840x2160 Advanced Help was readable; source/UI evidence
+does not establish native input, player cameras or licence-textbox acceptance.
+Both startup logs verified vibration zeros; WheelFfb.dll was quarantined outside
+the game for both input-only runs. Both exited normally, and restoration of
+both stage-6 runtime hashes, five original settings, absent test files and empty
+SaveGame completed at **21:13:42 UTC** before early lease release.
+Evidence: `build/camera-live-stage6/restore-verification.json` and
+`candidate-help-diagnostics-3840.png`. See [the comparison result and its
+limits](NATIVE-INPUT-DIAGNOSIS-2026-09-19.md). No force or camera acceptance is
+implied by this installation.
 
 ## Previous installation: stage 5
 
