@@ -15,6 +15,8 @@
   identities, shared pedal-handle reuse and neutral disconnected input.
 - Steering can also select a replacement device in Bind; the previous pedal
   identities/calibrations survive the swap, and force output is zeroed first.
+- Calibrated pedals on the primary wheel now fail neutral on disconnect in
+  both current and previous-frame input; telemetry reports unavailable.
 - Fixed startup with an older upstream INI lacking an FFB section; regression
   exercises the actual INI parser and layered migration cases.
 - Added a local install/restore package that backs up recognized Tweaks runtime

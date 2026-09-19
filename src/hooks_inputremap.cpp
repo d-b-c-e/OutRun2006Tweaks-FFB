@@ -567,35 +567,32 @@ namespace DInputRemap
 		return static_cast<int>(std::clamp(normalized * 127.0f, -127.0f, 127.0f));
 	}
 
-	static int GetAcceleration()
+	static bool PedalAvailable(const DeviceSlot* source, int role)
 	{
-		if (Settings::DIRemapAccelAxis < 0) return 0;
-		auto* source = PedalSlot(1);
-		if (!source || (source != &primary && !source->connected)) return 0;
-		LONG raw = ReadAxisRaw(source->currentState, Settings::DIRemapAccelAxis);
-		if (Settings::DIRemapCalibration[1].enabled)
-			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
-				false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
+		// Keep the pre-calibration primary route unchanged. Every explicitly
+		// calibrated pedal, including one on the wheel itself, fails neutral.
+		return source && (source->connected ||
+			(source == &primary && !Settings::DIRemapCalibration[role].enabled));
+	}
+
+	static int GetPedal(int role, bool previous = false)
+	{
+		const int axis = role == 1 ? Settings::DIRemapAccelAxis : Settings::DIRemapBrakeAxis;
+		if (axis < 0) return 0;
+		auto* source = PedalSlot(role);
+		if (!PedalAvailable(source, role)) return 0;
+		const LONG raw = ReadAxisRaw(previous ? source->previousState : source->currentState, axis);
+		const bool invert = role == 1 ? Settings::DIRemapAccelInvert : Settings::DIRemapBrakeInvert;
+		if (Settings::DIRemapCalibration[role].enabled)
+			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[role],
+				false, invert, role == 1 ? Settings::DIRemapAccelDeadzone : Settings::DIRemapBrakeDeadzone));
 		float normalized = static_cast<float>(raw) / 65535.0f;
-		if (Settings::DIRemapAccelInvert)
-			normalized = 1.0f - normalized;
+		if (invert) normalized = 1.0f - normalized;
 		return static_cast<int>(std::clamp(normalized * 255.0f, 0.0f, 255.0f));
 	}
 
-	static int GetBrake()
-	{
-		if (Settings::DIRemapBrakeAxis < 0) return 0;
-		auto* source = PedalSlot(2);
-		if (!source || (source != &primary && !source->connected)) return 0;
-		LONG raw = ReadAxisRaw(source->currentState, Settings::DIRemapBrakeAxis);
-		if (Settings::DIRemapCalibration[2].enabled)
-			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
-				false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
-		float normalized = static_cast<float>(raw) / 65535.0f;
-		if (Settings::DIRemapBrakeInvert)
-			normalized = 1.0f - normalized;
-		return static_cast<int>(std::clamp(normalized * 255.0f, 0.0f, 255.0f));
-	}
+	static int GetAcceleration() { return GetPedal(1); }
+	static int GetBrake() { return GetPedal(2); }
 
 	// ---------- Button checking (multi-slot) ----------
 
@@ -974,8 +971,8 @@ namespace DInputRemap
 	// Returns -1 when there is no primary device, so the caller can leave the
 	// packet field alone rather than transmitting a confident zero (which a
 	// brake light would read as "pedal released" rather than "no data").
-	int GetTelemetryAccel() { const auto* slot = PedalSlot(1); return slot && slot->initialized && (slot == &primary || slot->connected) ? GetAcceleration() : -1; }
-	int GetTelemetryBrake() { const auto* slot = PedalSlot(2); return slot && slot->initialized && (slot == &primary || slot->connected) ? GetBrake() : -1; }
+	int GetTelemetryAccel() { const auto* slot = PedalSlot(1); return slot && slot->initialized && PedalAvailable(slot, 1) ? GetAcceleration() : -1; }
+	int GetTelemetryBrake() { const auto* slot = PedalSlot(2); return slot && slot->initialized && PedalAvailable(slot, 2) ? GetBrake() : -1; }
 	bool GetPrimaryDeviceGuid(GUID* out)
 	{
 		if (!primaryGuidValid || !out)
@@ -1032,32 +1029,8 @@ class DirectInputRemapHook : public Hook
 			if (Settings::DIRemapSteeringInvert) n = -n;
 			return static_cast<int>(std::clamp(n * 127.0f, -127.0f, 127.0f));
 		}
-		case ADChannel::Acceleration:
-		{
-			if (Settings::DIRemapAccelAxis < 0) return 0;
-			auto* source = DInputRemap::PedalSlot(1);
-			if (!source || (source != &DInputRemap::primary && !source->connected)) return 0;
-			LONG raw = DInputRemap::ReadAxisRaw(source->previousState, Settings::DIRemapAccelAxis);
-			if (Settings::DIRemapCalibration[1].enabled)
-				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
-					false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
-			float n = static_cast<float>(raw) / 65535.0f;
-			if (Settings::DIRemapAccelInvert) n = 1.0f - n;
-			return static_cast<int>(std::clamp(n * 255.0f, 0.0f, 255.0f));
-		}
-		case ADChannel::Brake:
-		{
-			if (Settings::DIRemapBrakeAxis < 0) return 0;
-			auto* source = DInputRemap::PedalSlot(2);
-			if (!source || (source != &DInputRemap::primary && !source->connected)) return 0;
-			LONG raw = DInputRemap::ReadAxisRaw(source->previousState, Settings::DIRemapBrakeAxis);
-			if (Settings::DIRemapCalibration[2].enabled)
-				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
-					false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
-			float n = static_cast<float>(raw) / 65535.0f;
-			if (Settings::DIRemapBrakeInvert) n = 1.0f - n;
-			return static_cast<int>(std::clamp(n * 255.0f, 0.0f, 255.0f));
-		}
+		case ADChannel::Acceleration: return DInputRemap::GetPedal(1, true);
+		case ADChannel::Brake: return DInputRemap::GetPedal(2, true);
 		default:
 			return GetVolumeOld_hook.ccall<int>(volumeId);
 		}

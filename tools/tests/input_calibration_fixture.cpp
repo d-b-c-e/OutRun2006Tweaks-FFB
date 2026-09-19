@@ -129,6 +129,23 @@ int main()
     ReleaseUnusedUiDevices();
     primary.connected = false;
     assert(GetSteering() == 0); // Explicitly calibrated steering fails neutral too.
+    // A pedal can resolve to primary through an empty or explicit saved GUID,
+    // including after primary adoption. Stale current AND previous reads must
+    // fail neutral; telemetry reports unavailable rather than stale throttle.
+    for (const auto& identity : {std::string{}, PrimaryInputGuid()})
+    {
+        Settings::DIRemapAccelDeviceGuid = Settings::DIRemapBrakeDeviceGuid = identity;
+        primary.currentState.lY = primary.currentState.lZ = 5000;
+        primary.previousState.lY = primary.previousState.lZ = 5000;
+        assert(GetAcceleration() == 0 && GetBrake() == 0);
+        assert(GetPedal(1, true) == 0 && GetPedal(2, true) == 0);
+        assert(GetTelemetryAccel() == -1 && GetTelemetryBrake() == -1);
+        primary.connected = true;
+        assert(GetAcceleration() == 255 && GetBrake() == 255);
+        assert(GetPedal(1, true) == 255 && GetPedal(2, true) == 255);
+        assert(GetTelemetryAccel() == 255 && GetTelemetryBrake() == 255);
+        primary.connected = false;
+    }
     Settings::DIRemapSteeringAxis = Settings::DIRemapAccelAxis = Settings::DIRemapBrakeAxis = -1;
     assert(GetSteering() == 0 && GetAcceleration() == 0 && GetBrake() == 0);
     std::cout << "PASS: actual axis readers, legacy opt-out preservation (144 cases), calibrated endpoints/center/partial/clamp/invert/clear, invalid range/ambiguity, independent/shared USB pedal identity, missing/refused identity neutral, reconnect and unused-slot cleanup. No device calls.\n";
