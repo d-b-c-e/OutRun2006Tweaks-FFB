@@ -356,3 +356,14 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | CDTracks/26_Night_Flight_prototype.ogg | Advanced | Known-dead upstream keys; see CLAUDE.md | Night Flight (Prototype) |
 | CDTracks/27_Life_was_a_Bore_Instrumental.ogg | Advanced | Known-dead upstream keys; see CLAUDE.md | Life was a Bore (Instrumental) |
 | CDTracks/28_Night_Flight_Instrumental.ogg | Advanced | Known-dead upstream keys; see CLAUDE.md | Night Flight (Instrumental) |
+
+## Stage 3 disconnect regression — 2026-09-19
+
+Review caught calibrated pedals resolving to the primary wheel bypassing the
+new disconnect guard. Current and previous-frame pedal reads now share one
+reader, and calibrated primary pedals fail neutral with unavailable telemetry.
+The opt-out legacy uncalibrated primary path is unchanged. The source-linked
+fixture covers both empty/follow-primary and explicit primary GUIDs after
+adoption, stale nonzero current/previous values, disconnect and reconnect.
+Release x86 build and all three offline fixture executables pass; fixture run
+`run-3055c749f7b14cb1a9e695fb1cdaa64d`. No device acquisition or force output.

@@ -1,6 +1,24 @@
 # Local deployments — 2026-09-19
 
-## Current installation: stage 2
+## Current installation: stage 3
+
+Installed **19:29:38 UTC**, clean source
+`8ac4d9f026644264852d93f8a7435e4d5177ee24` (pushed). Calibrated primary-device
+pedals now fail neutral on disconnect in both current and previous-frame
+readers; telemetry reports unavailable. All three offline fixture executables
+and the x86 Release build pass. The actual-device path remains untested.
+
+Package `build/packages/wheel-settings-20260919-stage3.zip`, SHA256
+`8383b567c66cb359ad6f35a0ce30d0df692c9934a58e8202998e5699965ee0f4`.
+Installed proxy SHA256
+`b36a3cc1e55ff7fbd3a3c28c0981fd6d174ea7ca122f34e8da28d8feed5be67c`;
+WheelFfb remains `95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31`.
+Both installed runtime hashes match the package. All five existing
+configuration files remain unchanged. No process was running during install.
+Backup: `.wheel-settings-backups/20260919-192938-828-68521837/receipt.json`.
+Live startup/F6/native-camera identification is pending the serialized slot.
+
+## Stage 2: superseded by stage 3
 
 Installed **19:20:56 UTC** from clean source
 `310b36dea0e6193da2e66a0eed241b5834ea0382`, pushed on the same scoped branch.
@@ -38,8 +56,7 @@ serialized zero-output slot; physical wheel/force acceptance remains pending.
 zero-output launch failed with Windows `0xc0000142` before a game window. Its
 log ended inside base `Settings::read`. The migration code called
 `INIReader::Keys("FFB")` for an older upstream INI with no FFB section; that
-library throws for absent sections. A source fix and real-parser regression are
-being validated in the successor build. This package must not be reused.
+library throws for absent sections. The source fix and real-parser regression passed in the successor builds. This package must not be reused.
 
 The application-error dialog was closed normally; process exit was verified.
 The installer restored the previous upstream proxy from the receipt below and
