@@ -7,6 +7,9 @@
 - Added automatic viewport scaling for readable default 4K settings.
 - Isolated actual stock/SDL/DirectInput dispatch while settings/capture are open
   or focus is lost, with held menu input release before recovery.
+- Protected native licence/name text entry from settings capture and retained
+  key repeats. Added read-only Advanced Help input diagnostics for native-title
+  investigation; they do not poll devices or change input/output behavior.
 - Added F6 Simple-first wheel settings, remembered Advanced view, persistent
   Stop FFB/F8, ordinary primary-wheel/button binding and calibration.
 - Calibration captures center/rest and full travel, previews inversion/deadzone,

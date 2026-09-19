@@ -439,3 +439,16 @@ camera images as player views, or claim live native-input isolation from this
 test. After normal exit all five owner settings and both runtime hashes matched,
 test-only layout/override files were removed, and the original empty SaveGame
 was retained. See [the deployment receipt](DEPLOYMENT-2026-09-19.md).
+
+## Stage 6 native text and diagnostics follow-up
+
+Static EXE tracing established that WM_CHAR licence/name entry bypasses the
+ordinary switch hooks. The wrapper now lets ImGui consume text first, then
+suppresses the native text route during settings/focus suspension and until a
+captured key is released and freshly pressed. Lifecycle/system messages remain
+forwarded. Advanced Help adds read-only dispatch counters; Simple gains no
+diagnostic controls or persistent settings. These counters neither poll devices
+nor reset input gates. Independent source review found no blocking issue; the
+x86 build and all four offline suites pass. The actual WndProc/licence entry
+chain and native title input remain unaccepted. See
+[the reproducible comparison plan](NATIVE-INPUT-DIAGNOSIS-2026-09-19.md).

@@ -14,6 +14,7 @@
 #include "wheel_settings.hpp"
 #include "wheel_settings_policy.hpp"
 #include "wheel_ui_snapshot.hpp"
+#include "wheel_input_gate.hpp"
 #include <imgui.h>
 
 extern void ForceShowCursor(bool show);
@@ -921,6 +922,15 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         ImGui::TextWrapped("Support-file creation is not implemented. Logs are local beside the game; nothing is uploaded.");
         if (advanced)
         {
+            const auto dispatch = WheelInputGuard::Diagnostics();
+            ImGui::TextUnformatted("Input dispatch diagnostics (read only)");
+            ImGui::TextWrapped("Hooks: %s | blocking reasons: %u | held mask: %08X", dispatch.installed ? "Installed" : "Unavailable", dispatch.reason, dispatch.heldMask);
+            ImGui::TextWrapped("Reasons: 1 focus, 2 settings, 4 overlay, 8 capture. Opening this page blocks input; counters include the earlier closed-panel attempt.");
+            ImGui::TextWrapped("Queries: %llu | forwarded: %llu | UI blocked: %llu | release blocked: %llu", dispatch.queries, dispatch.forwarded, dispatch.uiBlocked, dispatch.releaseBlocked);
+            ImGui::TextWrapped("Confirm edge queries: %llu | forwarded: %llu | positive: %llu", dispatch.confirmQueries, dispatch.confirmForwarded, dispatch.confirmPositive);
+            ImGui::TextWrapped("Confirm blocked by UI: %llu | release: %llu | observed held: %llu", dispatch.confirmUiBlocked, dispatch.confirmReleaseBlocked, dispatch.confirmHeldDown);
+            ImGui::TextWrapped("Return messages: %llu | text messages blocked: %llu", dispatch.returnKeyDown, dispatch.textBlocked);
+            ImGui::TextWrapped("Confirm counters cover exact single-action native requests. Return messages prove message delivery, not a DirectInput keyboard sample. Reading diagnostics does not poll devices or change gates.");
             ImGui::TextWrapped("Log: %s", Module::LogPath.string().c_str());
             ImGui::TextWrapped("User settings: %s", Module::UserIniPath.string().c_str());
             ImGui::TextWrapped("The first settings edit keeps a .before-wheel-settings.bak backup.");

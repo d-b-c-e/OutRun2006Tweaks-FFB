@@ -15,6 +15,7 @@ static int selectionZero = -1, primaryAdoptions = 0;
 static DInputRemap::UiSnapshot fixtureInput;
 bool overlay_visible = false;
 bool InputManager_FunctionKeyBound(int key) { return key == VK_F9; } // Saved SDL binding conflict.
+namespace WheelInputGuard { DiagnosticSnapshot Diagnostics() { return {}; } }
 void ForceShowCursor(bool) {}
 OverlayWindow::OverlayWindow() {}
 bool Overlay::settings_write() { return true; }

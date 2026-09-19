@@ -20,6 +20,18 @@ struct DispatchGate
 
 namespace WheelInputGuard
 {
+struct DiagnosticSnapshot
+{
+    bool installed = false;
+    uint32_t reason = 0, heldMask = 0;
+    uint64_t queries = 0, uiBlocked = 0, releaseBlocked = 0, forwarded = 0;
+    uint64_t confirmQueries = 0, confirmUiBlocked = 0, confirmReleaseBlocked = 0;
+    uint64_t confirmHeldDown = 0, confirmForwarded = 0, confirmPositive = 0;
+    uint64_t returnKeyDown = 0, textBlocked = 0;
+};
 bool Install();
 bool Suspended();
+// Observes existing dispatch only; never polls devices or changes a gate.
+DiagnosticSnapshot Diagnostics();
+bool SuppressTextMessage(uint32_t message, uintptr_t key, intptr_t detail);
 }

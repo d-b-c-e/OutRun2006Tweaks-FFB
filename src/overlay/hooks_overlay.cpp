@@ -8,6 +8,7 @@
 #include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_dx9.h>
 #include "overlay.hpp"
+#include "wheel_input_gate.hpp"
 
 bool overlayInited = false;
 bool overlayActive = false;
@@ -211,6 +212,8 @@ class WndprocHook : public Hook
 	{
 		if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
 			return 1;
+		if (WheelInputGuard::SuppressTextMessage(msg, wParam, lParam))
+			return 0;
 
 		if (Settings::WindowedHideMouseCursor && !overlayActive)
 		{

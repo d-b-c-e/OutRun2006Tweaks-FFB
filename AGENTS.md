@@ -18,6 +18,9 @@ of live controls, physical force or camera acceptance.
   after all adapter hooks. Keep hardware polling during settings; release-latch
   both digital and analog menu navigation. The x86 fixture uses real local
   trampolines and an explicit `asInvoker` manifest, never game/device injection.
+  `SuppressTextMessage` is called after ImGui's actual Win32 handler; stock
+  WM_CHAR entry bypasses switch dispatch. Read-only Advanced Help counters and
+  the baseline comparison plan are in `docs/NATIVE-INPUT-DIAGNOSIS-2026-09-19.md`.
 - `src/hooks_dinputffb.cpp`: game force signals and output gates. Preserve owner
   tunes. Native output is a reviewed **v0.13.0 override** on the **v0.8.0 model/
   profile/encoder baseline**. Read `lib/toolkit/NATIVE-PROVENANCE.json` before sync.

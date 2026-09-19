@@ -31,10 +31,12 @@ int main()
     oldVolumeHook = safetyhook::create_inline(StockOld, OldVolume);
     volumeSwitchHook = safetyhook::create_inline(StockNavigation, VolumeSwitch);
     assert(onHook && nowHook && volumeHook && oldVolumeHook && volumeSwitchHook);
+    installed = true;
     constexpr uint32_t confirm = 1u << 2, camera = 1u << 18, navigation = 1u << 20;
     nativeNow = nativeEdge = confirm | camera | navigation;
     assert(StockNow(confirm | camera) == static_cast<int>(confirm | camera));
     assert(StockOn(camera) == static_cast<int>(camera)); // Stock ABI returns raw bits, not 1.
+    assert(StockOn(confirm) == static_cast<int>(confirm));
     assert(StockVolume(ADChannel::Acceleration) == 193 && StockOld(ADChannel::Brake) == 171);
     chordRoute = true; nativeNow = confirm; nativePrevious = 0;
     assert(!StockNow(confirm | camera) && !StockOn(confirm | camera));
@@ -50,6 +52,7 @@ int main()
         foreground = reinterpret_cast<HWND>(reason == 3 ? 2 : 1);
         const int before = reads;
         assert(!StockOn(UINT32_MAX) && !StockNow(UINT32_MAX));
+        assert(!StockOn(confirm));
         assert(!StockVolume(ADChannel::Acceleration) && !StockOld(ADChannel::Brake));
         assert(!StockNavigation(ADChannel::Steering));
         assert(reads == before); // Original dispatch is not run while isolated.
@@ -68,5 +71,40 @@ int main()
         rawNavigation = 0; assert(!StockNavigation(ADChannel::Steering));
         rawNavigation = 1; assert(StockNavigation(ADChannel::Steering));
     }
-    std::cout << "PASS: actual production x86 outer input trampolines suppress stock/adapter dispatch and current/previous axes for panel, capture, tools and focus; held digital/analog navigation requires release before recovery. No hardware.\n";
+    // Diagnostics are observational: no original route calls or latch changes.
+    const int beforeDiagnostics = reads;
+    const auto heldBeforeDiagnostics = gate.held;
+    const auto d = Diagnostics();
+    assert(d.installed && d.queries && d.forwarded && d.uiBlocked && d.releaseBlocked);
+    assert(d.confirmQueries && d.confirmForwarded && d.confirmUiBlocked && d.confirmReleaseBlocked && d.confirmHeldDown);
+    assert(reads == beforeDiagnostics && gate.held == heldBeforeDiagnostics);
+    // Native licence/name entry bypasses game switches through WM_CHAR.
+    constexpr intptr_t keyScan = intptr_t{0x1e} << 16;
+    constexpr intptr_t repeat = intptr_t{1} << 30;
+    assert(!SuppressTextMessage(WM_KEYDOWN, 'A', keyScan));
+    assert(!SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    Overlay::WheelSettingsVisible = true;
+    Suspended(); // Capture an already held key even before another message.
+    assert(SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    assert(!SuppressTextMessage(WM_CLOSE, 0, 0));
+    assert(!SuppressTextMessage(WM_QUERYENDSESSION, 0, 0));
+    assert(!SuppressTextMessage(WM_SYSKEYDOWN, VK_F4, intptr_t{0x3e} << 16));
+    Overlay::WheelSettingsVisible = false;
+    assert(!SuppressTextMessage(WM_KEYDOWN, 'A', keyScan | repeat));
+    assert(SuppressTextMessage(WM_CHAR, 'a', keyScan | repeat));
+    assert(!SuppressTextMessage(WM_KEYUP, 'A', keyScan | repeat));
+    assert(SuppressTextMessage(WM_CHAR, 'a', keyScan)); // Queued old char cannot replay on close.
+    assert(!SuppressTextMessage(WM_KEYDOWN, 'A', keyScan));
+    assert(!SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    foreground = reinterpret_cast<HWND>(2);
+    assert(SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    foreground = window;
+    assert(SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    assert(!SuppressTextMessage(WM_KEYUP, 'A', keyScan | repeat));
+    assert(!SuppressTextMessage(WM_KEYDOWN, 'A', keyScan));
+    assert(!SuppressTextMessage(WM_CHAR, 'a', keyScan));
+    assert(!SuppressTextMessage(WM_KEYDOWN, VK_RETURN, intptr_t{0x1c} << 16));
+    assert(Diagnostics().returnKeyDown == 1 && Diagnostics().textBlocked >= 5);
+    assert(reads == beforeDiagnostics); // Message guard never polls native input.
+    std::cout << "PASS: actual production x86 input dispatch, aggregate native/SDL semantics, held release, observational diagnostics and native WM_CHAR suppression through UI/focus/held-repeat/queued-character recovery. No hardware.\n";
 }
