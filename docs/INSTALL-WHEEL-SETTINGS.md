@@ -9,7 +9,10 @@ pending; the existing force tune has not changed.
 3. Paste the folder containing **OR2006C2C.EXE** when asked. The installer checks
    the package, backs up the previous runtime, preserves existing settings and
    bindings, then verifies the installed files. It does not launch the game.
-4. Start the game normally and press **F6**. Setup explains how to enable wheel
+4. Start **OR2006C2C.EXE from its own folder**, or use a shortcut whose
+   **Start in** folder is the game folder. This game loads assets relative to
+   its working directory; starting the executable from another directory can
+   show blank frames. Press **F6**. Setup explains how to enable wheel
    controls if needed. Enabling that input route requires one normal restart.
 5. In **Controls**, Bind or Calibrate Steering, Throttle and Brake. Capture
    center/rest, move only that control through its travel, then preview the
@@ -18,10 +21,22 @@ pending; the existing force tune has not changed.
    For a separate USB pedal set, choose its device from the dropdown in Throttle
    or Brake's Bind flow. Each pedal saves its own exact device identity; a missing
    device gives neutral input and is never silently replaced by another.
+   For a shifter or button box, expand its group in Simple Controls and choose
+   Bind on the desired action. Select the device, press/release its button, then
+   Save binding. The whole group uses that device. H-pattern simulates bounded
+   shifts through the native sequential gearbox.
 6. In **FFB**, the device defaults to the saved steering wheel. You can choose an
    explicit device from the dropdown. FFB remains Off until you enable it.
    **F8** or **Stop FFB** saves Off. Strength is available in Simple; detailed
    tuning is in Advanced. The force signal still needs attended validation.
+
+Settings shortcuts in Simple Controls can rebind Settings and Stop FFB to
+unmodified F3-F12 keys (F11 is reserved for tools). F1/F2 stay with the game.
+Help shows the actual saved shortcuts; the panel and font scale automatically
+with the viewport, with a user UI-scale adjustment available in Help.
+
+Native menus use arrows, Enter and Esc; first use asks you to create a licence.
+The installed PC manual documents these controls.
 
 Handbrake output, custom Bonnet/Bumper mounts and
 camera adjustment keys are not implemented by this adapter. The native Change

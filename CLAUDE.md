@@ -137,3 +137,20 @@ copy to audit an install:
 ```powershell
 .\tools\Check-IniCoverage.ps1 -Ini "<game folder>\OutRun2006Tweaks.ini"
 ```
+
+## Settings adoption and live launch context (2026-09-19)
+
+`docs/UX-OVERNIGHT-2026-09-16.md` is the option placement/acceptance inventory.
+Simple now includes optional shifter/button-box binding and function-key Settings/
+Stop rebinding. The final `wheel_input_gate` installs after all input adapters;
+it preserves their complete-mask query semantics and latches held controls through
+settings/focus transitions. Keep polling actual native states while suppressing
+final dispatch. Production trampolines are exercised by the offline x86 fixture.
+
+Launch the installed EXE **from its game folder**, or set the shortcut's Start in
+folder accordingly. A direct launch from another directory showed blank assets;
+Explorer launch from the same candidate's own folder showed title/attract and F6.
+The first 4K live panel was too small; the successor uses viewport-based scale.
+Only title/F6 has live evidence so far. Stock player-camera classification and
+physical controls/FFB remain unverified. `docs/DEPLOYMENT-2026-09-19.md` records
+exact stage packages, installed hashes, normal exit and owner-file restoration.

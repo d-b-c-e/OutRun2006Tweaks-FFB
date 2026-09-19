@@ -404,6 +404,16 @@ namespace Settings
 		OverlayEnabled = ini.Get("Overlay", "Enabled", OverlayEnabled);
 		WheelSettingsView = ini.Get("WheelSettings", "View", WheelSettingsView);
 		if (WheelSettingsView != "Advanced") WheelSettingsView = "Simple";
+		WheelSettingsScale = ini.Get("WheelSettings", "Scale", WheelSettingsScale);
+		if (!std::isfinite(WheelSettingsScale)) WheelSettingsScale = 1.0f;
+		WheelSettingsScale = std::clamp(WheelSettingsScale, 0.8f, 1.5f);
+		WheelSettingsKey = ini.Get("WheelSettings", "SettingsKey", WheelSettingsKey);
+		WheelStopKey = ini.Get("WheelSettings", "StopFfbKey", WheelStopKey);
+		if (!WheelSettingsPolicy::ValidShortcut(WheelSettingsKey) || !WheelSettingsPolicy::ValidShortcut(WheelStopKey) || WheelSettingsKey == WheelStopKey)
+		{
+			WheelSettingsKey = VK_F6; WheelStopKey = VK_F8;
+			spdlog::warn("Wheel settings: invalid/conflicting shortcuts; using F6 and F8 for this session");
+		}
 
 		FixPegasusClopping = ini.Get("Bugfixes", "FixPegasusClopping", FixPegasusClopping);
 		FixRightSideBunkiAnimations = ini.Get("Bugfixes", "FixRightSideBunkiAnimations", FixRightSideBunkiAnimations);

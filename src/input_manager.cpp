@@ -600,6 +600,18 @@ public:
 		for (auto controller : controllers)
 			SDL_CloseGamepad(controller);
 	}
+	bool functionKeyBound(int virtualKey)
+	{
+		const auto scancode = static_cast<SDL_Scancode>(SDL_SCANCODE_F1 + virtualKey - VK_F1);
+		const auto contains = [&](auto& bindings)
+		{
+			for (auto& binding : bindings)
+				for (const auto& source : binding.sources())
+					if (auto* key = dynamic_cast<const KeyboardSource*>(source.get()); key && key->key() == scancode) return true;
+			return false;
+		};
+		return contains(volumeBindings) || contains(switchBindings);
+	}
 
 	SDL_Gamepad* getPrimaryGamepad()
 	{
@@ -1179,6 +1191,11 @@ void InputManager_Update()
 {
 	if (Settings::UseNewInput)
 		InputManager::instance.update();
+}
+
+bool InputManager_FunctionKeyBound(int virtualKey)
+{
+	return Settings::UseNewInput && InputManager::instance.functionKeyBound(virtualKey);
 }
 
 void InputManager_SetVibration(WORD left, WORD right)

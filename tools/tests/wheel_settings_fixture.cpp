@@ -14,6 +14,7 @@ static int zeros = 0;
 static int selectionZero = -1, primaryAdoptions = 0;
 static DInputRemap::UiSnapshot fixtureInput;
 bool overlay_visible = false;
+bool InputManager_FunctionKeyBound(int key) { return key == VK_F9; } // Saved SDL binding conflict.
 void ForceShowCursor(bool) {}
 OverlayWindow::OverlayWindow() {}
 bool Overlay::settings_write() { return true; }
@@ -56,7 +57,7 @@ static void ExportDrawData(const std::filesystem::path& path)
 {
     const auto* data = ImGui::GetDrawData();
     std::ofstream output(path);
-    output << "{\"size\":[" << data->DisplaySize.x << ',' << data->DisplaySize.y << "],\"scale\":" << ImGui::GetIO().FontGlobalScale << ",\"lists\":[";
+    output << "{\"size\":[" << data->DisplaySize.x << ',' << data->DisplaySize.y << "],\"scale\":" << 1.5f * WheelSettingsUi::UiScale() << ",\"lists\":[";
     for (int li = 0; li < data->CmdListsCount; ++li)
     {
         if (li) output << ',';
@@ -137,6 +138,9 @@ int main(int argc, char** argv)
     assert(!IsAdvanced(""));
     assert(!IsAdvanced("invalid"));
     assert(IsAdvanced("Advanced"));
+    assert(LayoutScale(1280, 720, 1) == 1 && LayoutScale(3840, 2160, 1) == 2);
+    assert(LayoutScale(3840, 2160, 1.5f) == 3);
+    assert(!WheelSettingsPolicy::ValidShortcut(VK_ESCAPE) && !WheelSettingsPolicy::ValidShortcut(VK_F11));
     const auto upstreamIni = directory / "old-upstream.ini";
     std::ofstream(upstreamIni) << "[Controls]\nUseNewInput = false\n";
     auto parsed = inih::INIReader(upstreamIni);
@@ -204,10 +208,10 @@ int main(int argc, char** argv)
     Settings::UseDirectInputRemap = true;
     Frame(Page::Setup, false, 1280, 720);
     ExportDrawData(directory / "1280-long-device-simple.json");
-    io.FontGlobalScale = 2.5f;
+    Settings::WheelSettingsScale = 1.5f;
     Frame(Page::Ffb, false, 3840, 2160);
     ExportDrawData(directory / "3840-large-scale-simple.json");
-    io.FontGlobalScale = 1.5f;
+    Settings::WheelSettingsScale = 1.0f;
     assert(Settings::FFBSpringStrength == 0.29f);
     assert(!Settings::DirectInputFFB && !Settings::TelemetryEnabled);
     assert(zeros > 0);
@@ -316,6 +320,76 @@ int main(int argc, char** argv)
     fixtureInput.connected = false;
     Frame(Page::Cameras, false, 1280, 720);
     assert(!IsCapturing() && oldButton == 9);
+    fixtureInput.connected = true;
+    fixturePedal.connected = true; fixturePedal.guid = "{44444444-2222-3333-0405-060708090a0b}";
+    fixturePedal.name = "Separate shifter with a long device name";
+    DInputRemap::inputChoices.push_back({fixturePedal.guid, fixturePedal.name});
+    Settings::DIShifterDeviceGuid = fixturePedal.guid;
+    Settings::DIShifterGearMode = "hpattern";
+    Frame(Page::Controls, false, 1280, 720);
+    for (auto* window : ImGui::GetCurrentContext()->Windows)
+        if (std::string(window->Name).find("Page contents") != std::string::npos)
+            window->StateStorage.SetInt(window->GetID("Separate shifter"), 1);
+    Frame(Page::Controls, false, 1280, 720);
+    ExportDrawData(directory / "1280-optional-shifter-simple.json");
+    BeginCapture(Settings::DIShifterButtonGear1, "Gear 1", "ButtonGear1", false, fixturePedal, "DirectInput.Shifter");
+    auto buttonFrame = Frame(Page::Controls, false, 1280, 720);
+    assert(buttonFrame.find("Input device") != std::string::npos && buttonFrame.find("Cancel") != std::string::npos);
+    ExportDrawData(directory / "1280-optional-button-capture-simple.json");
+    capture.candidate = 89;
+    const auto previousShifterButton = Settings::DIShifterButtonGear1;
+    locked = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(!SaveCapturedBinding(fixturePedal));
+    assert(Settings::DIShifterButtonGear1 == previousShifterButton && pending.empty());
+    CloseHandle(locked);
+    assert(SaveCapturedBinding(fixturePedal) && Settings::DIShifterButtonGear1 == 89);
+    assert(Settings::DIShifterDeviceGuid == fixturePedal.guid);
+    EndCapture();
+    // Picker switched A -> B after this frame read A. An A press must never
+    // become a B binding; the production observer rearms on B's own snapshot.
+    BeginCapture(Settings::DIAuxButtonChangeView, "Change camera", "ButtonChangeView", false, fixtureInput, "DirectInput.Aux");
+    auto oldDeviceFrame = fixtureInput; oldDeviceFrame.buttons[91] = true;
+    capture.initial = fixturePedal;
+    ObserveButtonCapture(oldDeviceFrame);
+    assert(capture.candidate == -1 && oldDeviceFrame.guid == fixturePedal.guid);
+    auto newDeviceFrame = fixturePedal; newDeviceFrame.buttons[92] = true;
+    ObserveButtonCapture(newDeviceFrame); assert(capture.candidate == 92);
+    EndCapture();
+    // A whole-role device change must preflight retained buttons as well as
+    // the proposed Camera button: moved Confirm would conflict with Back.
+    Settings::DIAuxDeviceGuid = fixturePedal.guid; Settings::DIAuxButtonA = 73;
+    const int previousBack = Settings::DIRemapButtonB; Settings::DIRemapButtonB = 73;
+    BeginCapture(Settings::DIAuxButtonChangeView, "Change camera", "ButtonChangeView", false, fixtureInput, "DirectInput.Aux");
+    capture.candidate = 90;
+    assert(!SaveCapturedBinding(fixtureInput));
+    assert(Settings::DIAuxDeviceGuid == fixturePedal.guid && capture.message.find("group's saved buttons") != std::string::npos);
+    EndCapture();
+    Settings::DIRemapButtonB = previousBack; Settings::DIAuxButtonA = -1; Settings::DIAuxDeviceGuid.clear();
+    BeginCapture(Settings::DIShifterButtonGear2, "Gear 2", "ButtonGear2", false, fixturePedal, "DirectInput.Shifter");
+    capture.candidate = 89;
+    assert(!SaveCapturedBinding(fixturePedal) && capture.message.find("already assigned") != std::string::npos);
+    EndCapture();
+    BeginCapture(Settings::DIShifterButtonGear1, "Gear 1", "ButtonGear1", false, fixturePedal, "DirectInput.Shifter");
+    capture.clear = true;
+    locked = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(!SaveCapturedBinding(fixturePedal) && Settings::DIShifterButtonGear1 == 89 && pending.empty());
+    CloseHandle(locked);
+    assert(SaveCapturedBinding(fixturePedal) && Settings::DIShifterButtonGear1 == -1);
+    EndCapture();
+    BeginCapture(Settings::WheelSettingsKey, "Settings", "SettingsKey", false, {}, "WheelSettings");
+    capture.keyboard = true; capture.candidate = Settings::WheelStopKey;
+    assert(!SaveCapturedBinding({}));
+    capture.candidate = VK_F11; assert(!SaveCapturedBinding({}));
+    capture.candidate = VK_F9; assert(!SaveCapturedBinding({}));
+    Settings::HudToggleKey = "F3"; capture.candidate = VK_F3; assert(!SaveCapturedBinding({}));
+    Settings::HudToggleKey.clear();
+    capture.candidate = VK_F4;
+    auto shortcutFrame = Frame(Page::Controls, false, 1280, 720);
+    assert(shortcutFrame.find("Detected: F4") != std::string::npos);
+    ExportDrawData(directory / "1280-shortcut-capture-simple.json");
+    assert(SaveCapturedBinding({}) && Settings::WheelSettingsKey == VK_F4);
+    EndCapture();
+    assert(Read(Module::UserIniPath).find("SettingsKey = 115") != std::string::npos);
     Settings::DirectInputFFB = true;
     StopFfb();
     assert(!Settings::DirectInputFFB);

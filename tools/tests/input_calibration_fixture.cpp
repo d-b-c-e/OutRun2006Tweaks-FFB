@@ -148,5 +148,33 @@ int main()
     }
     Settings::DIRemapSteeringAxis = Settings::DIRemapAccelAxis = Settings::DIRemapBrakeAxis = -1;
     assert(GetSteering() == 0 && GetAcceleration() == 0 && GetBrake() == 0);
+    // Optional roles share exact saved devices with pedals and the primary,
+    // and stale buttons/POVs/H-pattern targets disappear on disconnect.
+    extraInputs[pedalGuidB] = std::make_unique<DeviceSlot>();
+    auto& buttonBox = *extraInputs[pedalGuidB];
+    buttonBox.connected = buttonBox.initialized = true;
+    ParseGuid(pedalGuidB, buttonBox.guid);
+    buttonBox.currentState.rgbButtons[89] = 0x80;
+    buttonBox.previousState.rgbButtons[89] = 0x80;
+    buttonBox.currentState.rgdwPOV[0] = 9000;
+    Settings::DIAuxDeviceGuid = Settings::DIShifterDeviceGuid = pedalGuidB;
+    Settings::DIRemapBrakeDeviceGuid = pedalGuidB;
+    Settings::DIAuxButtonChangeView = Settings::DIShifterButtonGear1 = 89;
+    Settings::DIShifterGearMode = "hpattern";
+    assert(&OptionalSlot(false) == &OptionalSlot(true) && &OptionalSlot(false) == PedalSlot(2));
+    assert(IsButtonPressedAny(SwitchId::ChangeView) && WasButtonPressedAny(SwitchId::ChangeView));
+    UpdateHPattern(); assert(hpattern.targetGear == 1);
+    uint32_t povMask = 0; ApplyPovToMask(OptionalSlot(false), povMask); assert(povMask);
+    buttonBox.connected = false;
+    assert(!IsButtonPressedAny(SwitchId::ChangeView) && !WasButtonPressedAny(SwitchId::ChangeView));
+    UpdateHPattern(); assert(hpattern.targetGear == 0 && hpattern.cachedMask == 0);
+    povMask = 0; ApplyPovToMask(OptionalSlot(false), povMask); assert(!povMask);
+    buttonBox.connected = true;
+    Settings::DIShifterDeviceGuid = "invalid";
+    assert(!OptionalSlot(true).connected && OptionalSlot(false).connected);
+    Settings::DIRemapBrakeDeviceGuid.clear(); ReleaseUnusedUiDevices();
+    assert(extraInputs.contains(pedalGuidB)); // Optional binding retains its shared handle.
+    Settings::DIAuxDeviceGuid.clear(); Settings::DIShifterDeviceGuid.clear();
+    ReleaseUnusedUiDevices(); assert(extraInputs.empty());
     std::cout << "PASS: actual axis readers, legacy opt-out preservation (144 cases), calibrated endpoints/center/partial/clamp/invert/clear, invalid range/ambiguity, independent/shared USB pedal identity, missing/refused identity neutral, reconnect and unused-slot cleanup. No device calls.\n";
 }

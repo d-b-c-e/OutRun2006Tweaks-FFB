@@ -4,6 +4,7 @@ Guidance: toolkit commit **a84bebab5ec2abdcd5140b9c63c139ccff86a7d3**,
 UX-1 including UX-01-S, UX-04-H, UX-05-D and UX-06-K. Starting source:
 `220f660` (`master`, clean). Work branch: `codex/ux-simple-settings-2026-09-16`.
 This is a **built partial adoption**, not completed UX reconciliation.
+Dispatch/release clarification reviewed at toolkit **12df6b325d770625baffd75b2d2eb74f1fcd0a8c**.
 Visual reference: toolkit `95cbd89`, `docs/reference/wheel-settings.html`.
 Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
 
@@ -73,6 +74,35 @@ Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
   and retains all existing INIs/bindings/profiles. Restore returns the previous
   runtime and retains settings. Unknown proxies require deliberate inspection.
 
+## 2026-09-19 successor: ordinary setup and dispatch isolation
+
+- Simple Controls now includes **Separate shifter**, **Button box / stalk** and
+  **Settings shortcuts**. Bind opens capture directly, with an optional-device
+  dropdown, Save and Cancel. Device identity/button save together; missing or
+  malformed identities do not fall back. Clear has a retryable provisional
+  confirmation; failed Save and Cancel cannot affect a later unrelated edit.
+- Sequential/H-pattern selection uses the existing game adapter. It preserves
+  saved buttons. Replacing an optional role can reuse the same input device as
+  pedals or Steering, while output still uses its independent native handle.
+- Known same-device overlapping driving/menu actions reject duplicate buttons;
+  one button may serve different contexts. Multiple simultaneous capture buttons
+  are rejected. Settings/Stop protect one another and existing HUD/SDL bindings.
+  The function-key-only shortcut limit is explicit in the capture UI.
+- The final input guard installs **after** stock/SDL/DirectInput hooks. Current
+  and previous axes and switch dispatch are isolated while settings/capture are
+  active or focus is lost. Native input keeps polling, so stale stock masks are
+  not reused. Held digital/analog menu navigation must release before resuming.
+  It does not change the configured input backend. Legacy HUD toggling also
+  waits for release after settings/focus transitions.
+- F6 uses an automatic viewport baseline, independent of F11 font scale, plus a
+  saved 0.8–1.5 user multiplier. Default 4K text is 42 px with a 2200 px panel;
+  720p text is 21 px with a viewport-clamped panel. Readability is shown in actual
+  ImGui raster evidence; successor live-game/DPI acceptance remains pending.
+- Four offline executables cover production UI transactions, output gates,
+  memory-only input and real x86 input-hook trampolines. The dispatch fixture
+  embeds `asInvoker`: it patches only its own process and needs no elevation.
+  Initial execution failed with WinError 740 before that explicit manifest.
+
 ## Verification and its limits
 
 `cmake --build build --config Release --target outrun2006tweaks`: **Pass**, x86
@@ -104,7 +134,7 @@ without a native window, game, DirectInput acquisition or real output:
   override wins over the steering GUID; driver refusal does not try another
   actuator; a zero game HWND is rejected before native initialization.
 
-`tools/Check-IniCoverage.ps1`: **Pass**, 166 parsed settings / 194 template keys,
+`tools/Check-IniCoverage.ps1`: **Pass**, 169 parsed settings / 197 template keys,
 including the 28 existing documented dead CDTracks entries. `git diff --check`:
 **Pass**. Component hashes match the verified official package, and model/profile/
 encoder/proxy files remain identical to the v0.8.0 baseline. A routine toolkit
@@ -128,10 +158,21 @@ Successor input-device/parser evidence:
 The direct device selector, rest action and Cancel fit together at 720p.
 The x86 build and complete UI/input/fake-ABI suite pass for this successor.
 
-**No game was launched, no screenshot captured in game, no real device bound,
-and no physical torque tested.** Deployment is recorded separately with exact
+**Stage 3 received a zero-output live startup/F6 smoke on 2026-09-19.**
+Correct-folder launch shows the native title/attract movie and working F6 pages;
+FFB stayed Off. The live 3840x2160 panel was too small, prompting automatic
+viewport scaling in the successor. Player-controlled stock cameras were not
+identified. No real device was bound and no physical torque was tested. Deployment is recorded separately with exact
 package/installed hashes and retention checks. Candidate artifacts are local,
 not a public release.
+
+Latest successor evidence: `build/wheel-settings-fixture/run-8f8b11a22b544d0594f04860d88521d1`
+contains 33 production frames. Build and all four fixture executables pass
+(`build/ux-stage4-build.log`, `build/ux-stage4-fixtures.log`). The separate reviewer
+closed three findings in source: old-device capture after a picker change,
+retained optional-group button conflicts on retarget, and SDL aggregate/chord
+semantics through the dispatch gate. Targeted regressions pass for each. This
+review does not establish live-game or physical-device acceptance.
 
 ## Required remaining work
 
@@ -139,9 +180,9 @@ not a public release.
 |---|---|
 | UX-01-S complete first setup in Simple | **Implemented controls path, live Not tested**. Device choice, calibration and recovery are in Simple. Initial input-route enable takes one normal restart because hooks/backends are selected at startup; there is no runtime backend switch. |
 | Guided rest/full/center calibration | **Implemented for primary device, live Not tested**. Transactional identity/axis/endpoints, ambiguity rejection, inversion/deadzone and finite range checks pass offline. |
-| Independent pedals/shifter/button box | **Pedals implemented, live Not tested**. Per-pedal GUID/axis/calibration transaction and shared USB handles pass source fixtures. Shifter/button-box slots remain startup INI settings. |
+| Independent pedals/shifter/button box | **Implemented, live Not tested**. Simple includes pedal calibration plus direct shifter/button-box device/button capture. Exact GUIDs share polling sources and disconnected buttons/POVs/H-pattern requests are neutral. H-pattern uses bounded native sequential shifts, not a fabricated neutral/clutch action. |
 | Handbrake axis/button | **Not available in the adapter**. Its known SwitchId/ADChannel mapping has no handbrake action. This is not proof the game cannot support one; investigate the game route before registering a permanent exception. |
-| Full ordinary binding set | **Partial**. Primary driving/menu bindings are available. Settings/Stop hotkeys, remaining native actions, keyboard binding and context-aware conflict checks need unification. Existing SDL route still links its legacy bindings modal. |
+| Full ordinary binding set | **Supported device actions implemented; broader keyboard route partial**. Primary, shifter and button-box actions have direct Bind/Clear transactions and same-device/context conflicts. Settings/Stop allow individual F3-F12 keys, protecting stock F1/F2, tools F11, each other, HUD and loaded SDL assignments. Arbitrary chords and controller Settings/Stop bindings are not implemented. The existing SDL route links its legacy modal; binary native keyboard bindings are not decoded by this adapter. |
 | UX-05-D device picker | **Implemented, live Not tested**. Requires attended follow/override, reorder, disconnect, duplicate-device and acquisition-refusal walks on the packaged build. |
 | FFB defaults / physical feel | **Gap / Not tested**. Fresh remains Off and steering source/scale is unverified. Validate it before changing safe defaults; do not retune by guessing. |
 | Bonnet/Bumper/native camera ownership | **Gap**. Mod mounts, native-cycle integration, numpad pose controls, adjustment rebinding and ownership gate have not been implemented. Stock Change camera binding is available. |
@@ -219,31 +260,31 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | DirectInput/ButtonSelDown | Simple on demand | F6 direct Bind/Clear | -1 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonSelLeft | Simple on demand | F6 direct Bind/Clear | -1 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonSelRight | Simple on demand | F6 direct Bind/Clear | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/DeviceGuid | Simple on demand | INI only (unreconciled) | empty |
-| DirectInput.Shifter/GearMode | Simple on demand | INI only (unreconciled) | sequential |
-| DirectInput.Shifter/ButtonGearUp | Simple on demand | INI only (unreconciled) | 4 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGearDown | Simple on demand | INI only (unreconciled) | 5 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear1 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear2 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear3 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear4 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear5 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGear6 | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Shifter/ButtonGearReverse | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/DeviceGuid | Simple on demand | INI only (unreconciled) | empty |
-| DirectInput.Aux/ButtonA | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonB | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonX | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonY | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonStart | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonBack | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonGearUp | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonGearDown | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonChangeView | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonSelUp | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonSelDown | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonSelLeft | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
-| DirectInput.Aux/ButtonSelRight | Simple on demand | INI only (unreconciled) | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/DeviceGuid | Simple on demand | F6 live / transactional Bind and Clear | empty |
+| DirectInput.Shifter/GearMode | Simple on demand | F6 live / transactional Bind and Clear | sequential |
+| DirectInput.Shifter/ButtonGearUp | Simple on demand | F6 live / transactional Bind and Clear | 4 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGearDown | Simple on demand | F6 live / transactional Bind and Clear | 5 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear1 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear2 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear3 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear4 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear5 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGear6 | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Shifter/ButtonGearReverse | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/DeviceGuid | Simple on demand | F6 live / transactional Bind and Clear | empty |
+| DirectInput.Aux/ButtonA | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonB | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonX | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonY | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonStart | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonBack | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonGearUp | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonGearDown | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonChangeView | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonSelUp | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonSelDown | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonSelLeft | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
+| DirectInput.Aux/ButtonSelRight | Simple on demand | F6 live / transactional Bind and Clear | -1 / button index (INI 0-based, UI 1-based) |
 | Telemetry/Enable | Simple | F6 live / saved | false |
 | Telemetry/SharedMemName | Advanced | F6 read-only; edit INI then restart | OutRun2006Telemetry |
 | FFB/DirectInputFFB | Simple | F6 live / saved | false |
@@ -319,6 +360,9 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | Misc/ProtectLoginData | Advanced | INI only (unreconciled) | true |
 | Overlay/Enabled | Advanced | INI only (unreconciled) | true |
 | WheelSettings/View | Simple | F6 live / saved | Simple |
+| WheelSettings/Scale | Simple Help | F6 live / saved user multiplier | 1.0 |
+| WheelSettings/SettingsKey | Simple Controls, on demand | Transactional function-key Bind | 117 / F6 |
+| WheelSettings/StopFfbKey | Simple Controls, on demand | Transactional function-key Bind | 119 / F8 |
 | Bugfixes/FixPegasusClopping | Advanced | INI only (unreconciled) | true |
 | Bugfixes/FixRightSideBunkiAnimations | Advanced | INI only (unreconciled) | true |
 | Bugfixes/FixC2CRankings | Advanced | INI only (unreconciled) | true |

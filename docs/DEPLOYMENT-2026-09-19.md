@@ -16,7 +16,18 @@ WheelFfb remains `95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe
 Both installed runtime hashes match the package. All five existing
 configuration files remain unchanged. No process was running during install.
 Backup: `.wheel-settings-backups/20260919-192938-828-68521837/receipt.json`.
-Live startup/F6/native-camera identification is pending the serialized slot.
+Zero-output live smoke: normal startup/title/attract and F6/pages work when
+launched from the game folder. Direct launch with a different working directory
+showed blank frames; it did not establish a runtime failure. The actual 3840x2160
+panel was too small, driving the successor viewport-scale change. Player-camera
+framing was not identified; no licence was created or wheel binding changed.
+FFB was explicitly Off throughout. Alt+F4 exited normally. All five owner settings
+were restored exactly; the test-only override was removed, SaveGame remained
+empty and runtime hashes were unchanged. Evidence:
+`build/camera-live-stage3/f6-correct-folder.png` and
+`build/camera-live-stage3/restore-verification.json` (19:44:13 UTC).
+The serialized window overran during context recovery; desktop was released
+explicitly after restoration. No nonzero physical output was enabled.
 
 ## Stage 2: superseded by stage 3
 

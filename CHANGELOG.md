@@ -2,6 +2,11 @@
 
 ## Unreleased — wheel settings candidate, 2026-09-19
 
+- Added Simple shifter/button-box device capture, Sequential/H-pattern mode,
+  Settings/Stop rebinding, same-context conflicts and retryable Clear.
+- Added automatic viewport scaling for readable default 4K settings.
+- Isolated actual stock/SDL/DirectInput dispatch while settings/capture are open
+  or focus is lost, with held menu input release before recovery.
 - Added F6 Simple-first wheel settings, remembered Advanced view, persistent
   Stop FFB/F8, ordinary primary-wheel/button binding and calibration.
 - Calibration captures center/rest and full travel, previews inversion/deadzone,

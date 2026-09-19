@@ -221,7 +221,7 @@ void Overlay::init()
 {
 	Overlay::settings_read();
 
-	Notifications::instance.add("OutRun2006Tweaks v" MODULE_VERSION_STR "\nF6: Wheel settings | F8: Stop FFB", 0,
+	Notifications::instance.add("OutRun2006Tweaks v" MODULE_VERSION_STR "\n" + WheelSettingsUi::ShortcutSummary(), 0,
 		[]() {
 			std::string url = "https://github.com/emoose/OutRun2006Tweaks";
 			ShellExecuteA(nullptr, "open", url.c_str(), 0, 0, SW_SHOWNORMAL);
@@ -302,14 +302,7 @@ bool Overlay::render()
 		ForceShowCursor(overlay_visible);
 	}
 
-	if (ImGui::IsKeyPressed(ImGuiKey_F6, false) && !IsBindingDialogActive && !WheelSettingsUi::IsCapturing())
-	{
-		if (WheelSettingsVisible) WheelSettingsUi::FlushChanges();
-		WheelSettingsVisible = !WheelSettingsVisible;
-		if (WheelSettingsVisible) overlay_visible = false;
-		ForceShowCursor(WheelSettingsVisible || overlay_visible);
-	}
-	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) WheelSettingsUi::StopFfb();
+	WheelSettingsUi::HandleShortcuts();
 	IsActive = overlay_visible || WheelSettingsVisible || IsBindingDialogActive;
 
 	// Notifications are rendered before any other window

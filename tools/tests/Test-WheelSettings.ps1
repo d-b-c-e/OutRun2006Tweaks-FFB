@@ -45,4 +45,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Input calibration fixture compilation failed.' }
     & (Join-Path $out 'input-calibration-fixture.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Input calibration fixture failed.' }
+    $dispatchArguments = $gateArguments | ForEach-Object {
+        $_.Replace('ffb_ui_gates_fixture.cpp', 'input_dispatch_fixture.cpp').Replace('ffb-ui-gates-fixture.exe', 'input-dispatch-fixture.exe')
+    }
+    # This test only patches its own process. An explicit execution level
+    # avoids legacy installer heuristics triggered by "patch" in its filename.
+    $dispatchArguments += '/link /MANIFEST:EMBED /MANIFESTUAC:"level=''asInvoker'' uiAccess=''false''"'
+    @('@echo off', ('call "' + $environment + '" >nul'), 'if errorlevel 1 exit /b %errorlevel%', ('cl ' + ($dispatchArguments -join ' ')), 'exit /b %errorlevel%') | Set-Content -LiteralPath $runner -Encoding ascii
+    & $runner
+    if ($LASTEXITCODE -ne 0) { throw 'Input dispatch fixture compilation failed.' }
+    & (Join-Path $out 'input-dispatch-fixture.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Input dispatch fixture failed.' }
 } finally { Pop-Location }

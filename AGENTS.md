@@ -14,6 +14,10 @@ of live controls, physical force or camera acceptance.
 - `src/hooks_inputremap.cpp`: game input adaptation. Do not switch the SDL and
   DirectInput backends at runtime. Device and camera capability gaps are listed
   honestly in the inventory; do not invent a game handbrake route.
+- `src/wheel_input_gate.cpp/.hpp`: final input dispatch isolation, installed
+  after all adapter hooks. Keep hardware polling during settings; release-latch
+  both digital and analog menu navigation. The x86 fixture uses real local
+  trampolines and an explicit `asInvoker` manifest, never game/device injection.
 - `src/hooks_dinputffb.cpp`: game force signals and output gates. Preserve owner
   tunes. Native output is a reviewed **v0.13.0 override** on the **v0.8.0 model/
   profile/encoder baseline**. Read `lib/toolkit/NATIVE-PROVENANCE.json` before sync.
@@ -31,3 +35,8 @@ On this machine CMake is under VS2022 BuildTools `Common7/IDE/CommonExtensions/
 Microsoft/CMake/CMake/bin`. Commit/push changes with `[skip ci]` when hosted CI
 is not requested. Live game/device tests require the coordinator's serial slot;
 no unattended nonzero force.
+
+For a live smoke, launch the EXE from its game folder (or set shortcut Start in).
+A direct launch without that working directory showed blank game frames despite
+a working F6 panel. Stage 3 title/F6 only passed; player cameras and physical
+wheel/force remain unaccepted. See the deployment receipt.

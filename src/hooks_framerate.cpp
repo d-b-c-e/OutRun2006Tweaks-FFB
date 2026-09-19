@@ -2,6 +2,7 @@
 #include "plugin.hpp"
 #include "game_addrs.hpp"
 #include "overlay/overlay.hpp"
+#include "wheel_input_gate.hpp"
 
 // from timeapi.h, which we can't include since our proxy timeBeginPeriod etc funcs will conflict...
 typedef struct timecaps_tag {
@@ -296,16 +297,14 @@ class ReplaceGameUpdateLoop : public Hook
 			// (do this inside our update-loop so that any hooked game funcs have accurate state...)
 			Input::Update();
 
-			if (!Overlay::IsActive || Overlay::IsBindingDialogActive)
-			{
-				void InputManager_Update();
-				InputManager_Update();
-			}
-
-			if (!Overlay::IsActive)
-			{
-				Game::ReadIO();
-			}
+			// Keep hardware states fresh while settings are open. The final
+			// dispatch guard isolates the game and waits for held buttons to
+			// release; skipping polling left stale stock navigation visible.
+			void InputManager_Update();
+			InputManager_Update();
+			Game::ReadIO();
+			// Prime release latches even on a frame that does not query input.
+			WheelInputGuard::Suspended();
 
 			Game::SoundControl_mb();
 			Game::LinkControlReceive();

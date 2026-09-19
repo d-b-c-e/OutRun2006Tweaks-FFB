@@ -266,6 +266,8 @@ namespace DInputRemap
 		if (IsPrimaryGuid(text)) return &primary;
 		GUID guid{};
 		if (!ParseGuid(text, guid)) return nullptr;
+		if (shifter.initialized && IsEqualGUID(guid, shifter.guid)) return &shifter;
+		if (aux.initialized && IsEqualGUID(guid, aux.guid)) return &aux;
 		const auto found = extraInputs.find(GuidText(guid));
 		return found == extraInputs.end() ? nullptr : found->second.get();
 	}
@@ -284,6 +286,11 @@ namespace DInputRemap
 
 		GUID targetGuid = {};
 		bool guidSpecified = ParseGuid(guidStr, targetGuid);
+		if (!guidSpecified && !guidStr.empty() && guidStr != "auto")
+		{
+			spdlog::warn("DInputRemap: {} has an invalid saved identity; refusing automatic replacement", slotName);
+			return false;
+		}
 
 		if (!guidSpecified)
 		{
@@ -375,6 +382,8 @@ namespace DInputRemap
 		if (!Settings::UseDirectInputRemap || Settings::UseNewInput) return nullptr;
 		GUID guid{};
 		if (!ParseGuid(text, guid)) return nullptr; // Never auto-select for a saved pedal.
+		if (shifter.initialized && IsEqualGUID(guid, shifter.guid)) return &shifter;
+		if (aux.initialized && IsEqualGUID(guid, aux.guid)) return &aux;
 		auto* di = g_RealDirectInput8 ? g_RealDirectInput8 : (Game::DirectInput8_ptr ? Game::DirectInput8() : nullptr);
 		if (!di || !Game::hWnd_ptr || !Game::GameHwnd()) return nullptr;
 		const auto key = GuidText(guid);
@@ -386,6 +395,19 @@ namespace DInputRemap
 			InitSlot(*slot, key, "Pedal input", di);
 		}
 		return slot.get();
+	}
+	static DeviceSlot& OptionalSlot(bool isShifter)
+	{
+		const auto& text = isShifter ? Settings::DIShifterDeviceGuid : Settings::DIAuxDeviceGuid;
+		static DeviceSlot unavailable;
+		if (text.empty()) return unavailable;
+		GUID guid{};
+		if (!ParseGuid(text, guid)) return unavailable;
+		if (IsPrimaryGuid(text)) return primary;
+		if (shifter.initialized && IsEqualGUID(guid, shifter.guid)) return shifter;
+		if (aux.initialized && IsEqualGUID(guid, aux.guid)) return aux;
+		const auto found = extraInputs.find(GuidText(guid));
+		return found == extraInputs.end() ? unavailable : *found->second;
 	}
 
 	// ---------- Deferred init (called on first frame) ----------
@@ -461,8 +483,12 @@ namespace DInputRemap
 
 	static void UpdateHPattern()
 	{
-		if (Settings::DIShifterGearMode != "hpattern" || !shifter.device)
+		const auto& shifter = OptionalSlot(true);
+		if (Settings::DIShifterGearMode != "hpattern" || !shifter.connected)
+		{
+			hpattern = {};
 			return;
+		}
 
 		// Read which gear button is pressed on the shifter device (mutually exclusive)
 		auto isPressed = [](const DeviceSlot& s, int btn) -> bool {
@@ -490,14 +516,17 @@ namespace DInputRemap
 			return;
 		lastPollFrame = tick;
 
-		PollSlot(primary);
-		PollSlot(shifter);
-		PollSlot(aux);
+		std::vector<DeviceSlot*> sources{ &primary };
+		for (const auto* guid : { &Settings::DIShifterDeviceGuid, &Settings::DIAuxDeviceGuid })
+			if (!guid->empty()) if (auto* source = EnsureExtraInput(*guid)) sources.push_back(source);
 		for (int role = 1; role <= 2; ++role)
 		{
 			auto* slot = EnsureExtraInput(PedalGuid(role));
-			if (slot && slot != &primary && (role == 1 || slot != PedalSlot(1))) PollSlot(*slot);
+			if (slot) sources.push_back(slot);
 		}
+		std::sort(sources.begin(), sources.end());
+		sources.erase(std::unique(sources.begin(), sources.end()), sources.end());
+		for (auto* source : sources) PollSlot(*source);
 		UpdateHPattern();
 
 		// Reset per-frame H-pattern cache so it's recomputed once this frame
@@ -599,14 +628,14 @@ namespace DInputRemap
 	// Check if a button is pressed on a given slot
 	static bool IsButtonPressed(const DeviceSlot& slot, int buttonIndex)
 	{
-		if (!slot.device || buttonIndex < 0 || buttonIndex >= 128)
+		if (!slot.connected || buttonIndex < 0 || buttonIndex >= 128)
 			return false;
 		return (slot.currentState.rgbButtons[buttonIndex] & 0x80) != 0;
 	}
 
 	static bool WasButtonPressed(const DeviceSlot& slot, int buttonIndex)
 	{
-		if (!slot.device || buttonIndex < 0 || buttonIndex >= 128)
+		if (!slot.connected || buttonIndex < 0 || buttonIndex >= 128)
 			return false;
 		return (slot.previousState.rgbButtons[buttonIndex] & 0x80) != 0;
 	}
@@ -670,7 +699,7 @@ namespace DInputRemap
 	// to prevent paddles from fighting the H-pattern state machine.
 	static bool ShouldSuppressPrimary(SwitchId id)
 	{
-		if (Settings::DIShifterGearMode == "hpattern" && shifter.device &&
+		if (Settings::DIShifterGearMode == "hpattern" && OptionalSlot(true).connected &&
 			(id == SwitchId::GearUp || id == SwitchId::GearDown))
 			return true;
 		return false;
@@ -686,12 +715,12 @@ namespace DInputRemap
 				return true;
 		}
 		// Aux
-		if (IsButtonPressed(aux, ButtonForSwitchAux(id)))
+		if (IsButtonPressed(OptionalSlot(false), ButtonForSwitchAux(id)))
 			return true;
 		// Shifter (sequential mode GearUp/GearDown only)
 		if (Settings::DIShifterGearMode == "sequential")
 		{
-			if (IsButtonPressed(shifter, ButtonForSwitchShifter(id)))
+			if (IsButtonPressed(OptionalSlot(true), ButtonForSwitchShifter(id)))
 				return true;
 		}
 		return false;
@@ -705,11 +734,11 @@ namespace DInputRemap
 			if (WasButtonPressed(primary, ButtonForSwitchPrimary(id)))
 				return true;
 		}
-		if (WasButtonPressed(aux, ButtonForSwitchAux(id)))
+		if (WasButtonPressed(OptionalSlot(false), ButtonForSwitchAux(id)))
 			return true;
 		if (Settings::DIShifterGearMode == "sequential")
 		{
-			if (WasButtonPressed(shifter, ButtonForSwitchShifter(id)))
+			if (WasButtonPressed(OptionalSlot(true), ButtonForSwitchShifter(id)))
 				return true;
 		}
 		return false;
@@ -735,7 +764,7 @@ namespace DInputRemap
 
 	static void ApplyPovToMask(const DeviceSlot& slot, uint32_t& mask)
 	{
-		if (!slot.device) return;
+		if (!slot.connected) return;
 		DWORD pov = slot.currentState.rgdwPOV[0];
 		if (pov == 0xFFFFFFFF) return;
 		if (pov >= 31500 || pov <= 4500)  mask |= (1 << static_cast<int>(SwitchId::SelectionUp));
@@ -746,7 +775,7 @@ namespace DInputRemap
 
 	static void ApplyPovEdgeToMask(const DeviceSlot& slot, uint32_t& mask)
 	{
-		if (!slot.device) return;
+		if (!slot.connected) return;
 		DWORD pov = slot.currentState.rgdwPOV[0];
 		DWORD prevPov = slot.previousState.rgdwPOV[0];
 		if (pov == prevPov || pov == 0xFFFFFFFF) return;
@@ -772,8 +801,8 @@ namespace DInputRemap
 
 		// POV hat from all slots
 		ApplyPovToMask(primary, mask);
-		ApplyPovToMask(shifter, mask);
-		ApplyPovToMask(aux, mask);
+		ApplyPovToMask(OptionalSlot(true), mask);
+		ApplyPovToMask(OptionalSlot(false), mask);
 
 		// Keyboard fallback
 		mask |= GetKeyboardMask();
@@ -833,8 +862,8 @@ namespace DInputRemap
 
 		// POV hat edge detection from all slots
 		ApplyPovEdgeToMask(primary, mask);
-		ApplyPovEdgeToMask(shifter, mask);
-		ApplyPovEdgeToMask(aux, mask);
+		ApplyPovEdgeToMask(OptionalSlot(true), mask);
+		ApplyPovEdgeToMask(OptionalSlot(false), mask);
 
 		// Keyboard edge detection — cached per frame
 		static DWORD lastKbEdgeFrame = 0;
@@ -871,6 +900,8 @@ namespace DInputRemap
 		if (IsPrimaryGuid(text)) return primary.initialized && primary.connected;
 		GUID guid{};
 		if (!ParseGuid(text, guid)) return false;
+		if (shifter.initialized && shifter.connected && IsEqualGUID(guid, shifter.guid)) return true;
+		if (aux.initialized && aux.connected && IsEqualGUID(guid, aux.guid)) return true;
 		const auto found = extraInputs.find(GuidText(guid));
 		return found != extraInputs.end() && found->second->initialized && found->second->connected;
 	}
@@ -879,8 +910,19 @@ namespace DInputRemap
 		if (IsPrimaryGuid(text) || !CanAdoptPrimaryInput(text)) return;
 		GUID guid{}; ParseGuid(text, guid);
 		const auto key = GuidText(guid);
-		auto replacement = std::move(extraInputs.at(key));
-		extraInputs.erase(key);
+		std::unique_ptr<DeviceSlot> replacement;
+		if (shifter.initialized && IsEqualGUID(guid, shifter.guid))
+		{
+			replacement = std::make_unique<DeviceSlot>(std::move(shifter)); shifter = {};
+		}
+		else if (aux.initialized && IsEqualGUID(guid, aux.guid))
+		{
+			replacement = std::make_unique<DeviceSlot>(std::move(aux)); aux = {};
+		}
+		else
+		{
+			replacement = std::move(extraInputs.at(key)); extraInputs.erase(key);
+		}
 		if (primary.initialized)
 		{
 			// Keep the old primary available to pedal roles pinned during the
@@ -903,6 +945,11 @@ namespace DInputRemap
 		for (auto it = extraInputs.begin(); it != extraInputs.end();)
 		{
 			bool used = false;
+			for (const auto* saved : { &Settings::DIShifterDeviceGuid, &Settings::DIAuxDeviceGuid })
+			{
+				GUID guid{};
+				if (ParseGuid(*saved, guid) && GuidText(guid) == it->first) used = true;
+			}
 			for (int role = 1; role <= 2; ++role)
 			{
 				GUID guid{};

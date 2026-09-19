@@ -1,4 +1,5 @@
 #include "hook_mgr.hpp"
+#include "wheel_input_gate.hpp"
 
 Hook::Hook()
 {
@@ -22,4 +23,5 @@ void HookManager::ApplyHooks()
             }
         }
     }
+    WheelInputGuard::Install();
 }

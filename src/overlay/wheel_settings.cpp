@@ -18,10 +18,15 @@
 
 extern void ForceShowCursor(bool show);
 extern bool overlay_visible;
+extern bool InputManager_FunctionKeyBound(int virtualKey);
 
 namespace WheelSettingsUi
 {
-static float UiScale() { return ImGui::GetIO().FontGlobalScale / 1.5f; }
+static float UiScale()
+{
+    const auto size = ImGui::GetIO().DisplaySize;
+    return WheelSettingsPolicy::LayoutScale(size.x, size.y, Settings::WheelSettingsScale);
+}
 enum class Page { Setup, Controls, Ffb, Cameras, Telemetry, Help };
 static Page page = Page::Setup;
 static bool saveFailed = false;
@@ -114,10 +119,39 @@ struct Capture
     WheelInput::Calibration calibration;
     bool invert = false;
     float deadzone = 0;
+    const char* section = "DirectInput";
+    bool keyboard = false, clear = false;
+    std::string message;
 };
 static Capture capture;
 bool IsCapturing() { return capture.destination != nullptr; }
 static void EndCapture() { capture = {}; DInputRemap::ReleaseUnusedUiDevices(); }
+static bool ValidShortcut(int key) { return WheelSettingsPolicy::ValidShortcut(key); }
+static ImGuiKey ShortcutKey(int key) { return ValidShortcut(key) ? static_cast<ImGuiKey>(ImGuiKey_F1 + key - VK_F1) : ImGuiKey_None; }
+static std::string ShortcutLabel(int key) { return ValidShortcut(key) ? "F" + std::to_string(key - VK_F1 + 1) : "Not bound"; }
+std::string ShortcutSummary()
+{
+    return ShortcutLabel(Settings::WheelSettingsKey) + ": Wheel settings | " + ShortcutLabel(Settings::WheelStopKey) + ": Stop FFB";
+}
+static bool ExistingShortcutConflict(int key)
+{
+    return WheelSettingsPolicy::Equal(Settings::HudToggleKey, ShortcutLabel(key)) || InputManager_FunctionKeyBound(key);
+}
+void HandleShortcuts()
+{
+    const bool focused = GetForegroundWindow() == Game::GameHwnd();
+    if (!focused) return;
+    const auto stop = ShortcutKey(Settings::WheelStopKey);
+    if (stop != ImGuiKey_None && ImGui::IsKeyPressed(stop, false)) StopFfb();
+    const auto settings = ShortcutKey(Settings::WheelSettingsKey);
+    if (settings != ImGuiKey_None && ImGui::IsKeyPressed(settings, false) && !Overlay::IsBindingDialogActive && !IsCapturing())
+    {
+        if (Overlay::WheelSettingsVisible) FlushChanges();
+        Overlay::WheelSettingsVisible = !Overlay::WheelSettingsVisible;
+        if (Overlay::WheelSettingsVisible) overlay_visible = false;
+        ForceShowCursor(Overlay::WheelSettingsVisible || overlay_visible);
+    }
+}
 
 static bool Choice(const char* label, bool& value)
 {
@@ -148,9 +182,133 @@ static void Percent(const char* label, float& value, const char* section, const 
     ImGui::PopID();
 }
 
-static void BeginCapture(int& value, const char* label, const char* key, bool axis, const DInputRemap::UiSnapshot& input)
+static void BeginCapture(int& value, const char* label, const char* key, bool axis, const DInputRemap::UiSnapshot& input, const char* section = "DirectInput")
 {
     capture = { &value, key, label, axis, -1, ImGui::GetTime() + 20.0, input };
+    capture.section = section;
+    if (std::string(section) != "DirectInput") DInputRemap::RefreshUiInputDevices();
+}
+
+static std::string& OptionalGuid(const char* section)
+{
+    return std::string(section) == "DirectInput.Shifter" ? Settings::DIShifterDeviceGuid : Settings::DIAuxDeviceGuid;
+}
+
+static std::string ButtonConflict(const DInputRemap::UiSnapshot& input)
+{
+    const auto context = [](const char* key)
+    {
+        const std::string value(key);
+        if (value == "ButtonStart") return 3; // Pause is active while driving too.
+        return value.starts_with("ButtonGear") || value == "ButtonChangeView" ? 1 : 2;
+    };
+    struct Entry { const char* section; const char* key; int* value; const std::string* guid; };
+    const auto primaryGuid = DInputRemap::PrimaryInputGuid();
+    const Entry entries[] = {
+#define PRIMARY(k, v) {"DirectInput", k, &Settings::DIRemap##v, &primaryGuid}
+#define AUX(k, v) {"DirectInput.Aux", k, &Settings::DIAux##v, &Settings::DIAuxDeviceGuid}
+#define SHIFT(k, v) {"DirectInput.Shifter", k, &Settings::DIShifter##v, &Settings::DIShifterDeviceGuid}
+        PRIMARY("ButtonGearUp", ButtonGearUp), PRIMARY("ButtonGearDown", ButtonGearDown), PRIMARY("ButtonChangeView", ButtonChangeView),
+        PRIMARY("ButtonA", ButtonA), PRIMARY("ButtonB", ButtonB), PRIMARY("ButtonX", ButtonX), PRIMARY("ButtonY", ButtonY),
+        PRIMARY("ButtonStart", ButtonStart), PRIMARY("ButtonBack", ButtonBack), PRIMARY("ButtonSelUp", ButtonSelUp),
+        PRIMARY("ButtonSelDown", ButtonSelDown), PRIMARY("ButtonSelLeft", ButtonSelLeft), PRIMARY("ButtonSelRight", ButtonSelRight),
+        AUX("ButtonGearUp", ButtonGearUp), AUX("ButtonGearDown", ButtonGearDown), AUX("ButtonChangeView", ButtonChangeView),
+        AUX("ButtonA", ButtonA), AUX("ButtonB", ButtonB), AUX("ButtonX", ButtonX), AUX("ButtonY", ButtonY),
+        AUX("ButtonStart", ButtonStart), AUX("ButtonBack", ButtonBack), AUX("ButtonSelUp", ButtonSelUp),
+        AUX("ButtonSelDown", ButtonSelDown), AUX("ButtonSelLeft", ButtonSelLeft), AUX("ButtonSelRight", ButtonSelRight),
+        SHIFT("ButtonGearUp", ButtonGearUp), SHIFT("ButtonGearDown", ButtonGearDown), SHIFT("ButtonGear1", ButtonGear1),
+        SHIFT("ButtonGear2", ButtonGear2), SHIFT("ButtonGear3", ButtonGear3), SHIFT("ButtonGear4", ButtonGear4),
+        SHIFT("ButtonGear5", ButtonGear5), SHIFT("ButtonGear6", ButtonGear6), SHIFT("ButtonGearReverse", ButtonGearReverse)
+#undef PRIMARY
+#undef AUX
+#undef SHIFT
+    };
+    const auto active = [](const Entry& entry)
+    {
+        if (std::string(entry.section) != "DirectInput.Shifter") return true;
+        const bool sequential = std::string(entry.key) == "ButtonGearUp" || std::string(entry.key) == "ButtonGearDown";
+        return sequential == (Settings::DIShifterGearMode != "hpattern");
+    };
+    const auto check = [&](int* destination, const char* key, int button)
+    {
+        for (const auto& other : entries)
+        {
+            const int otherButton = other.value == capture.destination ? capture.candidate : *other.value;
+            if (!active(other) || other.value == destination || button < 0 || otherButton != button || !(context(other.key) & context(key))) continue;
+            const auto& effectiveGuid = std::string(other.section) == capture.section ? input.guid : *other.guid;
+            if (!effectiveGuid.empty() && WheelSettingsPolicy::Equal(effectiveGuid, input.guid))
+                return "Button already assigned to " + std::string(other.key).substr(6) + " on this device. Clear or rebind that action first.";
+        }
+        return std::string{};
+    };
+    if (auto conflict = check(capture.destination, capture.key, capture.candidate); !conflict.empty()) return conflict;
+    if (std::string(capture.section) != "DirectInput" &&
+        !WheelSettingsPolicy::Equal(OptionalGuid(capture.section), input.guid))
+    {
+        // A role has one device identity. Moving it moves retained buttons too;
+        // preflight that whole proposal, not just the newly captured button.
+        for (const auto& retained : entries)
+            if (std::string(retained.section) == capture.section && retained.value != capture.destination && active(retained))
+                if (auto conflict = check(retained.value, retained.key, *retained.value); !conflict.empty())
+                    return "This device change also moves the group's saved buttons. " + conflict;
+    }
+    return {};
+}
+
+static bool SaveCapturedBinding(const DInputRemap::UiSnapshot& input)
+{
+    const bool optional = std::string(capture.section) != "DirectInput" && !capture.keyboard;
+    if (!capture.destination || !capture.key) return false;
+    if (!capture.clear)
+    {
+        if (capture.keyboard)
+        {
+            if (!ValidShortcut(capture.candidate) || ExistingShortcutConflict(capture.candidate) ||
+                (capture.destination != &Settings::WheelStopKey && capture.candidate == Settings::WheelStopKey) ||
+                (capture.destination != &Settings::WheelSettingsKey && capture.candidate == Settings::WheelSettingsKey)) return false;
+        }
+        else if (capture.candidate < 0 || capture.candidate >= 128 || input.buttons[capture.candidate]) return false;
+        if (!capture.keyboard && !(capture.message = ButtonConflict(input)).empty()) return false;
+    }
+    if (!capture.clear && !capture.keyboard && (!input.connected || input.guid.empty() || input.guid != capture.initial.guid)) return false;
+    const auto oldPending = pending;
+    Queue(capture.section, capture.key, capture.clear ? -1 : capture.candidate);
+    if (optional && !capture.clear) Queue(capture.section, "DeviceGuid", input.guid);
+    if (!SavePending()) { pending = oldPending; return false; }
+    *capture.destination = capture.clear ? -1 : capture.candidate;
+    if (optional && !capture.clear)
+    {
+        OptionalGuid(capture.section) = input.guid;
+        Settings::DIShifterEnabled = !Settings::DIShifterDeviceGuid.empty();
+        Settings::DIAuxEnabled = !Settings::DIAuxDeviceGuid.empty();
+    }
+    return true;
+}
+
+static void InputDevicePicker(DInputRemap::UiSnapshot& selected)
+{
+    ImGui::TextUnformatted("Input device"); ImGui::SameLine(180 * UiScale());
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::BeginCombo("##button-device", selected.connected ? selected.name.c_str() : "Choose a connected device"))
+    {
+        const auto& choices = DInputRemap::UiInputDevices();
+        for (const auto& device : choices)
+        {
+            auto label = device.name;
+            if (std::count_if(choices.begin(), choices.end(), [&](const auto& other) { return other.name == device.name; }) > 1)
+                label += " [" + device.guid.substr(1, 8) + "]";
+            ImGui::PushID(device.guid.c_str());
+            if (ImGui::Selectable(label.c_str(), device.guid == selected.guid))
+            {
+                selected = DInputRemap::ReadDeviceUiSnapshot(device.guid);
+                capture.candidate = -1;
+                capture.deadline = ImGui::GetTime() + 30;
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::Button("Refresh devices")) DInputRemap::RefreshUiInputDevices();
 }
 
 static bool& AxisInvert(int role)
@@ -327,65 +485,80 @@ static void AxisCalibrationPanel(const DInputRemap::UiSnapshot& input)
     if (ImGui::Button("Cancel")) EndCapture();
 }
 
+static void ObserveButtonCapture(DInputRemap::UiSnapshot& input)
+{
+    // Picker edits can occur during this frame, after its first device read.
+    if (input.guid != capture.initial.guid) input = capture.initial;
+    int newlyPressed = -1, count = 0;
+    for (int i = 0; i < 128; ++i)
+    {
+        if (!input.buttons[i]) capture.initial.buttons[i] = false;
+        if (input.buttons[i] && !capture.initial.buttons[i]) { newlyPressed = i; ++count; }
+    }
+    if (count > 1)
+    {
+        capture.candidate = -1; capture.initial.buttons = input.buttons;
+        capture.message = "More than one button moved. Release them and press only the intended button.";
+    }
+    else if (count == 1) { capture.candidate = newlyPressed; capture.message = ButtonConflict(input); }
+}
+
 static void CapturePanel(const DInputRemap::UiSnapshot& primaryInput)
 {
     if (!IsCapturing()) return;
-    const auto input = capture.axis && capture.role >= 0 ? DInputRemap::ReadDeviceUiSnapshot(capture.initial.guid) : primaryInput;
-    const bool choosingDevice = capture.axis && capture.role >= 0 && capture.stage == 0;
-    if ((!choosingDevice && (!input.connected || input.guid != capture.initial.guid)) || GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
+    const bool optional = !capture.keyboard && std::string(capture.section) != "DirectInput";
+    auto input = (capture.axis && capture.role >= 0) || optional ? DInputRemap::ReadDeviceUiSnapshot(capture.initial.guid) : primaryInput;
+    const bool choosingDevice = (capture.axis && capture.role >= 0 && capture.stage == 0) || (optional && capture.candidate < 0);
+    if (GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
         ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { EndCapture(); return; }
+    if (!capture.keyboard && !capture.clear && !choosingDevice && (!input.connected || input.guid != capture.initial.guid)) { EndCapture(); return; }
     if (capture.axis && capture.role >= 0) { AxisCalibrationPanel(input); return; }
-    ImGui::Separator();
-    ImGui::Text("Bind %s", capture.label);
-    ImGui::TextWrapped(capture.axis ? "Move only this axis through its travel, then choose Save binding. Your previous binding stays active until saved."
-        : "Press and release the desired wheel button, then choose Save binding.");
-    if (capture.axis)
+    ImGui::Text("%s %s", capture.clear ? "Clear" : "Bind", capture.label);
+    if (capture.clear)
+        ImGui::TextWrapped("Clear this assignment? Your current binding stays active until the change is saved.");
+    else if (capture.keyboard)
     {
-        long greatest = 8192;
-        for (int i = 0; i < 8; ++i)
+        ImGui::TextWrapped("Press and release F3-F12, then Save binding. F1/F2 belong to the game; F11 opens tools. Modified key combinations are unsupported.");
+        const auto& io = ImGui::GetIO();
+        for (int key = VK_F1; key <= VK_F12; ++key)
         {
-            const auto movement = std::abs(input.axes[i] - capture.initial.axes[i]);
-            if (movement > greatest) { greatest = movement; capture.candidate = i; }
+            const auto named = static_cast<ImGuiKey>(ImGuiKey_F1 + key - VK_F1);
+            if (!ImGui::IsKeyPressed(named, false)) continue;
+            if (io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper) capture.message = "Key combinations are unsupported. Press one function key.";
+            else if (!ValidShortcut(key)) capture.message = "F1/F2 are reserved for game menus; F11 opens the existing tools panel.";
+            else if (ExistingShortcutConflict(key)) capture.message = "This key is already assigned to the HUD or a controller/keyboard action.";
+            else if ((capture.destination != &Settings::WheelStopKey && key == Settings::WheelStopKey) ||
+                (capture.destination != &Settings::WheelSettingsKey && key == Settings::WheelSettingsKey))
+                capture.message = "This key is already assigned to Settings or Stop FFB.";
+            else { capture.candidate = key; capture.message.clear(); }
         }
     }
     else
-        for (int i = 0; i < 128; ++i)
-        {
-            if (!input.buttons[i]) capture.initial.buttons[i] = false;
-            if (input.buttons[i] && !capture.initial.buttons[i]) { capture.candidate = i; break; }
-        }
-    if (capture.candidate >= 0)
-        ImGui::Text("Detected: %s %d", capture.axis ? "Axis" : "Button", capture.candidate + 1);
-    else ImGui::TextUnformatted("Waiting for input...");
-    ImGui::BeginDisabled(capture.candidate < 0 || (!capture.axis && input.buttons[capture.candidate]));
-    if (ImGui::Button("Save binding"))
     {
-        const bool saveSteering = capture.axis && std::string(capture.key) == "SteeringAxis";
-        if (saveSteering) Queue("DirectInput", "DeviceGuid", input.guid);
-        if (Save("DirectInput", capture.key, capture.candidate))
+        if (optional)
         {
-            *capture.destination = capture.candidate;
-            if (saveSteering)
-            {
-                Settings::DIRemapDeviceGuid = input.guid;
-                if (Settings::FFBDeviceGuid == "steering") FFB::SelectionChanged();
-            }
-            EndCapture();
+            InputDevicePicker(capture.initial);
         }
-        else
-        {
-            pending.erase({"DirectInput", capture.key});
-            if (saveSteering) pending.erase({"DirectInput", "DeviceGuid"});
-        }
+        ObserveButtonCapture(input);
+        ImGui::TextWrapped("Device: %s", input.connected ? input.name.c_str() : "Missing or unavailable");
+        ImGui::TextWrapped("Press and release one button, then Save binding. Your current assignment stays active until saved.");
     }
+    if (!capture.message.empty()) ImGui::TextWrapped("%s", capture.message.c_str());
+    if (!capture.clear)
+    {
+        if (capture.candidate >= 0)
+        {
+            if (capture.keyboard) ImGui::Text("Detected: %s", ShortcutLabel(capture.candidate).c_str());
+            else ImGui::Text("Detected: Button %d", capture.candidate + 1);
+        }
+        else ImGui::TextUnformatted("Waiting for input...");
+    }
+    const bool held = capture.candidate >= 0 && (capture.keyboard ? ImGui::IsKeyDown(ShortcutKey(capture.candidate)) : input.buttons[capture.candidate]);
+    ImGui::BeginDisabled(!capture.clear && (capture.candidate < 0 || held || !capture.message.empty()));
+    if (ImGui::Button(saveFailed ? "Retry save" : capture.clear ? "Save clear" : "Save binding") && SaveCapturedBinding(input)) EndCapture();
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
-    {
-        // A failed provisional save must not be retried after cancellation.
-        pending.erase({"DirectInput", capture.key});
-        EndCapture();
-    }
+    if (ImGui::Button("Cancel")) EndCapture();
 }
 
 static void AxisRow(int role, const char* label, int& axis, bool& invert, const char* key, const char* invertKey,
@@ -408,8 +581,8 @@ static void AxisRow(int role, const char* label, int& axis, bool& invert, const 
     ImGui::BeginDisabled(axis < 0);
     if (ImGui::Button("Clear"))
     {
-        if (Save("DirectInput", key, -1)) axis = -1;
-        else pending.erase({"DirectInput", key});
+        BeginCapture(axis, label, key, false, input);
+        capture.clear = true;
     }
     ImGui::EndDisabled();
     ImGui::EndDisabled();
@@ -431,24 +604,26 @@ static void AxisRow(int role, const char* label, int& axis, bool& invert, const 
     ImGui::PopID();
 }
 
-static void ButtonRow(const char* label, int& button, const char* key, const DInputRemap::UiSnapshot& input)
+static void ButtonRow(const char* label, int& button, const char* key, const DInputRemap::UiSnapshot& input, const char* section = "DirectInput")
 {
+    ImGui::PushID(section);
     ImGui::PushID(key);
     ImGui::TextUnformatted(label);
     ImGui::SameLine(180 * UiScale());
     if (button >= 0) ImGui::Text("Button %d", button + 1); else ImGui::TextDisabled("Not bound");
     ImGui::SameLine(310 * UiScale());
-    ImGui::BeginDisabled(!input.connected || IsCapturing());
-    if (ImGui::Button("Bind")) BeginCapture(button, label, key, false, input);
+    ImGui::BeginDisabled(IsCapturing() || !Settings::UseDirectInputRemap || Settings::UseNewInput || (!input.connected && std::string(section) == "DirectInput"));
+    if (ImGui::Button("Bind")) BeginCapture(button, label, key, false, input, section);
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(IsCapturing());
     if (ImGui::Button("Clear"))
     {
-        if (Save("DirectInput", key, -1)) button = -1;
-        else pending.erase({"DirectInput", key});
+        BeginCapture(button, label, key, false, input, section);
+        capture.clear = true;
     }
     ImGui::EndDisabled();
+    ImGui::PopID();
     ImGui::PopID();
 }
 
@@ -462,6 +637,82 @@ static bool CustomTuning()
         Settings::FFBTireSlip != 0.35f || Settings::FFBEngineIdle != 0.08f ||
         !Settings::FFBUsePeriodicEffects || Settings::FFBWheelTorqueNm != 0 ||
         Settings::FFBInvertForce || Settings::FFBDiagnosticLog || Settings::DIRemapSteeringSensitivity != 1.0f;
+}
+
+static void SettingsShortcuts()
+{
+    if (!ImGui::CollapsingHeader("Settings shortcuts")) return;
+    for (bool stop : {false, true})
+    {
+        auto& key = stop ? Settings::WheelStopKey : Settings::WheelSettingsKey;
+        const auto* label = stop ? "Stop FFB" : "Settings";
+        ImGui::PushID(label);
+        ImGui::TextUnformatted(label); ImGui::SameLine(180 * UiScale());
+        ImGui::TextUnformatted(ShortcutLabel(key).c_str()); ImGui::SameLine(310 * UiScale());
+        if (ImGui::Button("Bind"))
+        {
+            BeginCapture(key, label, stop ? "StopFfbKey" : "SettingsKey", false, {}, "WheelSettings");
+            capture.keyboard = true;
+        }
+        ImGui::PopID();
+    }
+    ImGui::TextWrapped("Settings and Stop FFB always retain a shortcut. Assign a different function key to free the current key.");
+}
+
+static void OptionalControls(bool shifter)
+{
+    const auto* title = shifter ? "Separate shifter" : "Button box / stalk";
+    if (!ImGui::CollapsingHeader(title)) return;
+    const auto* section = shifter ? "DirectInput.Shifter" : "DirectInput.Aux";
+    const auto& guid = OptionalGuid(section);
+    const auto device = guid.empty() ? DInputRemap::UiSnapshot{} : DInputRemap::ReadDeviceUiSnapshot(guid);
+    ImGui::TextWrapped("Device: %s", guid.empty() ? "Not bound" : device.connected ? device.name.c_str() : "Saved device missing - Bind to choose a replacement");
+    ImGui::TextWrapped("Bind starts capture and lets you choose the input device. All buttons in this group use that saved device.");
+    if (shifter)
+    {
+        ImGui::TextUnformatted("Shift mode"); ImGui::SameLine(180 * UiScale());
+        bool sequential = Settings::DIShifterGearMode != "hpattern";
+        auto choose = [&](const char* mode)
+        {
+            if (Save(section, "GearMode", mode)) Settings::DIShifterGearMode = mode;
+            else pending.erase({section, "GearMode"});
+        };
+        if (ImGui::RadioButton("Sequential", sequential) && !sequential) choose("sequential");
+        ImGui::SameLine();
+        if (ImGui::RadioButton("H-pattern", !sequential) && sequential) choose("hpattern");
+        if (sequential)
+        {
+            ButtonRow("Shift up", Settings::DIShifterButtonGearUp, "ButtonGearUp", device, section);
+            ButtonRow("Shift down", Settings::DIShifterButtonGearDown, "ButtonGearDown", device, section);
+        }
+        else
+        {
+            ButtonRow("Gear 1", Settings::DIShifterButtonGear1, "ButtonGear1", device, section);
+            ButtonRow("Gear 2", Settings::DIShifterButtonGear2, "ButtonGear2", device, section);
+            ButtonRow("Gear 3", Settings::DIShifterButtonGear3, "ButtonGear3", device, section);
+            ButtonRow("Gear 4", Settings::DIShifterButtonGear4, "ButtonGear4", device, section);
+            ButtonRow("Gear 5", Settings::DIShifterButtonGear5, "ButtonGear5", device, section);
+            ButtonRow("Gear 6", Settings::DIShifterButtonGear6, "ButtonGear6", device, section);
+            ButtonRow("Reverse", Settings::DIShifterButtonGearReverse, "ButtonGearReverse", device, section);
+            ImGui::TextWrapped("The game's gearbox is sequential. This adapter sends bounded shifts toward the selected gear; releasing the shifter does not add a native neutral gear.");
+        }
+    }
+    else
+    {
+        ButtonRow("Shift up", Settings::DIAuxButtonGearUp, "ButtonGearUp", device, section);
+        ButtonRow("Shift down", Settings::DIAuxButtonGearDown, "ButtonGearDown", device, section);
+        ButtonRow("Change camera", Settings::DIAuxButtonChangeView, "ButtonChangeView", device, section);
+        ButtonRow("Confirm", Settings::DIAuxButtonA, "ButtonA", device, section);
+        ButtonRow("Back", Settings::DIAuxButtonB, "ButtonB", device, section);
+        ButtonRow("Start / pause", Settings::DIAuxButtonStart, "ButtonStart", device, section);
+        ButtonRow("Select", Settings::DIAuxButtonBack, "ButtonBack", device, section);
+        ButtonRow("X action", Settings::DIAuxButtonX, "ButtonX", device, section);
+        ButtonRow("Y action", Settings::DIAuxButtonY, "ButtonY", device, section);
+        ButtonRow("Menu up", Settings::DIAuxButtonSelUp, "ButtonSelUp", device, section);
+        ButtonRow("Menu down", Settings::DIAuxButtonSelDown, "ButtonSelDown", device, section);
+        ButtonRow("Menu left", Settings::DIAuxButtonSelLeft, "ButtonSelLeft", device, section);
+        ButtonRow("Menu right", Settings::DIAuxButtonSelRight, "ButtonSelRight", device, section);
+    }
 }
 
 static void SelectDevice(const std::string& guid, const std::string& name)
@@ -525,10 +776,10 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
                 pending[{"Controls", "UseNewInput"}] = "false";
                 if (SavePending()) Save("WheelSettings", "View", Settings::WheelSettingsView);
             }
-            ImGui::TextWrapped("After saving, exit normally and restart. Device selection still uses the existing saved wheel configuration.");
+            ImGui::TextWrapped("After saving, exit normally and restart. Then open Controls to bind and calibrate your wheel and pedals.");
         }
         else if (!input.connected)
-            ImGui::TextWrapped("Wheel input unavailable. Check its connection, then restart the game. Automatic device replacement is not supported by this version.");
+            ImGui::TextWrapped("Wheel input unavailable. Reconnect it, or open Controls and use Steering > Bind to choose a replacement.");
         else
         {
             ImGui::TextWrapped("Wheel: %s", input.name.c_str());
@@ -573,12 +824,14 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
             ButtonRow("Menu left", Settings::DIRemapButtonSelLeft, "ButtonSelLeft", input);
             ButtonRow("Menu right", Settings::DIRemapButtonSelRight, "ButtonSelRight", input);
         }
+        OptionalControls(true);
+        OptionalControls(false);
+        SettingsShortcuts();
         if (advanced)
         {
             if (ImGui::SliderFloat("Steering sensitivity", &Settings::DIRemapSteeringSensitivity, 0.1f, 10.0f, "%.2fx"))
                 Queue("DirectInput", "SteeringSensitivity", Settings::DIRemapSteeringSensitivity);
             if (ImGui::IsItemDeactivatedAfterEdit()) Save("DirectInput", "SteeringSensitivity", Settings::DIRemapSteeringSensitivity);
-            ImGui::TextWrapped("Separate shifter and button-box assignments remain startup INI settings. See Help for the settings folder.");
             if (input.connected)
                 for (int i = 0; i < 8; ++i) ImGui::Text("Raw axis %d: %ld", i + 1, input.axes[i]);
         }
@@ -649,15 +902,12 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
     }
     case Page::Help:
         ImGui::TextUnformatted("OutRun2006Tweaks " MODULE_VERSION_STR);
-        ImGui::TextUnformatted("F6: settings | F8: Stop FFB | Esc: cancel or close");
+        ImGui::Text("%s: settings | %s: Stop FFB | Esc: cancel or close", ShortcutLabel(Settings::WheelSettingsKey).c_str(), ShortcutLabel(Settings::WheelStopKey).c_str());
         ImGui::TextWrapped("No input: reconnect the wheel, exit normally, then restart. Check Controls before driving. No FFB: check both DLLs are beside the game and choose On in FFB.");
-        if (ImGui::SliderFloat("UI scale", &Overlay::GlobalFontScale, 1.0f, 2.5f, "%.2fx"))
-            ImGui::GetIO().FontGlobalScale = Overlay::GlobalFontScale;
-        if (ImGui::IsItemDeactivatedAfterEdit() && !Overlay::settings_write())
-        {
-            saveFailed = true;
-            saveError = "UI scale could not be saved; retry with the scale control";
-        }
+        ImGui::TextWrapped("Text and controls scale automatically with the game window.");
+        if (ImGui::SliderFloat("UI scale", &Settings::WheelSettingsScale, 0.8f, 1.5f, "%.2fx"))
+            Queue("WheelSettings", "Scale", Settings::WheelSettingsScale);
+        if (ImGui::IsItemDeactivatedAfterEdit()) Save("WheelSettings", "Scale", Settings::WheelSettingsScale);
         if (ImGui::Button("Open settings folder"))
             ShellExecuteW(nullptr, L"open", Module::DllPath.parent_path().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         ImGui::TextWrapped("Support-file creation is not implemented. Logs are local beside the game; nothing is uploaded.");
@@ -694,14 +944,20 @@ public:
         }
         const auto screen = ImGui::GetIO().DisplaySize;
         const float scale = UiScale();
+        const float previousFontScale = ImGui::GetIO().FontGlobalScale;
+        ImGui::GetIO().FontGlobalScale = 1.5f * scale;
         static float lastScale = 0;
+        static ImVec2 lastScreen;
+        const bool layoutChanged = scale != lastScale || screen.x != lastScreen.x || screen.y != lastScreen.y;
         ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f * scale, screen.x - 32), std::min(760.0f * scale, screen.y - 32)),
-            scale == lastScale ? ImGuiCond_FirstUseEver : ImGuiCond_Always);
+            layoutChanged ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
         lastScale = scale;
-        ImGui::SetNextWindowPos(ImVec2(screen.x / 2, screen.y / 2), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+        lastScreen = screen;
+        ImGui::SetNextWindowPos(ImVec2(screen.x / 2, screen.y / 2), layoutChanged ? ImGuiCond_Always : ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 16));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16 * scale, 16 * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8 * scale, 6 * scale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * scale, 4 * scale));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
         if (Overlay::WheelSettingsFont) ImGui::PushFont(Overlay::WheelSettingsFont);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.106f, .125f, .149f, 1));
@@ -792,7 +1048,8 @@ public:
         ImGui::End();
         ImGui::PopStyleColor(13);
         if (Overlay::WheelSettingsFont) ImGui::PopFont();
-        ImGui::PopStyleVar(3);
+        ImGui::PopStyleVar(4);
+        ImGui::GetIO().FontGlobalScale = previousFontScale;
     }
     static WheelSettingsWindow instance;
 };

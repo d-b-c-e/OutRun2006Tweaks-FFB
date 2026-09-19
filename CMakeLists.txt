@@ -325,6 +325,8 @@ set(outrun2006tweaks_SOURCES
 	"src/plugin.hpp"
 	"src/resource.h"
 	"src/telemetry.hpp"
+	"src/wheel_input_gate.cpp"
+	"src/wheel_input_gate.hpp"
 	"src/wheel_settings_policy.hpp"
 	"src/wheel_ui_snapshot.hpp"
 )

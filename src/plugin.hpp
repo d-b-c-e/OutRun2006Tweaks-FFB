@@ -249,6 +249,9 @@ namespace Settings
 
 	inline bool OverlayEnabled = true;
 	inline std::string WheelSettingsView = "Simple";
+	inline float WheelSettingsScale = 1.0f;
+	inline int WheelSettingsKey = 0x75; // F6, Win32 virtual key
+	inline int WheelStopKey = 0x77; // F8
 
 	inline bool FixPegasusClopping = true;
 	inline bool FixRightSideBunkiAnimations = true;

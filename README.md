@@ -14,11 +14,17 @@ Strength and a real device dropdown following the saved
 Steering wheel unless you choose an explicit override. Changes save into the
 existing user INI without replacing your tune.
 
+Simple also has shifter and button-box capture, Sequential/H-pattern selection,
+and Settings/Stop shortcut rebinding. The panel scales automatically at 4K;
+Help provides a user scale adjustment. Game controls are isolated while settings
+are open, and held menu inputs must release before resuming.
+
 Use the packaged **Install.bat** with the game closed. It recognizes existing
 Tweaks, backs up the runtime, retains settings and bindings, and verifies the
 installed hashes. [Install and restore instructions](docs/INSTALL-WHEEL-SETTINGS.md).
 
-This is partial adoption, built and tested with offline fixtures; it has **not
+A zero-output startup/F6 smoke passed on the installed stage 3. This successor
+has offline UI/input/dispatch evidence; it has **not
 been driven**. Custom cameras and live pedal/force acceptance remain work.
 See the
 [exact inventory and acceptance gaps](docs/UX-OVERNIGHT-2026-09-16.md).

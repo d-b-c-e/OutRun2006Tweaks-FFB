@@ -9,6 +9,7 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "wheel_input_gate.hpp"
 
 namespace Input
 {
@@ -56,7 +57,16 @@ namespace Input
     void HudToggleUpdate()
     {
         static bool HudTogglePrevState = false;
+        static bool waitForRelease = false;
         bool hudToggleKeyState = (GetAsyncKeyState(HudToggleVKey) & 0x8000);
+        if (WheelInputGuard::Suspended() || HudToggleVKey == Settings::WheelSettingsKey || HudToggleVKey == Settings::WheelStopKey)
+        {
+            waitForRelease = true; HudTogglePrevState = hudToggleKeyState; return;
+        }
+        if (waitForRelease)
+        {
+            waitForRelease = hudToggleKeyState; HudTogglePrevState = hudToggleKeyState; return;
+        }
         if (HudTogglePrevState != hudToggleKeyState)
         {
             HudTogglePrevState = hudToggleKeyState;

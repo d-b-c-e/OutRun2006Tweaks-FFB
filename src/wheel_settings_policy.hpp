@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <string>
 #include <string_view>
 
@@ -9,6 +10,13 @@
 namespace WheelSettingsPolicy
 {
 inline bool IsAdvanced(std::string_view value) { return value == "Advanced"; }
+inline bool ValidShortcut(int key) { return key >= 0x72 && key <= 0x7B && key != 0x7A; } // F1/F2 stock menus, F11 tools
+inline float LayoutScale(float width, float height, float preference)
+{
+    if (!std::isfinite(preference)) preference = 1;
+    return std::clamp((std::min)(width / 1920.0f, height / 1080.0f), 1.0f, 3.0f)
+        * std::clamp(preference, 0.8f, 1.5f);
+}
 template <class IniReader>
 inline bool RequiresLegacyFfbSelection(const IniReader& ini, int index)
 {
