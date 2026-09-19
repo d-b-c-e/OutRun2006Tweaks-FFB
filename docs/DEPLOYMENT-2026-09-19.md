@@ -1,6 +1,40 @@
 # Local deployments — 2026-09-19
 
-## Current installation: stage 3
+## Current installation: stage 4
+
+Installed **20:13:22 UTC** from clean/pushed source `72730f51cf270672ebe46e16fd3793562486b21e`.
+This adds Simple shifter/button-box capture, function-key Settings/Stop bindings,
+transactional Clear, viewport scaling, and final native/SDL/remap input dispatch
+isolation with held-menu release gates. Independent review findings were closed
+before freeze. The x86 build and all four offline production fixtures pass.
+
+Package `build/packages/wheel-settings-20260919-stage4.zip`, SHA256
+`8c36c259e6e2b1426e3b2883abbc3d416394f647f50c0ede163819e7584532be`. Installed proxy SHA256
+`03e88ff628649ab72bde47f7cc3cfbb1efad44fc743a02ce6e22b6ca96b7b87d`;
+WheelFfb remains `95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31`.
+Both installed DLLs match the package. Backup:
+`.wheel-settings-backups/20260919-201322-358-4c7ea01f/receipt.json`.
+Game was closed; the installer did not launch it or enable FFB.
+
+All five original owner configuration files remain byte-identical. The installer
+initially retained six files because stage 3's live smoke had created a separate
+`imgui.ini` (created 19:37:49 UTC, hash
+`605c380e2290e8ef648b8147ab5a8b8c804543ff97e88c292d70dbe1f121ed3f`).
+The original stage-3 restoration retained the original five correctly but missed
+this added layout. After verifying it matched the archived smoke output, that
+known test-only file was removed with the game closed, restoring its original
+absence. `OutRun2006Tweaks.imgui.ini` is a distinct original file and was retained.
+Evidence: `build/deployment-stage4-result.json` and
+`build/camera-live-stage3/additional-ui-layout-restoration.json`.
+Temporary user override is absent; SaveGame is still empty.
+
+Latest offline UI evidence is
+`build/wheel-settings-fixture/run-8f8b11a22b544d0594f04860d88521d1`
+(33 frames and actual font-atlas raster output). Reviewer checked the default
+4K result, but **stage-4 live startup, input isolation and camera identification
+remain pending**. No physical controls or nonzero force accepted.
+
+## Stage 3: superseded by stage 4
 
 Installed **19:29:38 UTC**, clean source
 `8ac4d9f026644264852d93f8a7435e4d5177ee24` (pushed). Calibrated primary-device
