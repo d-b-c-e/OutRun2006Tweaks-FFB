@@ -20,7 +20,7 @@ of live controls, physical force or camera acceptance.
   trampolines and an explicit `asInvoker` manifest, never game/device injection.
   `SuppressTextMessage` is called after ImGui's actual Win32 handler; stock
   WM_CHAR entry bypasses switch dispatch. Read-only Advanced Help counters and
-  the baseline comparison plan are in `docs/NATIVE-INPUT-DIAGNOSIS-2026-09-19.md`.
+  the executed baseline comparison are in `docs/NATIVE-INPUT-DIAGNOSIS-2026-09-19.md`.
 - `src/hooks_dinputffb.cpp`: game force signals and output gates. Preserve owner
   tunes. Native output is a reviewed **v0.13.0 override** on the **v0.8.0 model/
   profile/encoder baseline**. Read `lib/toolkit/NATIVE-PROVENANCE.json` before sync.
@@ -42,6 +42,11 @@ no unattended nonzero force.
 For a live smoke, launch the EXE from its game folder (or set shortcut Start in).
 A direct launch without that working directory showed blank game frames despite
 a working F6 panel. Stage 5 verified actual 4K F6/pages and shortcut capture/
-cancel. Native title confirmation failed before first F6; do not attribute that
-to automation or the mod without a diagnostic comparison. Player cameras and
-physical wheel/force remain unaccepted. See the deployment receipt.
+cancel. Stage 6 reproduced native title confirmation failure on both the new
+candidate and exact saved pre-session proxy, with two Return window messages
+and zero release-blocked queries. Exact Confirm edge counters were zero, so
+do not infer successful native keyboard sampling or a specific root cause.
+Actual 4K Advanced Help was readable. All owner state was restored after both
+normal exits; current installed source is d3d7f23. Player cameras, native text
+entry isolation and physical wheel/force remain unaccepted. See the deployment
+receipt and diagnosis result before repeating a live test.

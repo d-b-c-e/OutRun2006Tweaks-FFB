@@ -153,8 +153,12 @@ Explorer launch from the same candidate's own folder showed title/attract and F6
 The first 4K live panel was too small; stage 5's viewport-based scale is readable
 in actual 3840x2160 screenshots. Page navigation, direct Settings capture and
 Esc cancellation were exercised; F6 and the override remained unchanged.
-Native Return did not advance the title even before the first F6 press; cause
-is unproven, so inspect native dispatch/release state before assigning blame.
+Native Return did not advance the title even before the first F6 press. Stage 6
+reproduced that failure on the candidate and exact saved pre-session proxy with
+vibration zero and WheelFfb quarantined. Live diagnostics saw two Return window
+messages, zero release-blocked queries and zero exact Confirm edge queries;
+the shared native/setup/tool-input cause remains unresolved. See
+`docs/NATIVE-INPUT-DIAGNOSIS-2026-09-19.md` before repeating this comparison.
 Stock player-camera classification and
 physical controls/FFB remain unverified. `docs/DEPLOYMENT-2026-09-19.md` records
 exact stage packages, installed hashes, normal exit and owner-file restoration.
