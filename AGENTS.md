@@ -38,5 +38,7 @@ no unattended nonzero force.
 
 For a live smoke, launch the EXE from its game folder (or set shortcut Start in).
 A direct launch without that working directory showed blank game frames despite
-a working F6 panel. Stage 3 title/F6 only passed; player cameras and physical
-wheel/force remain unaccepted. See the deployment receipt.
+a working F6 panel. Stage 5 verified actual 4K F6/pages and shortcut capture/
+cancel. Native title confirmation failed before first F6; do not attribute that
+to automation or the mod without a diagnostic comparison. Player cameras and
+physical wheel/force remain unaccepted. See the deployment receipt.

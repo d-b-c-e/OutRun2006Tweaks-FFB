@@ -150,7 +150,11 @@ final dispatch. Production trampolines are exercised by the offline x86 fixture.
 Launch the installed EXE **from its game folder**, or set the shortcut's Start in
 folder accordingly. A direct launch from another directory showed blank assets;
 Explorer launch from the same candidate's own folder showed title/attract and F6.
-The first 4K live panel was too small; the successor uses viewport-based scale.
-Only title/F6 has live evidence so far. Stock player-camera classification and
+The first 4K live panel was too small; stage 5's viewport-based scale is readable
+in actual 3840x2160 screenshots. Page navigation, direct Settings capture and
+Esc cancellation were exercised; F6 and the override remained unchanged.
+Native Return did not advance the title even before the first F6 press; cause
+is unproven, so inspect native dispatch/release state before assigning blame.
+Stock player-camera classification and
 physical controls/FFB remain unverified. `docs/DEPLOYMENT-2026-09-19.md` records
 exact stage packages, installed hashes, normal exit and owner-file restoration.

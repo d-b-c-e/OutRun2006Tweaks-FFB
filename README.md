@@ -23,9 +23,12 @@ Use the packaged **Install.bat** with the game closed. It recognizes existing
 Tweaks, backs up the runtime, retains settings and bindings, and verifies the
 installed hashes. [Install and restore instructions](docs/INSTALL-WHEEL-SETTINGS.md).
 
-A zero-output startup/F6 smoke passed on the installed stage 3. This successor
-has offline UI/input/dispatch evidence; it has **not
-been driven**. Custom cameras and live pedal/force acceptance remain work.
+A zero-output stage-5 smoke verified startup, the actual 3840x2160 F6 panel,
+page navigation and shortcut capture/cancel. Native menu confirmation did not
+advance from the title screen, including before the first F6 press; its cause
+is unresolved. Input isolation has offline production-hook evidence and the
+mod has **not been driven**. Player-camera identification and live pedal/force
+acceptance remain work.
 See the
 [exact inventory and acceptance gaps](docs/UX-OVERNIGHT-2026-09-16.md).
 The old Off default remains until the force signal is validated.

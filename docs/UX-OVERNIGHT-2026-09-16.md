@@ -5,6 +5,8 @@ UX-1 including UX-01-S, UX-04-H, UX-05-D and UX-06-K. Starting source:
 `220f660` (`master`, clean). Work branch: `codex/ux-simple-settings-2026-09-16`.
 This is a **built partial adoption**, not completed UX reconciliation.
 Dispatch/release clarification reviewed at toolkit **12df6b325d770625baffd75b2d2eb74f1fcd0a8c**.
+Host-size/direct-dispatch clarification reviewed at **94dc3a1288359049eb887f6edaabb16005fc999c**;
+actual title input is unresolved, so direct-game/pointer isolation is not accepted.
 Visual reference: toolkit `95cbd89`, `docs/reference/wheel-settings.html`.
 Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
 
@@ -97,7 +99,8 @@ Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
 - F6 uses an automatic viewport baseline, independent of F11 font scale, plus a
   saved 0.8–1.5 user multiplier. Default 4K text is 42 px with a 2200 px panel;
   720p text is 21 px with a viewport-clamped panel. Readability is shown in actual
-  ImGui raster evidence; successor live-game/DPI acceptance remains pending.
+  ImGui raster evidence and stage-5 actual 3840x2160 game screenshots. Other
+  Windows DPI/monitor configurations remain untested.
 - Four offline executables cover production UI transactions, output gates,
   memory-only input and real x86 input-hook trampolines. The dispatch fixture
   embeds `asInvoker`: it patches only its own process and needs no elevation.
@@ -423,3 +426,16 @@ pinning still applies only when replacing a nonempty previous primary identity.
 Source fixtures cover both replacement and first assignment against an existing
 Aux action. This is offline transaction evidence; physical-device adoption and
 live conflict presentation remain unaccepted.
+
+## Stage 5 live smoke limits — 2026-09-19
+
+Startup from the game folder, actual 3840x2160 Simple panel readability,
+Setup/Controls/FFB navigation, scrollbar-track access and Settings shortcut
+capture/cancel passed with FFB/remap/telemetry Off. F9 was provisional, Esc
+cancelled it and the entire temporary user INI stayed byte-identical; F6 still
+closed the panel. Native Return failed twice before first F6, and no player
+session was reached. The cause is not established. Do not classify attract-movie
+camera images as player views, or claim live native-input isolation from this
+test. After normal exit all five owner settings and both runtime hashes matched,
+test-only layout/override files were removed, and the original empty SaveGame
+was retained. See [the deployment receipt](DEPLOYMENT-2026-09-19.md).

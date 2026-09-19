@@ -22,8 +22,29 @@ All five owner settings remain byte-identical, temporary user/layout overrides
 are absent and SaveGame remains empty. Game was closed throughout deployment.
 Exact receipt: `build/deployment-stage5-result.json`.
 
-Live 4K layout, input isolation and player-camera identification remain pending.
-No physical controls or nonzero force are accepted.
+Serialized zero-output smoke ran **20:36–20:41 UTC** from the game folder.
+Actual **3840x2160** screenshots show the readable default 2200x1520 panel,
+fixed Stop/Close/navigation, Setup/FFB/Controls and Off status. Scrollbar-track
+navigation revealed Settings shortcuts; Bind directly captured F9, Esc cancelled,
+and the original F6 still closed the panel. The temporary user override remained
+byte-identical after cancellation (SHA256
+`100845ce522b424b126103e4894247ee1510d44a262dd7c7107594f152ef718a`).
+
+Native Return was tested twice at the title **before the first F6**, without
+advancing to a player menu. A/Space/F2 also did not establish that menu. There
+are no runtime dispatch counters in this build, so neither the cause nor live
+input-isolation acceptance is established. No licence was created; attract-movie
+shots are not player-camera evidence. Stock framing remains unidentified, and
+no camera hook was added on that basis. No physical controls or nonzero force
+are accepted.
+
+Alt+F4 exited normally. Restoration finished **20:41:14 UTC** and the coordinator
+lease was released early. All five original configuration hashes and both
+runtime hashes match; test-only user/layout files are absent and SaveGame remains
+empty. Logs and generated test files were archived. Evidence under
+`build/camera-live-stage5/`: `f6-setup-3840.png`, `f6-ffb-off-3840.png`,
+`f6-controls-3840.png`, `shortcut-candidate-f9-3840.png`, and
+`restore-verification.json`.
 
 ## Stage 4: superseded by stage 5
 
