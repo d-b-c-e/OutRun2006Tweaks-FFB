@@ -246,6 +246,14 @@ void Overlay::init_imgui()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.FontGlobalScale = Overlay::GlobalFontScale;
+	io.Fonts->AddFontDefault(); // Preserve the upstream windows' original font.
+	wchar_t windowsDirectory[MAX_PATH]{};
+	if (GetWindowsDirectoryW(windowsDirectory, MAX_PATH))
+	{
+		const auto fontPath = std::filesystem::path(windowsDirectory) / L"Fonts" / L"segoeui.ttf";
+		if (std::filesystem::exists(fontPath))
+			WheelSettingsFont = io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f);
+	}
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();

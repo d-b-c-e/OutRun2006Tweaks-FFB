@@ -475,7 +475,14 @@ namespace DInputRemap
 
 	static int GetSteering()
 	{
+		if (Settings::DIRemapSteeringAxis < 0) return 0;
 		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapSteeringAxis);
+		if (Settings::DIRemapCalibration[0].enabled)
+		{
+			const float value = WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[0],
+				true, Settings::DIRemapSteeringInvert, Settings::SteeringDeadZone);
+			return static_cast<int>(std::clamp(value * Settings::DIRemapSteeringSensitivity * 127.0f, -127.0f, 127.0f));
+		}
 		float normalized = (static_cast<float>(raw) - 32767.5f) / 32767.5f; // -1.0 to +1.0
 		if (Settings::DIRemapSteeringInvert)
 			normalized = -normalized;
@@ -498,7 +505,11 @@ namespace DInputRemap
 
 	static int GetAcceleration()
 	{
+		if (Settings::DIRemapAccelAxis < 0) return 0;
 		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapAccelAxis);
+		if (Settings::DIRemapCalibration[1].enabled)
+			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
+				false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
 		float normalized = static_cast<float>(raw) / 65535.0f;
 		if (Settings::DIRemapAccelInvert)
 			normalized = 1.0f - normalized;
@@ -507,7 +518,11 @@ namespace DInputRemap
 
 	static int GetBrake()
 	{
+		if (Settings::DIRemapBrakeAxis < 0) return 0;
 		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapBrakeAxis);
+		if (Settings::DIRemapCalibration[2].enabled)
+			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
+				false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
 		float normalized = static_cast<float>(raw) / 65535.0f;
 		if (Settings::DIRemapBrakeInvert)
 			normalized = 1.0f - normalized;
@@ -856,21 +871,34 @@ class DirectInputRemapHook : public Hook
 		{
 		case ADChannel::Steering:
 		{
+			if (Settings::DIRemapSteeringAxis < 0) return 0;
 			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapSteeringAxis);
+			if (Settings::DIRemapCalibration[0].enabled)
+				return static_cast<int>(std::clamp(127 * Settings::DIRemapSteeringSensitivity * WheelInput::Normalize(
+					static_cast<float>(raw), Settings::DIRemapCalibration[0], true, Settings::DIRemapSteeringInvert,
+					Settings::SteeringDeadZone), -127.0f, 127.0f));
 			float n = (static_cast<float>(raw) - 32767.5f) / 32767.5f;
 			if (Settings::DIRemapSteeringInvert) n = -n;
 			return static_cast<int>(std::clamp(n * 127.0f, -127.0f, 127.0f));
 		}
 		case ADChannel::Acceleration:
 		{
+			if (Settings::DIRemapAccelAxis < 0) return 0;
 			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapAccelAxis);
+			if (Settings::DIRemapCalibration[1].enabled)
+				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
+					false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
 			float n = static_cast<float>(raw) / 65535.0f;
 			if (Settings::DIRemapAccelInvert) n = 1.0f - n;
 			return static_cast<int>(std::clamp(n * 255.0f, 0.0f, 255.0f));
 		}
 		case ADChannel::Brake:
 		{
+			if (Settings::DIRemapBrakeAxis < 0) return 0;
 			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapBrakeAxis);
+			if (Settings::DIRemapCalibration[2].enabled)
+				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
+					false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
 			float n = static_cast<float>(raw) / 65535.0f;
 			if (Settings::DIRemapBrakeInvert) n = 1.0f - n;
 			return static_cast<int>(std::clamp(n * 255.0f, 0.0f, 255.0f));

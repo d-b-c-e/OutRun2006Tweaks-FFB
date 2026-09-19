@@ -80,7 +80,7 @@ $Destination = (Resolve-Path $Destination).Path
 # A routine include/native sync must not silently erase that reviewed split.
 $nativeOverride = Join-Path $Destination 'NATIVE-VERSION'
 if ((Test-Path -LiteralPath $nativeOverride) -and
-    ($Parts -contains 'include' -or $Parts -contains 'native-x86')) {
+    ($ReplaceNativeOverride -or $Parts -contains 'include' -or $Parts -contains 'native-x86')) {
     if (-not $ReplaceNativeOverride -or -not ($Parts -contains 'include' -and $Parts -contains 'native-x86')) {
         throw 'A reviewed native ABI override is active. Read NATIVE-PROVENANCE.json; replace deliberately with -ReplaceNativeOverride and BOTH include,native-x86, or leave those components untouched.'
     }

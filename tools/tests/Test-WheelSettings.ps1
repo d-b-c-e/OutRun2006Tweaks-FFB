@@ -36,4 +36,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'FFB gate fixture compilation failed.' }
     & (Join-Path $out 'ffb-ui-gates-fixture.exe')
     if ($LASTEXITCODE -ne 0) { throw 'FFB gate fixture failed.' }
+    $inputArguments = $gateArguments | ForEach-Object {
+        $_.Replace('ffb_ui_gates_fixture.cpp', 'input_calibration_fixture.cpp').Replace('ffb-ui-gates-fixture.exe', 'input-calibration-fixture.exe')
+    }
+    $inputArguments += 'dinput8.lib dxguid.lib'
+    @('@echo off', ('call "' + $environment + '" >nul'), 'if errorlevel 1 exit /b %errorlevel%', ('cl ' + ($inputArguments -join ' ')), 'exit /b %errorlevel%') | Set-Content -LiteralPath $runner -Encoding ascii
+    & $runner
+    if ($LASTEXITCODE -ne 0) { throw 'Input calibration fixture compilation failed.' }
+    & (Join-Path $out 'input-calibration-fixture.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Input calibration fixture failed.' }
 } finally { Pop-Location }

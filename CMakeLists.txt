@@ -322,6 +322,7 @@ set(outrun2006tweaks_SOURCES
 	"src/overlay/wheel_settings.cpp"
 	"src/overlay/wheel_settings.hpp"
 	"src/plugin.hpp"
+	"src/axis_calibration.hpp"
 	"src/resource.h"
 	"src/telemetry.hpp"
 	"src/wheel_settings_policy.hpp"

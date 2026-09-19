@@ -4,6 +4,8 @@ Guidance: toolkit commit **a84bebab5ec2abdcd5140b9c63c139ccff86a7d3**,
 UX-1 including UX-01-S, UX-04-H, UX-05-D and UX-06-K. Starting source:
 `220f660` (`master`, clean). Work branch: `codex/ux-simple-settings-2026-09-16`.
 This is a **built partial adoption**, not completed UX reconciliation.
+Visual reference: toolkit `95cbd89`, `docs/reference/wheel-settings.html`.
+Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
 
 ## Implemented
 
@@ -15,14 +17,23 @@ This is a **built partial adoption**, not completed UX reconciliation.
   reset a tune, change an input backend, acquire a wheel or enable a stream.
   A hidden custom tune is summarized with **Review in Advanced**.
 - Simple has wheel/axis status, direct primary-wheel axis/button Bind with a
-  provisional candidate and Save binding/Cancel, inversion/deadzone, grouped
+  provisional candidate and Save/Cancel, guided axis calibration, grouped
   driving/menu buttons, FFB Off/On/device/Strength/status, native Change camera
   binding, telemetry Off/On/destination/status, Help and UI scale.
-- A successful Steering binding saves the actual primary device GUID in the
+- A successful axis calibration saves the actual primary device GUID in the
   same atomic settings write. Capture never changes the old assignment before
   save; cancel, timeout, focus loss, disconnect and failed save retain it.
   Held buttons must be released before Save binding is allowed. Capture disables
   view/navigation/close, and Esc cancels first. Main buttons are one-based.
+- Bind/Calibrate captures wheel center or pedal rest, full travel, and a device
+  preview with inversion/deadzone. Multiple moving axes are rejected. Finite,
+  ordered endpoints with minimum usable travel are required. No axis/identity/
+  endpoint changes become effective until the atomic Save calibration succeeds.
+  Cancellation or a failed save cannot be committed by a later Stop/view edit.
+  Legacy transforms remain unchanged until the explicit calibrated flag is saved.
+- F6 uses a scoped Segoe UI font (system font, not redistributed), neutral/cyan
+  palette, left navigation and fixed top controls. The upstream F11 font/style
+  remains separate. Long device names wrap; scale is adjustable from Help.
 - Advanced adds legacy force gains, noise floor, invert force, diagnostic log,
   sensitivity, raw axes, telemetry signal caveats and local paths. Startup-only
   settings are labeled read-only. Dormant wheel-torque calibration is not offered
@@ -48,6 +59,10 @@ This is a **built partial adoption**, not completed UX reconciliation.
   on failure. The first edit backs up the previous override. Save failure remains
   visible across pages, with retry for committed edits. Sliders defer disk writes
   until release; view/close/F6 flush pending edits without resetting values.
+- Packaged Install.bat recognizes existing OutRun2006Tweaks, records its version
+  and hash, backs up runtime/settings, verifies package and installed hashes,
+  and retains all existing INIs/bindings/profiles. Restore returns the previous
+  runtime and retains settings. Unknown proxies require deliberate inspection.
 
 ## Verification and its limits
 
@@ -65,30 +80,45 @@ without a native window, game, DirectInput acquisition or real output:
   A view round trip preserves the same tune and Off/telemetry state.
 - Provisional button capture detects a candidate without changing the old
   binding; disconnect cancels it. Stop persists Off.
+- Guided calibration verifies atomic save/identity, invalid endpoint rejection,
+  locked-file failure, disconnect/cancel and no delayed partial commit. The actual
+  input-reader fixture covers 144 legacy opt-out cases plus centered, released,
+  full, partial, inverted, clamped, cleared and invalid calibrated input.
 - The production FFB update/selection functions run against fake ABI callbacks:
   six inactive gates zero both effect types before any initialization; switching
   releases before another open; unbound steering follow is refused; an explicit
   override wins over the steering GUID; driver refusal does not try another
   actuator; a zero game HWND is rejected before native initialization.
 
-`tools/Check-IniCoverage.ps1`: **Pass**, 148 parsed settings / 176 template keys,
+`tools/Check-IniCoverage.ps1`: **Pass**, 162 parsed settings / 190 template keys,
 including the 28 existing documented dead CDTracks entries. `git diff --check`:
 **Pass**. Component hashes match the verified official package, and model/profile/
 encoder/proxy files remain identical to the v0.8.0 baseline. A routine toolkit
 sync is rejected before changes while the native override is active.
 
-These are source/build/offline-fixture results. **No game was launched, no DLL
-deployed, no screenshot captured in game, no real device bound, and no physical
-torque tested.** Text logs at two viewport sizes do not establish readability,
-focus navigation, game coexistence or high-DPI acceptance. Candidate artifacts
-are local and not a release. The installed game is unchanged.
+`tools/tests/Test-WheelInstall.ps1`: **Pass**, synthetic x86 executable; package
+validation, unknown-proxy refusal, existing config/binding retention, seeded
+defaults, backup, restore, locked-second-DLL rollback and tamper refusal.
+
+Production ImGui draw data and the actual font atlas were rasterized offline:
+`build/wheel-settings-fixture/run-1de7275af5234449ada49abd835d1c2f` contains
+29 frames, text logs and `render-manifest.json` with per-frame viewport, scale,
+window bounds, content extent and scroll maxima. The coordinator reviewed FFB
+at 720p/4K; calibration and long-device frames were inspected locally. Bounds
+checks keep the fixed window/navigation inside the viewport. These demonstrate
+renderer-level layout, not game/GPU/high-DPI or keyboard-navigation acceptance.
+
+**No game was launched, no screenshot captured in game, no real device bound,
+and no physical torque tested.** Deployment is recorded separately with exact
+package/installed hashes and retention checks. Candidate artifacts are local,
+not a public release.
 
 ## Required remaining work
 
 | Requirement | Status / concrete next work |
 |---|---|
 | UX-01-S complete first setup in Simple | **Partial**. Enable wheel controls is saved for next launch because input hooks are startup-only. No runtime backend switch. Device chooser/calibration and restart-free onboarding remain work. |
-| Guided rest/full/center calibration | **Gap**. Capture currently binds an axis with its existing fixed device range; it does not capture endpoints. Add transactional normalized calibration before claiming first-drive completion. |
+| Guided rest/full/center calibration | **Implemented for primary device, live Not tested**. Transactional identity/axis/endpoints, ambiguity rejection, inversion/deadzone and finite range checks pass offline. |
 | Independent pedals/shifter/button box | **Gap**. Primary-wheel binding works in source. Additional slots remain startup INI settings; separate pedal devices are unsupported. |
 | Handbrake axis/button | **Not available in the adapter**. Its known SwitchId/ADChannel mapping has no handbrake action. This is not proof the game cannot support one; investigate the game route before registering a permanent exception. |
 | Full ordinary binding set | **Partial**. Primary driving/menu bindings are available. Settings/Stop hotkeys, remaining native actions, keyboard binding and context-aware conflict checks need unification. Existing SDL route still links its legacy bindings modal. |
@@ -96,8 +126,8 @@ are local and not a release. The installed game is unchanged.
 | FFB defaults / physical feel | **Gap / Not tested**. Fresh remains Off and steering source/scale is unverified. Validate it before changing safe defaults; do not retune by guessing. |
 | Bonnet/Bumper/native camera ownership | **Gap**. Mod mounts, native-cycle integration, numpad pose controls, adjustment rebinding and ownership gate have not been implemented. Stock Change camera binding is available. |
 | Telemetry destination/recording | **Partial**. Existing fixed receiver path is surfaced. Editable atomic connection settings, presets validated with receivers and bounded recording/support collection remain work. |
-| Installer/setup | **Gap**. Still copy the DLL pair; no standard Install.bat/backup/rollback/uninstall flow yet. Never overwrite an owner's existing INIs during manual update. |
-| 720p/4K keyboard/mouse UI walk | **Not tested**. Offline ImGui rendering covers content selection, not actual appearance/navigation. F11 upstream tools remain unreconciled. |
+| Installer/setup | **Implemented and fixture-tested**. Install.bat, recognized proxy/version/hash, timestamped backup, config retention, runtime restore and failure rollback. See deployment receipt for installed evidence. |
+| 720p/4K keyboard/mouse UI walk | **Layout partially verified**. Production draw-data PNGs cover visual appearance/bounds, not live input/focus/DPI. F11 upstream tools remain unreconciled. |
 | Lifecycle while a car is moving | **Not tested**. Existing overlay suspends game ReadIO; verify neutralization/held-input release and pause behavior during capture and close. |
 
 ## Placement inventory
@@ -130,7 +160,7 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | Controls/ImpulseVibrationLeftMultiplier | Advanced | INI only (unreconciled) | 0.20 |
 | Controls/ImpulseVibrationRightMultiplier | Advanced | INI only (unreconciled) | 0.20 |
 | DirectInput/UseDirectInputRemap | Simple on demand | Setup saves wheel route for next launch | false |
-| DirectInput/DeviceGuid | Simple | Saved by Steering Bind; chooser gap | auto |
+| DirectInput/DeviceGuid | Simple | Saved atomically by axis calibration; chooser gap | auto |
 | DirectInput/SteeringAxis | Simple | F6 live / saved | 0 / axis index (INI 0-based, UI 1-based) |
 | DirectInput/SteeringInvert | Simple | F6 live / saved | false |
 | DirectInput/SteeringSensitivity | Advanced | F6 live / saved | 1.0 |
@@ -138,12 +168,26 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | DirectInput/AccelerationInvert | Simple | F6 live / saved | false |
 | DirectInput/BrakeAxis | Simple | F6 live / saved | 2 / axis index (INI 0-based, UI 1-based) |
 | DirectInput/BrakeInvert | Simple | F6 live / saved | false |
+| DirectInput/AccelerationDeadzone | Simple on demand | F6 calibration preview / atomic Save | 0 / ratio (UI %) |
+| DirectInput/BrakeDeadzone | Simple on demand | F6 calibration preview / atomic Save | 0 / ratio (UI %) |
+| DirectInput.Calibration/SteeringEnabled | Simple on demand | F6 Bind/Calibrate / atomic Save | false |
+| DirectInput.Calibration/SteeringMinimum | Simple on demand | Captured endpoint / atomic Save | 0 / normalized device units |
+| DirectInput.Calibration/SteeringCenter | Simple on demand | Captured center / atomic Save | 32767.5 / normalized device units |
+| DirectInput.Calibration/SteeringMaximum | Simple on demand | Captured endpoint / atomic Save | 65535 / normalized device units |
+| DirectInput.Calibration/ThrottleEnabled | Simple on demand | F6 Bind/Calibrate / atomic Save | false |
+| DirectInput.Calibration/ThrottleMinimum | Simple on demand | Captured endpoint / atomic Save | 0 / normalized device units |
+| DirectInput.Calibration/ThrottleCenter | Simple on demand | Derived midpoint / atomic Save | 32767.5 / normalized device units |
+| DirectInput.Calibration/ThrottleMaximum | Simple on demand | Captured endpoint / atomic Save | 65535 / normalized device units |
+| DirectInput.Calibration/BrakeEnabled | Simple on demand | F6 Bind/Calibrate / atomic Save | false |
+| DirectInput.Calibration/BrakeMinimum | Simple on demand | Captured endpoint / atomic Save | 0 / normalized device units |
+| DirectInput.Calibration/BrakeCenter | Simple on demand | Derived midpoint / atomic Save | 32767.5 / normalized device units |
+| DirectInput.Calibration/BrakeMaximum | Simple on demand | Captured endpoint / atomic Save | 65535 / normalized device units |
 | DirectInput/ButtonA | Simple on demand | F6 direct Bind/Clear | 0 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonB | Simple on demand | F6 direct Bind/Clear | 1 / button index (INI 0-based, UI 1-based) |
-| DirectInput/ButtonX | Simple on demand | INI only (unreconciled) | 2 / button index (INI 0-based, UI 1-based) |
-| DirectInput/ButtonY | Simple on demand | INI only (unreconciled) | 3 / button index (INI 0-based, UI 1-based) |
+| DirectInput/ButtonX | Simple on demand | F6 direct Bind/Clear | 2 / button index (INI 0-based, UI 1-based) |
+| DirectInput/ButtonY | Simple on demand | F6 direct Bind/Clear | 3 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonStart | Simple on demand | F6 direct Bind/Clear | 7 / button index (INI 0-based, UI 1-based) |
-| DirectInput/ButtonBack | Simple on demand | INI only (unreconciled) | 6 / button index (INI 0-based, UI 1-based) |
+| DirectInput/ButtonBack | Simple on demand | F6 direct Bind/Clear | 6 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonGearUp | Simple on demand | F6 direct Bind/Clear | 4 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonGearDown | Simple on demand | F6 direct Bind/Clear | 5 / button index (INI 0-based, UI 1-based) |
 | DirectInput/ButtonChangeView | Simple on demand | F6 direct Bind/Clear | 8 / button index (INI 0-based, UI 1-based) |

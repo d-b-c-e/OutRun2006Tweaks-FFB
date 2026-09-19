@@ -21,6 +21,7 @@ extern bool overlay_visible;
 
 namespace WheelSettingsUi
 {
+static float UiScale() { return ImGui::GetIO().FontGlobalScale / 1.5f; }
 enum class Page { Setup, Controls, Ffb, Cameras, Telemetry, Help };
 static Page page = Page::Setup;
 static bool saveFailed = false;
@@ -108,6 +109,11 @@ struct Capture
     int candidate = -1;
     double deadline = 0;
     DInputRemap::UiSnapshot initial;
+    int role = -1, fixedAxis = -1, stage = 0;
+    WheelInput::Travel travel;
+    WheelInput::Calibration calibration;
+    bool invert = false;
+    float deadzone = 0;
 };
 static Capture capture;
 bool IsCapturing() { return capture.destination != nullptr; }
@@ -116,7 +122,7 @@ static bool Choice(const char* label, bool& value)
 {
     ImGui::PushID(label);
     ImGui::Text("%s:", label);
-    ImGui::SameLine(180);
+    ImGui::SameLine(180 * UiScale());
     bool changed = false;
     if (ImGui::RadioButton("Off", !value) && value) { value = false; changed = true; }
     ImGui::SameLine();
@@ -129,7 +135,7 @@ static void Percent(const char* label, float& value, const char* section, const 
 {
     ImGui::PushID(label);
     ImGui::TextUnformatted(label);
-    ImGui::SameLine(180);
+    ImGui::SameLine(180 * UiScale());
     ImGui::SetNextItemWidth(-1);
     float percent = value * 100.0f;
     if (ImGui::SliderFloat("##value", &percent, 0, maximum * 100.0f, "%.0f%%"))
@@ -146,11 +152,133 @@ static void BeginCapture(int& value, const char* label, const char* key, bool ax
     capture = { &value, key, label, axis, -1, ImGui::GetTime() + 20.0, input };
 }
 
+static bool& AxisInvert(int role)
+{
+    return role == 0 ? Settings::DIRemapSteeringInvert : role == 1 ? Settings::DIRemapAccelInvert : Settings::DIRemapBrakeInvert;
+}
+static float& AxisDeadzone(int role)
+{
+    return role == 0 ? Settings::SteeringDeadZone : role == 1 ? Settings::DIRemapAccelDeadzone : Settings::DIRemapBrakeDeadzone;
+}
+static const char* AxisPrefix(int role) { return role == 0 ? "Steering" : role == 1 ? "Throttle" : "Brake"; }
+
+static void BeginAxisCalibration(int& value, const char* key, int role, bool existing, const DInputRemap::UiSnapshot& input)
+{
+    BeginCapture(value, AxisPrefix(role), key, true, input);
+    capture.role = role;
+    capture.fixedAxis = existing ? value : -1;
+    capture.deadline = ImGui::GetTime() + 90;
+    capture.deadzone = AxisDeadzone(role);
+    capture.invert = AxisInvert(role);
+}
+
+static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
+{
+    if (capture.role < 0 || capture.stage != 2 || capture.candidate < 0 || capture.candidate > 7 ||
+        !input.connected || input.guid.empty() || input.guid != capture.initial.guid ||
+        !capture.calibration.enabled || !WheelInput::Valid(capture.calibration, capture.role == 0) || !std::isfinite(capture.deadzone) ||
+        capture.deadzone < 0 || capture.deadzone >= 1) return false;
+    const auto previousPending = pending;
+    const auto prefix = std::string(AxisPrefix(capture.role));
+    Queue("DirectInput", capture.key, capture.candidate);
+    Queue("DirectInput.Calibration", (prefix + "Enabled").c_str(), true);
+    Queue("DirectInput.Calibration", (prefix + "Minimum").c_str(), capture.calibration.minimum);
+    Queue("DirectInput.Calibration", (prefix + "Center").c_str(), capture.calibration.center);
+    Queue("DirectInput.Calibration", (prefix + "Maximum").c_str(), capture.calibration.maximum);
+    const char* invertKey = capture.role == 0 ? "SteeringInvert" : capture.role == 1 ? "AccelerationInvert" : "BrakeInvert";
+    const char* deadzoneKey = capture.role == 0 ? "SteeringDeadZone" : capture.role == 1 ? "AccelerationDeadzone" : "BrakeDeadzone";
+    Queue("DirectInput", invertKey, capture.invert);
+    Queue(capture.role == 0 ? "Controls" : "DirectInput", deadzoneKey, capture.deadzone);
+    Queue("DirectInput", "DeviceGuid", input.guid);
+    if (!SavePending())
+    {
+        // Never flush a provisional calibration later through Stop/view/close.
+        pending = previousPending;
+        return false;
+    }
+    *capture.destination = capture.candidate;
+    Settings::DIRemapCalibration[capture.role] = capture.calibration;
+    AxisInvert(capture.role) = capture.invert;
+    AxisDeadzone(capture.role) = capture.deadzone;
+    {
+        const bool identityChanged = Settings::DIRemapDeviceGuid != input.guid;
+        Settings::DIRemapDeviceGuid = input.guid;
+        if (identityChanged && Settings::FFBDeviceGuid == "steering") FFB::SelectionChanged();
+    }
+    return true;
+}
+
+static void AxisCalibrationPanel(const DInputRemap::UiSnapshot& input)
+{
+    const bool steering = capture.role == 0;
+    ImGui::Text("Calibrate %s", capture.label);
+    ImGui::TextWrapped("Wheel: %s", input.name.c_str());
+    ImGui::TextWrapped("Your current binding remains unchanged until Save calibration.");
+    if (capture.stage == 0)
+    {
+        ImGui::TextWrapped(steering ? "Center the wheel and leave other controls still." : "Release this pedal fully and leave other controls still.");
+        if (ImGui::Button(steering ? "Capture center" : "Capture rest"))
+        {
+            capture.travel.Begin(input.axes);
+            capture.stage = 1;
+        }
+    }
+    else if (capture.stage == 1)
+    {
+        ImGui::TextWrapped(steering ? "Turn fully left, then fully right, then return to center." : "Press this pedal fully, then release it.");
+        capture.travel.Observe(input.axes);
+        const int candidate = capture.travel.Candidate();
+        bool valid = candidate >= 0 && (capture.fixedAxis < 0 || candidate == capture.fixedAxis);
+        if (valid)
+        {
+            capture.calibration = capture.travel.Endpoints(candidate, steering);
+            valid = WheelInput::Valid(capture.calibration, steering);
+            if (!steering)
+            {
+                const float rest = capture.travel.rest[candidate];
+                const float span = capture.calibration.maximum - capture.calibration.minimum;
+                valid &= std::min(std::abs(rest - capture.calibration.minimum), std::abs(rest - capture.calibration.maximum)) <= span * .05f;
+                capture.invert = rest > capture.calibration.center;
+            }
+        }
+        if (candidate == -2) ImGui::TextWrapped("More than one axis moved. Choose Start again and move only the requested control.");
+        else if (candidate < 0) ImGui::TextUnformatted("Waiting for enough travel...");
+        else if (capture.fixedAxis >= 0 && candidate != capture.fixedAxis)
+            ImGui::TextWrapped("A different axis moved. Use the assigned control, or Cancel and choose Bind to replace it.");
+        else if (!valid) ImGui::TextWrapped("Capture both steering limits around center, or a released pedal and its full travel.");
+        else ImGui::Text("Detected: Axis %d", candidate + 1);
+        ImGui::BeginDisabled(!valid);
+        if (ImGui::Button("Preview calibration")) { capture.candidate = candidate; capture.stage = 2; }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Start again")) capture.stage = 0;
+    }
+    else
+    {
+        const float value = WheelInput::Normalize(static_cast<float>(input.axes[capture.candidate]), capture.calibration,
+            steering, capture.invert, capture.deadzone);
+        ImGui::Text("Device input: %+.0f%%", value * 100);
+        ImGui::ProgressBar(steering ? (value + 1) / 2 : value, ImVec2(-1, 0), "");
+        Choice("Invert", capture.invert);
+        float percent = capture.deadzone * 100;
+        ImGui::TextUnformatted("Deadzone");
+        ImGui::SameLine(180 * UiScale());
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::SliderFloat("##calibration-deadzone", &percent, 0, 95, "%.0f%%")) capture.deadzone = percent / 100;
+        ImGui::TextWrapped("%s", steering ? "Check center is 0%, left is -100% and right is +100%." : "Check released is 0%, partial travel is smooth and fully pressed is 100%.");
+        if (ImGui::Button("Save calibration") && SaveAxisCalibration(input)) { capture = {}; return; }
+        ImGui::SameLine();
+        if (ImGui::Button("Start again")) capture.stage = 0;
+    }
+    if (ImGui::Button("Cancel")) capture = {};
+}
+
 static void CapturePanel(const DInputRemap::UiSnapshot& input)
 {
     if (!IsCapturing()) return;
-    if (!input.connected || GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
+    if (!input.connected || input.guid != capture.initial.guid || GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
         ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { capture = {}; return; }
+    if (capture.axis && capture.role >= 0) { AxisCalibrationPanel(input); return; }
     ImGui::Separator();
     ImGui::Text("Bind %s", capture.label);
     ImGui::TextWrapped(capture.axis ? "Move only this axis through its travel, then choose Save binding. Your previous binding stays active until saved."
@@ -204,22 +332,35 @@ static void CapturePanel(const DInputRemap::UiSnapshot& input)
     }
 }
 
-static void AxisRow(const char* label, int& axis, bool& invert, const char* key, const char* invertKey,
+static void AxisRow(int role, const char* label, int& axis, bool& invert, const char* key, const char* invertKey,
     float value, const DInputRemap::UiSnapshot& input)
 {
     ImGui::PushID(label);
-    ImGui::Text("%s - Axis %d", label, axis + 1);
+    if (axis >= 0) ImGui::Text("%s - Axis %d", label, axis + 1);
+    else ImGui::Text("%s - Not bound", label);
     ImGui::SameLine();
     ImGui::BeginDisabled(!input.connected || IsCapturing());
-    if (ImGui::Button("Bind")) BeginCapture(axis, label, key, true, input);
+    if (ImGui::Button("Bind")) BeginAxisCalibration(axis, key, role, false, input);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(axis < 0);
+    if (ImGui::Button("Calibrate")) BeginAxisCalibration(axis, key, role, true, input);
+    ImGui::SameLine();
+    if (ImGui::Button("Clear"))
+    {
+        if (Save("DirectInput", key, -1)) axis = -1;
+        else pending.erase({"DirectInput", key});
+    }
+    ImGui::EndDisabled();
     ImGui::EndDisabled();
     if (input.connected)
     {
         char text[40];
         sprintf_s(text, "%+.0f%%", value * 100.0f);
-        ImGui::ProgressBar(std::clamp(value, 0.0f, 1.0f), ImVec2(-1, 0), text);
+        ImGui::ProgressBar(role == 0 ? (value + 1) / 2 : std::clamp(value, 0.0f, 1.0f), ImVec2(-1, 0), text);
     }
     else ImGui::TextDisabled("Device input unavailable");
+    if (!Settings::DIRemapCalibration[role].enabled) ImGui::TextDisabled("Using the existing full device range - Calibrate to set endpoints");
+    else if (!WheelInput::Valid(Settings::DIRemapCalibration[role], role == 0)) ImGui::TextWrapped("Saved calibration is invalid. Calibrate this axis again.");
     if (Choice("Invert", invert)) Save("DirectInput", invertKey, invert);
     ImGui::PopID();
 }
@@ -228,9 +369,9 @@ static void ButtonRow(const char* label, int& button, const char* key, const DIn
 {
     ImGui::PushID(key);
     ImGui::TextUnformatted(label);
-    ImGui::SameLine(180);
+    ImGui::SameLine(180 * UiScale());
     if (button >= 0) ImGui::Text("Button %d", button + 1); else ImGui::TextDisabled("Not bound");
-    ImGui::SameLine(310);
+    ImGui::SameLine(310 * UiScale());
     ImGui::BeginDisabled(!input.connected || IsCapturing());
     if (ImGui::Button("Bind")) BeginCapture(button, label, key, false, input);
     ImGui::EndDisabled();
@@ -280,7 +421,7 @@ static void DevicePicker()
     if (!listed) { FFB::RefreshUiDevices(); listed = true; }
     const auto label = FFB::UiDeviceLabel();
     ImGui::TextUnformatted("FFB device");
-    ImGui::SameLine(180);
+    ImGui::SameLine(180 * UiScale());
     ImGui::SetNextItemWidth(-1);
     if (ImGui::BeginCombo("##ffb-device", label.c_str()))
     {
@@ -324,7 +465,7 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
             ImGui::TextWrapped("Wheel input unavailable. Check its connection, then restart the game. Automatic device replacement is not supported by this version.");
         else
         {
-            ImGui::Text("Wheel: %s", input.name.c_str());
+            ImGui::TextWrapped("Wheel: %s", input.name.c_str());
             ImGui::Text("Steering: %+.0f%%   Throttle: %.0f%%   Brake: %.0f%%", input.steering * 100, input.throttle * 100, input.brake * 100);
             ImGui::TextWrapped("Next: check each axis and bind your driving buttons in Controls.");
         }
@@ -339,13 +480,13 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
             ImGui::TextWrapped("The current controller input route uses the existing bindings dialog.");
             if (ImGui::Button("Open controller bindings")) Overlay::RequestBindingDialog = true;
         }
-        ImGui::Text("Wheel: %s", input.connected ? input.name.c_str() : "Unavailable");
+        ImGui::TextWrapped("Wheel: %s", input.connected ? input.name.c_str() : "Unavailable");
         ImGui::BeginDisabled(IsCapturing());
-        AxisRow("Steering", Settings::DIRemapSteeringAxis, Settings::DIRemapSteeringInvert, "SteeringAxis", "SteeringInvert", input.steering, input);
-        AxisRow("Throttle", Settings::DIRemapAccelAxis, Settings::DIRemapAccelInvert, "AccelerationAxis", "AccelerationInvert", input.throttle, input);
-        AxisRow("Brake", Settings::DIRemapBrakeAxis, Settings::DIRemapBrakeInvert, "BrakeAxis", "BrakeInvert", input.brake, input);
+        AxisRow(0, "Steering", Settings::DIRemapSteeringAxis, Settings::DIRemapSteeringInvert, "SteeringAxis", "SteeringInvert", input.steering, input);
+        AxisRow(1, "Throttle", Settings::DIRemapAccelAxis, Settings::DIRemapAccelInvert, "AccelerationAxis", "AccelerationInvert", input.throttle, input);
+        AxisRow(2, "Brake", Settings::DIRemapBrakeAxis, Settings::DIRemapBrakeInvert, "BrakeAxis", "BrakeInvert", input.brake, input);
         Percent("Steering deadzone", Settings::SteeringDeadZone, "Controls", "SteeringDeadZone", 0.95f);
-        ImGui::TextWrapped("Binding uses the device's full range. Guided endpoint calibration and separate pedal-device binding are not implemented yet.");
+        ImGui::TextWrapped("Values here are game input. Calibration previews show device input. Separate pedal-device binding is not implemented yet.");
         ImGui::TextDisabled("Handbrake: no handbrake action is exposed by this game adapter.");
         if (ImGui::CollapsingHeader("Driving buttons"))
         {
@@ -358,6 +499,9 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
             ButtonRow("Confirm", Settings::DIRemapButtonA, "ButtonA", input);
             ButtonRow("Back", Settings::DIRemapButtonB, "ButtonB", input);
             ButtonRow("Start / pause", Settings::DIRemapButtonStart, "ButtonStart", input);
+            ButtonRow("Select", Settings::DIRemapButtonBack, "ButtonBack", input);
+            ButtonRow("X action", Settings::DIRemapButtonX, "ButtonX", input);
+            ButtonRow("Y action", Settings::DIRemapButtonY, "ButtonY", input);
             ButtonRow("Menu up", Settings::DIRemapButtonSelUp, "ButtonSelUp", input);
             ButtonRow("Menu down", Settings::DIRemapButtonSelDown, "ButtonSelDown", input);
             ButtonRow("Menu left", Settings::DIRemapButtonSelLeft, "ButtonSelLeft", input);
@@ -483,12 +627,30 @@ public:
             return;
         }
         const auto screen = ImGui::GetIO().DisplaySize;
-        ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f, screen.x - 32), std::min(760.0f, screen.y - 32)), ImGuiCond_FirstUseEver);
+        const float scale = UiScale();
+        static float lastScale = 0;
+        ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f * scale, screen.x - 32), std::min(760.0f * scale, screen.y - 32)),
+            scale == lastScale ? ImGuiCond_FirstUseEver : ImGuiCond_Always);
+        lastScale = scale;
         ImGui::SetNextWindowPos(ImVec2(screen.x / 2, screen.y / 2), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 16));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+        if (Overlay::WheelSettingsFont) ImGui::PushFont(Overlay::WheelSettingsFont);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.106f, .125f, .149f, 1));
+        ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(.14f, .169f, .20f, 1));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(.14f, .169f, .20f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.14f, .169f, .20f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.20f, .25f, .29f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.16f, .24f, .29f, 1));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(.54f, .847f, .933f, 1));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(.54f, .847f, .933f, 1));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(.54f, .847f, .933f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.94f, .95f, .97f, 1));
+        ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(.714f, .757f, .807f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(.27f, .314f, .369f, 1));
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(.54f, .847f, .933f, 1));
         if (ImGui::Begin("Wheel settings", nullptr, ImGuiWindowFlags_NoCollapse))
         {
             bool advanced = WheelSettingsPolicy::IsAdvanced(Settings::WheelSettingsView);
@@ -544,13 +706,13 @@ public:
             }
             static const char* pages[] = { "Setup", "Controls", "FFB", "Cameras", "Telemetry", "Help" };
             ImGui::Separator();
-            ImGui::BeginChild("Navigation", ImVec2(136, 0), false);
+            ImGui::BeginChild("Navigation", ImVec2(136 * scale, 0), false);
             ImGui::BeginDisabled(IsCapturing());
             for (int i = 0; i < 6; ++i)
             {
                 const bool selected = page == static_cast<Page>(i);
                 if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-                if (ImGui::Button(pages[i], ImVec2(-1, 36))) page = static_cast<Page>(i);
+                if (ImGui::Button(pages[i], ImVec2(-1, 36 * scale))) page = static_cast<Page>(i);
                 if (selected) ImGui::PopStyleColor();
             }
             ImGui::EndDisabled();
@@ -562,6 +724,8 @@ public:
             if (!ImGui::IsAnyItemActive() && !saveFailed && !pending.empty()) SavePending();
         }
         ImGui::End();
+        ImGui::PopStyleColor(13);
+        if (Overlay::WheelSettingsFont) ImGui::PopFont();
         ImGui::PopStyleVar(3);
     }
     static WheelSettingsWindow instance;

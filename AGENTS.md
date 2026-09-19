@@ -1,0 +1,33 @@
+# OutRun2006Tweaks-FFB working notes
+
+Read [CLAUDE.md](CLAUDE.md) for build architecture and known force-signal issues,
+then [the UX adoption inventory](docs/UX-OVERNIGHT-2026-09-16.md) and the latest
+deployment receipt under `docs/`. Offline fixtures and deployment are not proof
+of live controls, physical force or camera acceptance.
+
+- `src/overlay/wheel_settings.cpp`: the production F6 Simple/Advanced UI and
+  atomic user-INI saves. One shared Settings store; no backend change on view
+  switches. Stop FFB/F8 persists Off.
+- `src/axis_calibration.hpp`: finite/range validation and opt-in normalized
+  axes. Existing uncalibrated transforms must remain unchanged. Binding, identity
+  and calibration save together; failed/cancelled captures never flush later.
+- `src/hooks_inputremap.cpp`: game input adaptation. Do not switch the SDL and
+  DirectInput backends at runtime. Device and camera capability gaps are listed
+  honestly in the inventory; do not invent a game handbrake route.
+- `src/hooks_dinputffb.cpp`: game force signals and output gates. Preserve owner
+  tunes. Native output is a reviewed **v0.13.0 override** on the **v0.8.0 model/
+  profile/encoder baseline**. Read `lib/toolkit/NATIVE-PROVENANCE.json` before sync.
+- `tools/tests/Test-WheelSettings.ps1`: real ImGui/memory-only input/fake ABI
+  tests. `render_imgui_fixture.py <run-folder>` renders actual ImGui draw data
+  with NumPy/Pillow. It does not launch a game or acquire a wheel.
+- `tools/tests/Test-WheelInstall.ps1`: synthetic-executable installer/restore,
+  retention and rollback tests. `tools/Check-IniCoverage.ps1` checks every key.
+- `tools/Package-WheelSettings.ps1` packages the existing x86 Release build;
+  package `Install.bat` calls `Install.ps1`. Deploy only while the game is closed,
+  verify hashes and preserve owner settings. Never kill a game for deployment.
+
+Build: `cmake --build build --config Release --target outrun2006tweaks`.
+On this machine CMake is under VS2022 BuildTools `Common7/IDE/CommonExtensions/
+Microsoft/CMake/CMake/bin`. Commit/push changes with `[skip ci]` when hosted CI
+is not requested. Live game/device tests require the coordinator's serial slot;
+no unattended nonzero force.

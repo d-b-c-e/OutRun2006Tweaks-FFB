@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include "axis_calibration.hpp"
 
 #include "game.hpp"
 
@@ -152,6 +153,9 @@ namespace Settings
 	inline bool DIRemapAccelInvert = false;
 	inline int DIRemapBrakeAxis = 2;
 	inline bool DIRemapBrakeInvert = false;
+	inline WheelInput::Calibration DIRemapCalibration[3];
+	inline float DIRemapAccelDeadzone = 0;
+	inline float DIRemapBrakeDeadzone = 0;
 	inline int DIRemapButtonA = 0;
 	inline int DIRemapButtonB = 1;
 	inline int DIRemapButtonX = 2;
