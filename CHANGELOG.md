@@ -2,6 +2,9 @@
 
 ## Unreleased — wheel settings candidate, 2026-09-19
 
+- Fixed Windows PowerShell 5.1 player installation when no package directory is
+  supplied. The batch launcher now preserves failures after its final pause;
+  installer-only packages identify their unchanged runtime source separately.
 - Added Simple shifter/button-box device capture, Sequential/H-pattern mode,
   Settings/Stop rebinding, same-context conflicts and retryable Clear.
 - Added automatic viewport scaling for readable default 4K settings.

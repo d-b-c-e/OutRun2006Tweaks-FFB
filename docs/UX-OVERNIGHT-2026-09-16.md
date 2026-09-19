@@ -461,3 +461,22 @@ keyboard sampling or camera capabilities. Both runs had vibration zero and no
 WheelFfb DLL in the game search location, exited normally, and restored all
 owner settings/runtime/absence/save state at 21:13:42 UTC. Stock player views
 and real textbox isolation remain unverified; no speculative mount was added.
+
+## Installer-only player-route correction
+
+The stage-6 package's no-argument player route failed in real Windows PowerShell
+5.1: `$PSScriptRoot` was empty while evaluating the CmdletBinding parameter
+default. Earlier fixture/deployment calls supplied PackageDirectory explicitly,
+so they did not exercise this route. It is now resolved in the script body,
+while explicit overrides remain supported. The shipped batch keeps PowerShell's
+exit status through its pause, including package-hash failures.
+
+Six real child-process player workflows pass: omitted package path, restore,
+the actual batch's prompted game-folder input, explicit package override,
+second-DLL locked-file rollback, and actual-batch corrupt-package refusal.
+All use unrelated working directories and spaced paths. The original synthetic
+installer suite also passes. No fixture executes its synthetic EXE, loads a
+runtime DLL or accesses a device. Installer-only packaging copies the exact
+frozen stage-6 runtime and records runtime and installer commits separately;
+previous packages remain immutable. The local installed runtime already matches
+those DLLs and does not need a replacement merely for this installer fix.

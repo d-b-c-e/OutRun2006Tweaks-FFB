@@ -59,7 +59,9 @@ keeps your current settings. It refuses to overwrite runtime files changed
 since that install. Backups live in `.wheel-settings-backups` in the game folder.
 Keep them until you are satisfied with the update. No logs are uploaded.
 
-The package manifest identifies the exact source and DLL hashes. The native
+The package manifest identifies the exact runtime source, installer source and
+DLL hashes separately. An installer-only update can contain the same verified
+DLLs; its manifest records both versions. The native
 output DLL/header use official toolkit v0.13.0/native 0.6.0 for strict device
 selection; model/profile/encoder files retain the v0.8.0 baseline. Component
 provenance is in `provenance/`.

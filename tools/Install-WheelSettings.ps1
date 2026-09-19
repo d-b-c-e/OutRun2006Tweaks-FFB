@@ -9,12 +9,15 @@ failure. Restore changes runtime files only, retaining subsequent settings.
 [CmdletBinding()]
 param(
     [string]$GameDirectory,
-    [string]$PackageDirectory = $PSScriptRoot,
+    [string]$PackageDirectory,
     [ValidateSet('Install','Restore')][string]$Action = 'Install',
     [string]$BackupDirectory,
     [switch]$AllowUnknownProxy
 )
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 can evaluate PSScriptRoot as empty in a CmdletBinding
+# parameter default under -File. Resolve it here, after script scope exists.
+if ([string]::IsNullOrWhiteSpace($PackageDirectory)) { $PackageDirectory = $PSScriptRoot }
 if (-not $GameDirectory) { $GameDirectory = (Read-Host 'Folder containing OR2006C2C.EXE').Trim('"') }
 $game = (Resolve-Path -LiteralPath $GameDirectory).Path
 $exe = Join-Path $game 'OR2006C2C.EXE'
@@ -106,7 +109,7 @@ foreach ($name in $runtime) {
 $settingsBackup = Join-Path $backup 'settings'
 New-Item -ItemType Directory -Path $settingsBackup | Out-Null
 foreach ($file in $preserved) { Copy-Item -LiteralPath (Join-Path $game $file.name) -Destination (Join-Path $settingsBackup $file.name) }
-$receipt = [ordered]@{schemaVersion=1; gameDirectory=$game; packageSource=$manifest.sourceCommit; installedUtc=[DateTime]::UtcNow.ToString('o'); previousProxy=$proxyProvenance; runtime=$records; preserved=$preserved; seeded=@(); status='prepared'}
+$receipt = [ordered]@{schemaVersion=1; gameDirectory=$game; packageSource=$manifest.sourceCommit; packageRuntimeSource=$manifest.runtimeSourceCommit; packageInstallerSource=$manifest.installerSourceCommit; installedUtc=[DateTime]::UtcNow.ToString('o'); previousProxy=$proxyProvenance; runtime=$records; preserved=$preserved; seeded=@(); status='prepared'}
 $receiptPath = Join-Path $backup 'receipt.json'
 $receipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
 $changed = @()

@@ -29,9 +29,17 @@ of live controls, physical force or camera acceptance.
   with NumPy/Pillow. It does not launch a game or acquire a wheel.
 - `tools/tests/Test-WheelInstall.ps1`: synthetic-executable installer/restore,
   retention and rollback tests. `tools/Check-IniCoverage.ps1` checks every key.
+- `tools/tests/Test-WheelInstallPlayer.ps1`: actual Windows PowerShell 5.1
+  `-File` and shipped batch routes from another CWD, with spaced paths, omitted
+  package path, prompted game path, restore, explicit override and failures.
+  Use `-PackagedDirectory` to test an immutable package with a synthetic EXE.
+  The child uses its own default PS5.1 module path, not inherited PS7 modules.
 - `tools/Package-WheelSettings.ps1` packages the existing x86 Release build;
   package `Install.bat` calls `Install.ps1`. Deploy only while the game is closed,
   verify hashes and preserve owner settings. Never kill a game for deployment.
+  For installer-only repacks, use `-RuntimePackageDirectory` pointing at the
+  verified frozen package. `sourceCommit`/`runtimeSourceCommit` retain its runtime
+  identity; `installerSourceCommit`/`packagingSourceCommit` identify the repack.
 
 Build: `cmake --build build --config Release --target outrun2006tweaks`.
 On this machine CMake is under VS2022 BuildTools `Common7/IDE/CommonExtensions/
