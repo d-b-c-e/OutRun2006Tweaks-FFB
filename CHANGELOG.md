@@ -11,10 +11,16 @@
   exact explicit overrides, missing-device refusal and zero-before-switch.
 - Added offline production ImGui raster fixtures at 720p/4K, input calibration
   checks and fake-ABI output-gate tests.
+- Added independent Throttle/Brake device dropdowns inside Bind, exact saved
+  identities, shared pedal-handle reuse and neutral disconnected input.
+- Steering can also select a replacement device in Bind; the previous pedal
+  identities/calibrations survive the swap, and force output is zeroed first.
+- Fixed startup with an older upstream INI lacking an FFB section; regression
+  exercises the actual INI parser and layered migration cases.
 - Added a local install/restore package that backs up recognized Tweaks runtime
   and preserves existing settings, bindings and profiles.
 - Pinned only the native output DLL/header to official toolkit v0.13.0/native
   0.6.0; retained v0.8.0 force model, profiles and encoder unchanged.
 
-Independent pedal devices and custom camera mounts remain follow-up work.
+Custom camera mounts remain follow-up work.
 Physical wheel/force behavior has not been accepted in game.

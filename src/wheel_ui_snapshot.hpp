@@ -15,6 +15,15 @@ struct UiSnapshot
     float steering = 0, throttle = 0, brake = 0;
 };
 UiSnapshot ReadUiSnapshot();
+UiSnapshot ReadAxisUiSnapshot(int role);
+UiSnapshot ReadDeviceUiSnapshot(const std::string& guid);
+struct InputDeviceChoice { std::string guid, name; };
+const std::vector<InputDeviceChoice>& UiInputDevices();
+void RefreshUiInputDevices();
+void ReleaseUnusedUiDevices();
+std::string PrimaryInputGuid();
+bool CanAdoptPrimaryInput(const std::string& guid);
+void AdoptPrimaryInput(const std::string& guid);
 }
 namespace FFB
 {

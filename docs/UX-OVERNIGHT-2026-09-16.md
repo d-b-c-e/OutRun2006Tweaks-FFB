@@ -20,7 +20,7 @@ Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
   provisional candidate and Save/Cancel, guided axis calibration, grouped
   driving/menu buttons, FFB Off/On/device/Strength/status, native Change camera
   binding, telemetry Off/On/destination/status, Help and UI scale.
-- A successful axis calibration saves the actual primary device GUID in the
+- A successful axis calibration saves its actual device GUID in the
   same atomic settings write. Capture never changes the old assignment before
   save; cancel, timeout, focus loss, disconnect and failed save retain it.
   Held buttons must be released before Save binding is allowed. Capture disables
@@ -31,6 +31,15 @@ Resumed 2026-09-19 with owner authorization to build/package/deploy locally.
   endpoint changes become effective until the atomic Save calibration succeeds.
   Cancellation or a failed save cannot be committed by a later Stop/view edit.
   Legacy transforms remain unchanged until the explicit calibrated flag is saved.
+- Throttle and Brake Bind each offer a direct input-device dropdown, including
+  separate USB pedals. GUID/name, axis and calibration save as one transaction;
+  Steering identity and FFB override are untouched. Identical pedal GUIDs share
+  one input handle on the game's existing DirectInput instance. Missing/refused
+  identities never fall back; disconnected explicit pedal input is neutral.
+- Steering Bind uses the same device picker, including recovery from a missing
+  primary wheel. Save zeroes/releases FFB before adopting the captured input
+  handle. Pedals that followed the old primary are pinned to that old identity
+  in the same transaction, preserving their endpoints; explicit overrides remain.
 - F6 uses a scoped Segoe UI font (system font, not redistributed), neutral/cyan
   palette, left navigation and fixed top controls. The upstream F11 font/style
   remains separate. Long device names wrap; scale is adjustable from Help.
@@ -84,13 +93,18 @@ without a native window, game, DirectInput acquisition or real output:
   locked-file failure, disconnect/cancel and no delayed partial commit. The actual
   input-reader fixture covers 144 legacy opt-out cases plus centered, released,
   full, partial, inverted, clamped, cleared and invalid calibrated input.
+- Successor fixtures additionally exercise independent/shared pedal identities,
+  missing/refused selection, neutral disconnect and same-identity recovery,
+  primary-handle adoption, preservation of old pedal sources and zero-before-swap.
+  Real INIReader regression covers old upstream files without an FFB section;
+  the first live attempt exposed and rolled back that migration defect (receipt).
 - The production FFB update/selection functions run against fake ABI callbacks:
   six inactive gates zero both effect types before any initialization; switching
   releases before another open; unbound steering follow is refused; an explicit
   override wins over the steering GUID; driver refusal does not try another
   actuator; a zero game HWND is rejected before native initialization.
 
-`tools/Check-IniCoverage.ps1`: **Pass**, 162 parsed settings / 190 template keys,
+`tools/Check-IniCoverage.ps1`: **Pass**, 166 parsed settings / 194 template keys,
 including the 28 existing documented dead CDTracks entries. `git diff --check`:
 **Pass**. Component hashes match the verified official package, and model/profile/
 encoder/proxy files remain identical to the v0.8.0 baseline. A routine toolkit
@@ -108,6 +122,12 @@ at 720p/4K; calibration and long-device frames were inspected locally. Bounds
 checks keep the fixed window/navigation inside the viewport. These demonstrate
 renderer-level layout, not game/GPU/high-DPI or keyboard-navigation acceptance.
 
+Successor input-device/parser evidence:
+`build/wheel-settings-fixture/run-500e6b16b92f4cf0b130604166e18925` has
+30 production frames including `1280-separate-pedal-device-simple.png`.
+The direct device selector, rest action and Cancel fit together at 720p.
+The x86 build and complete UI/input/fake-ABI suite pass for this successor.
+
 **No game was launched, no screenshot captured in game, no real device bound,
 and no physical torque tested.** Deployment is recorded separately with exact
 package/installed hashes and retention checks. Candidate artifacts are local,
@@ -117,9 +137,9 @@ not a public release.
 
 | Requirement | Status / concrete next work |
 |---|---|
-| UX-01-S complete first setup in Simple | **Partial**. Enable wheel controls is saved for next launch because input hooks are startup-only. No runtime backend switch. Device chooser/calibration and restart-free onboarding remain work. |
+| UX-01-S complete first setup in Simple | **Implemented controls path, live Not tested**. Device choice, calibration and recovery are in Simple. Initial input-route enable takes one normal restart because hooks/backends are selected at startup; there is no runtime backend switch. |
 | Guided rest/full/center calibration | **Implemented for primary device, live Not tested**. Transactional identity/axis/endpoints, ambiguity rejection, inversion/deadzone and finite range checks pass offline. |
-| Independent pedals/shifter/button box | **Gap**. Primary-wheel binding works in source. Additional slots remain startup INI settings; separate pedal devices are unsupported. |
+| Independent pedals/shifter/button box | **Pedals implemented, live Not tested**. Per-pedal GUID/axis/calibration transaction and shared USB handles pass source fixtures. Shifter/button-box slots remain startup INI settings. |
 | Handbrake axis/button | **Not available in the adapter**. Its known SwitchId/ADChannel mapping has no handbrake action. This is not proof the game cannot support one; investigate the game route before registering a permanent exception. |
 | Full ordinary binding set | **Partial**. Primary driving/menu bindings are available. Settings/Stop hotkeys, remaining native actions, keyboard binding and context-aware conflict checks need unification. Existing SDL route still links its legacy bindings modal. |
 | UX-05-D device picker | **Implemented, live Not tested**. Requires attended follow/override, reorder, disconnect, duplicate-device and acquisition-refusal walks on the packaged build. |
@@ -160,7 +180,7 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | Controls/ImpulseVibrationLeftMultiplier | Advanced | INI only (unreconciled) | 0.20 |
 | Controls/ImpulseVibrationRightMultiplier | Advanced | INI only (unreconciled) | 0.20 |
 | DirectInput/UseDirectInputRemap | Simple on demand | Setup saves wheel route for next launch | false |
-| DirectInput/DeviceGuid | Simple | Saved atomically by axis calibration; chooser gap | auto |
+| DirectInput/DeviceGuid | Simple | Steering Bind device dropdown / atomic Save | auto |
 | DirectInput/SteeringAxis | Simple | F6 live / saved | 0 / axis index (INI 0-based, UI 1-based) |
 | DirectInput/SteeringInvert | Simple | F6 live / saved | false |
 | DirectInput/SteeringSensitivity | Advanced | F6 live / saved | 1.0 |
@@ -170,6 +190,10 @@ items remain available in Advanced. Source: `src/overlay/wheel_settings.cpp`,
 | DirectInput/BrakeInvert | Simple | F6 live / saved | false |
 | DirectInput/AccelerationDeadzone | Simple on demand | F6 calibration preview / atomic Save | 0 / ratio (UI %) |
 | DirectInput/BrakeDeadzone | Simple on demand | F6 calibration preview / atomic Save | 0 / ratio (UI %) |
+| DirectInput/ThrottleDeviceGuid | Simple on demand | F6 Throttle Bind device dropdown / atomic Save | empty = primary wheel |
+| DirectInput/ThrottleDeviceName | Simple on demand | Saved friendly name with device identity | empty |
+| DirectInput/BrakeDeviceGuid | Simple on demand | F6 Brake Bind device dropdown / atomic Save | empty = primary wheel |
+| DirectInput/BrakeDeviceName | Simple on demand | Saved friendly name with device identity | empty |
 | DirectInput.Calibration/SteeringEnabled | Simple on demand | F6 Bind/Calibrate / atomic Save | false |
 | DirectInput.Calibration/SteeringMinimum | Simple on demand | Captured endpoint / atomic Save | 0 / normalized device units |
 | DirectInput.Calibration/SteeringCenter | Simple on demand | Captured center / atomic Save | 32767.5 / normalized device units |

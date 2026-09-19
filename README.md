@@ -8,8 +8,8 @@
 
 Press **F6** for **Wheel settings**, which opens in Simple by default. Choose
 Advanced for detailed tuning; the views share all settings and remember your
-choice. **F8 / Stop FFB** saves Off. Controls provides primary-wheel axis/button
-binding with transactional center/rest/full-travel calibration; FFB provides
+choice. **F8 / Stop FFB** saves Off. Controls provides wheel/button binding and
+independent USB pedal selection with transactional center/rest/full-travel calibration; FFB provides
 Strength and a real device dropdown following the saved
 Steering wheel unless you choose an explicit override. Changes save into the
 existing user INI without replacing your tune.
@@ -19,7 +19,7 @@ Tweaks, backs up the runtime, retains settings and bindings, and verifies the
 installed hashes. [Install and restore instructions](docs/INSTALL-WHEEL-SETTINGS.md).
 
 This is partial adoption, built and tested with offline fixtures; it has **not
-been driven**. Independent pedal-device setup and custom cameras remain work.
+been driven**. Custom cameras and live pedal/force acceptance remain work.
 See the
 [exact inventory and acceptance gaps](docs/UX-OVERNIGHT-2026-09-16.md).
 The old Off default remains until the force signal is validated.

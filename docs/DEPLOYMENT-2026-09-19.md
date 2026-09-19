@@ -1,5 +1,21 @@
 # Local deployment — 2026-09-19, stage 1
 
+**Rolled back after startup validation.** At 19:08:58 UTC the first authorized
+zero-output launch failed with Windows `0xc0000142` before a game window. Its
+log ended inside base `Settings::read`. The migration code called
+`INIReader::Keys("FFB")` for an older upstream INI with no FFB section; that
+library throws for absent sections. A source fix and real-parser regression are
+being validated in the successor build. This package must not be reused.
+
+The application-error dialog was closed normally; process exit was verified.
+The installer restored the previous upstream proxy from the receipt below and
+removed the added WheelFfb DLL. The temporary explicit FFB-Off test override
+was removed, and every pre-test configuration hash was verified unchanged.
+No camera framing was observed and no force device initialized. Test preflight
+settings/log evidence is in `build/camera-live-stage1/`.
+
+The following records the original installation before that rollback:
+
 Installed at **2026-09-19 18:58:54 UTC**. This is a local development candidate,
 not live wheel acceptance or a public release. The game was closed; no game was
 launched, no input injected and no force applied by this work.

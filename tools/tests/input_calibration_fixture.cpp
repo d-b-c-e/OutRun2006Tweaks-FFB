@@ -63,6 +63,7 @@ int main()
                     assert((old == std::array{GetSteering(), GetAcceleration(), GetBrake()}));
                 }
     Settings::DIRemapCalibration[0] = wheel;
+    primary.connected = true;
     Settings::DIRemapCalibration[1] = Settings::DIRemapCalibration[2] = pedal;
     Settings::SteeringDeadZone = Settings::DIRemapAccelDeadzone = Settings::DIRemapBrakeDeadzone = 0;
     Settings::DIRemapSteeringSensitivity = 1;
@@ -78,7 +79,57 @@ int main()
     assert(GetSteering() == 127 && GetAcceleration() == 0 && GetBrake() == 0);
     primary.currentState.lX = 65535; primary.currentState.lY = primary.currentState.lZ = 0;
     assert(GetSteering() == -127 && GetAcceleration() == 255 && GetBrake() == 255);
+    const std::string pedalGuidA = "{11111111-2222-3333-0405-060708090A0B}";
+    const std::string pedalGuidB = "{22222222-2222-3333-0405-060708090A0B}";
+    Settings::DIRemapAccelDeviceGuid = pedalGuidA;
+    Settings::DIRemapBrakeDeviceGuid = pedalGuidB;
+    extraInputs[pedalGuidA] = std::make_unique<DeviceSlot>();
+    extraInputs[pedalGuidB] = std::make_unique<DeviceSlot>();
+    auto& throttle = *extraInputs[pedalGuidA];
+    auto& brake = *extraInputs[pedalGuidB];
+    throttle.connected = brake.connected = throttle.initialized = brake.initialized = true;
+    throttle.currentState.lY = 5000;
+    brake.currentState.lZ = 55000;
+    // Two independent saved devices use their own state, not the primary wheel.
+    assert(GetAcceleration() == 255 && GetBrake() == 0);
+    throttle.connected = false;
+    assert(GetAcceleration() == 0 && GetTelemetryAccel() == -1 && GetBrake() == 0);
+    throttle.connected = true;
+    assert(GetAcceleration() == 255 && GetTelemetryAccel() == 255);
+    Settings::DIRemapBrakeDeviceGuid = pedalGuidA;
+    throttle.currentState.lZ = 5000;
+    assert(PedalSlot(1) == PedalSlot(2) && GetBrake() == 255); // Shared USB pedal set.
+    Settings::DIRemapAccelDeviceGuid = "{33333333-2222-3333-0405-060708090A0B}";
+    assert(GetAcceleration() == 0); // Missing saved identity never falls back.
+    Settings::DIRemapAccelDeviceGuid = "invalid-guid";
+    assert(GetAcceleration() == 0);
+    ReleaseUnusedUiDevices();
+    assert(extraInputs.size() == 1 && extraInputs.contains(pedalGuidA));
+    Settings::DIRemapAccelDeviceGuid.clear(); Settings::DIRemapBrakeDeviceGuid.clear();
+    ReleaseUnusedUiDevices(); assert(extraInputs.empty());
+    const std::string oldPrimaryGuid = "{33333333-2222-3333-0405-060708090A0B}";
+    ParseGuid(oldPrimaryGuid, primary.guid); primaryGuid = primary.guid; primaryGuidValid = true;
+    primary.initialized = primary.connected = true;
+    primary.currentState.lX = 61000;
+    extraInputs[pedalGuidA] = std::make_unique<DeviceSlot>();
+    auto& replacement = *extraInputs[pedalGuidA];
+    replacement.initialized = replacement.connected = true;
+    ParseGuid(pedalGuidA, replacement.guid);
+    replacement.currentState.lX = 1000;
+    Settings::DIRemapAccelDeviceGuid = Settings::DIRemapBrakeDeviceGuid = oldPrimaryGuid;
+    assert(CanAdoptPrimaryInput(pedalGuidA) && !CanAdoptPrimaryInput(pedalGuidB));
+    AdoptPrimaryInput(pedalGuidA);
+    assert(PrimaryInputGuid() == pedalGuidA && primary.currentState.lX == 1000);
+    assert(primary.previousState.lX == primary.currentState.lX);
+    assert(PedalSlot(1) == PedalSlot(2) && PedalSlot(1) != &primary);
+    assert(PedalSlot(1)->currentState.lX == 61000);
+    ReleaseUnusedUiDevices();
+    assert(extraInputs.size() == 1 && extraInputs.contains(oldPrimaryGuid));
+    Settings::DIRemapAccelDeviceGuid.clear(); Settings::DIRemapBrakeDeviceGuid.clear();
+    ReleaseUnusedUiDevices();
+    primary.connected = false;
+    assert(GetSteering() == 0); // Explicitly calibrated steering fails neutral too.
     Settings::DIRemapSteeringAxis = Settings::DIRemapAccelAxis = Settings::DIRemapBrakeAxis = -1;
     assert(GetSteering() == 0 && GetAcceleration() == 0 && GetBrake() == 0);
-    std::cout << "PASS: actual primary-axis readers, legacy opt-out preservation (144 cases), calibrated endpoints/center/partial/clamp/invert/clear, deadzone and invalid-range rejection, multi-axis ambiguity. No device calls.\n";
+    std::cout << "PASS: actual axis readers, legacy opt-out preservation (144 cases), calibrated endpoints/center/partial/clamp/invert/clear, invalid range/ambiguity, independent/shared USB pedal identity, missing/refused identity neutral, reconnect and unused-slot cleanup. No device calls.\n";
 }

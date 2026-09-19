@@ -9,6 +9,15 @@
 namespace WheelSettingsPolicy
 {
 inline bool IsAdvanced(std::string_view value) { return value == "Advanced"; }
+template <class IniReader>
+inline bool RequiresLegacyFfbSelection(const IniReader& ini, int index)
+{
+    // INIReader::Keys throws for an absent section. Older upstream INIs have
+    // no FFB section at all, including when layered over previous defaults.
+    if (index < 0 || !ini.Sections().count("FFB")) return false;
+    const auto keys = ini.Keys("FFB");
+    return keys.count("FFBDevice") && !keys.count("FFBDeviceGuid");
+}
 
 inline std::string Trim(std::string value)
 {

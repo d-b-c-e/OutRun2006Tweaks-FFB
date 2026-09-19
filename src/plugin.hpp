@@ -156,6 +156,10 @@ namespace Settings
 	inline WheelInput::Calibration DIRemapCalibration[3];
 	inline float DIRemapAccelDeadzone = 0;
 	inline float DIRemapBrakeDeadzone = 0;
+	// Empty GUID retains the legacy primary-wheel source. Explicit pedal
+	// identities never fall back to another attached device.
+	inline std::string DIRemapAccelDeviceGuid, DIRemapAccelDeviceName;
+	inline std::string DIRemapBrakeDeviceGuid, DIRemapBrakeDeviceName;
 	inline int DIRemapButtonA = 0;
 	inline int DIRemapButtonB = 1;
 	inline int DIRemapButtonX = 2;

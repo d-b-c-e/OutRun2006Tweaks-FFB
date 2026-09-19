@@ -15,12 +15,15 @@ pending; the existing force tune has not changed.
    center/rest, move only that control through its travel, then preview the
    direction and deadzone. **Save calibration** commits the complete binding.
    Cancel or a disconnected device retains the previous binding.
+   For a separate USB pedal set, choose its device from the dropdown in Throttle
+   or Brake's Bind flow. Each pedal saves its own exact device identity; a missing
+   device gives neutral input and is never silently replaced by another.
 6. In **FFB**, the device defaults to the saved steering wheel. You can choose an
    explicit device from the dropdown. FFB remains Off until you enable it.
    **F8** or **Stop FFB** saves Off. Strength is available in Simple; detailed
    tuning is in Advanced. The force signal still needs attended validation.
 
-Independent pedal devices, handbrake output, custom Bonnet/Bumper mounts and
+Handbrake output, custom Bonnet/Bumper mounts and
 camera adjustment keys are not implemented by this adapter. The native Change
 camera button is bindable. Telemetry is optional; its page explains receiver
 setup and distinguishes sending from confirmed receipt.

@@ -8,14 +8,29 @@ static HWND FixtureForeground() { return reinterpret_cast<HWND>(1); }
 #include <imgui_internal.h>
 #include <cassert>
 #include <iostream>
+#include "../../external/ini-cpp/ini/ini.h"
 
 static int zeros = 0;
+static int selectionZero = -1, primaryAdoptions = 0;
 static DInputRemap::UiSnapshot fixtureInput;
 bool overlay_visible = false;
 void ForceShowCursor(bool) {}
 OverlayWindow::OverlayWindow() {}
 bool Overlay::settings_write() { return true; }
-namespace DInputRemap { UiSnapshot ReadUiSnapshot() { return fixtureInput; } }
+static DInputRemap::UiSnapshot fixturePedal;
+namespace DInputRemap
+{
+UiSnapshot ReadUiSnapshot() { return fixtureInput; }
+UiSnapshot ReadAxisUiSnapshot(int role) { return role > 0 && !fixturePedal.guid.empty() ? fixturePedal : fixtureInput; }
+UiSnapshot ReadDeviceUiSnapshot(const std::string& guid) { return guid == fixturePedal.guid ? fixturePedal : fixtureInput; }
+static std::vector<InputDeviceChoice> inputChoices;
+const std::vector<InputDeviceChoice>& UiInputDevices() { return inputChoices; }
+void RefreshUiInputDevices() {}
+void ReleaseUnusedUiDevices() {}
+std::string PrimaryInputGuid() { return fixtureInput.guid; }
+bool CanAdoptPrimaryInput(const std::string&) { return true; }
+void AdoptPrimaryInput(const std::string& guid) { if (guid != fixtureInput.guid) assert(selectionZero == zeros); ++primaryAdoptions; }
+}
 namespace FFB
 {
 void ZeroAllForces() { ++zeros; }
@@ -23,7 +38,7 @@ const char* UiStatus() { return Settings::DirectInputFFB ? "Paused while setting
 static std::vector<DeviceChoice> choices;
 const std::vector<DeviceChoice>& UiDevices() { return choices; }
 void RefreshUiDevices() {}
-void SelectionChanged() { ++zeros; }
+void SelectionChanged() { selectionZero = ++zeros; }
 std::string UiDeviceLabel() { return "Use steering wheel - Fixture wheel"; }
 }
 namespace Telemetry
@@ -122,6 +137,20 @@ int main(int argc, char** argv)
     assert(!IsAdvanced(""));
     assert(!IsAdvanced("invalid"));
     assert(IsAdvanced("Advanced"));
+    const auto upstreamIni = directory / "old-upstream.ini";
+    std::ofstream(upstreamIni) << "[Controls]\nUseNewInput = false\n";
+    auto parsed = inih::INIReader(upstreamIni);
+    assert(!RequiresLegacyFfbSelection(parsed, -1));
+    assert(!RequiresLegacyFfbSelection(parsed, 2)); // No section must never throw.
+    std::ofstream(upstreamIni) << "[FFB]\nDirectInputFFB = false\n";
+    parsed = inih::INIReader(upstreamIni);
+    assert(!RequiresLegacyFfbSelection(parsed, 2)); // Off-only override retains identity.
+    std::ofstream(upstreamIni) << "[FFB]\nFFBDevice = 2\n";
+    parsed = inih::INIReader(upstreamIni);
+    assert(RequiresLegacyFfbSelection(parsed, 2));
+    std::ofstream(upstreamIni) << "[FFB]\nFFBDevice = 2\nFFBDeviceGuid = steering\n";
+    parsed = inih::INIReader(upstreamIni);
+    assert(!RequiresLegacyFfbSelection(parsed, 2));
     assert(Save("WheelSettings", "View", "Advanced"));
     const auto first = Read(Module::UserIniPath);
     assert(first.starts_with(old));
@@ -239,6 +268,46 @@ int main(int argc, char** argv)
     capture = {};
     Frame(Page::Controls, false, 1280, 720);
     ExportDrawData(directory / "1280-controls-connected-simple.json");
+    // A separate pedal selection stays provisional and cannot alter Steering
+    // or its FFB-follow identity, including after a failed save/cancellation.
+    fixturePedal = fixtureInput;
+    fixturePedal.guid = "{22222222-2222-3333-0405-060708090a0b}";
+    fixturePedal.name = "Fixture USB pedals";
+    DInputRemap::inputChoices = {{fixtureInput.guid, fixtureInput.name}, {fixturePedal.guid, fixturePedal.name}};
+    BeginAxisCalibration(Settings::DIRemapAccelAxis, "AccelerationAxis", 1, false, fixturePedal);
+    auto pedalFrame = Frame(Page::Controls, false, 1280, 720);
+    assert(pedalFrame.find("Input device") != std::string::npos && pedalFrame.find("Capture rest") != std::string::npos);
+    ExportDrawData(directory / "1280-separate-pedal-device-simple.json");
+    capture.candidate = 4; capture.stage = 2;
+    capture.calibration = {true, 5000, 30000, 55000}; capture.invert = true; capture.deadzone = .02f;
+    const auto oldThrottleAxis = Settings::DIRemapAccelAxis;
+    const auto steeringIdentity = Settings::DIRemapDeviceGuid;
+    locked = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(locked != INVALID_HANDLE_VALUE);
+    assert(!SaveAxisCalibration(fixturePedal));
+    assert(Settings::DIRemapAccelDeviceGuid.empty() && Settings::DIRemapAccelAxis == oldThrottleAxis && pending.empty());
+    CloseHandle(locked);
+    const int zeroCount = zeros;
+    assert(SaveAxisCalibration(fixturePedal));
+    assert(Settings::DIRemapAccelDeviceGuid == fixturePedal.guid && Settings::DIRemapAccelDeviceName == fixturePedal.name);
+    assert(Settings::DIRemapAccelAxis == 4 && Settings::DIRemapCalibration[1].enabled);
+    assert(Settings::DIRemapDeviceGuid == steeringIdentity && zeros == zeroCount);
+    assert(Read(Module::UserIniPath).find("ThrottleDeviceGuid = " + fixturePedal.guid) != std::string::npos);
+    EndCapture();
+    auto newWheel = fixtureInput;
+    newWheel.guid = "{33333333-2222-3333-0405-060708090a0b}";
+    newWheel.name = "Replacement wheel";
+    const auto previousPedalGuid = Settings::DIRemapAccelDeviceGuid;
+    BeginAxisCalibration(Settings::DIRemapSteeringAxis, "SteeringAxis", 0, false, newWheel);
+    capture.candidate = 0; capture.stage = 2;
+    capture.calibration = {true, 1000, 30000, 61000};
+    assert(SaveAxisCalibration(newWheel));
+    assert(Settings::DIRemapDeviceGuid == newWheel.guid && primaryAdoptions >= 2);
+    assert(Settings::DIRemapAccelDeviceGuid == previousPedalGuid); // Explicit pedal override retained.
+    assert(Settings::DIRemapBrakeDeviceGuid == fixtureInput.guid); // Old primary source pinned.
+    assert(Read(Module::UserIniPath).find("BrakeDeviceGuid = " + fixtureInput.guid) != std::string::npos);
+    EndCapture();
+    fixturePedal = {};
     int oldButton = 9;
     BeginCapture(oldButton, "Change camera", "ButtonChangeView", false, fixtureInput);
     fixtureInput.buttons[3] = true;
@@ -252,5 +321,5 @@ int main(int argc, char** argv)
     assert(!Settings::DirectInputFFB);
     assert(Read(Module::UserIniPath).find("DirectInputFFB = false") != std::string::npos);
     ImGui::DestroyContext();
-    std::cout << "PASS: migration, old tune/Off preservation, atomic write failure/retry, backup, 29 UI frames/bounds, Simple filtering, calibration identity/axis/endpoints transaction and cancelled failure rollback, persistent Stop FFB.\n";
+    std::cout << "PASS: actual INI parser migration (absent FFB section and layered selection), old tune/Off preservation, atomic failure/retry, 30 UI frames/bounds, calibration device/axis/endpoints transaction, primary replacement/pedal preservation/zero-before-swap and persistent Stop FFB.\n";
 }

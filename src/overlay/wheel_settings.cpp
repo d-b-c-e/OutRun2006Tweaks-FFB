@@ -117,6 +117,7 @@ struct Capture
 };
 static Capture capture;
 bool IsCapturing() { return capture.destination != nullptr; }
+static void EndCapture() { capture = {}; DInputRemap::ReleaseUnusedUiDevices(); }
 
 static bool Choice(const char* label, bool& value)
 {
@@ -170,6 +171,7 @@ static void BeginAxisCalibration(int& value, const char* key, int role, bool exi
     capture.deadline = ImGui::GetTime() + 90;
     capture.deadzone = AxisDeadzone(role);
     capture.invert = AxisInvert(role);
+    DInputRemap::RefreshUiInputDevices();
 }
 
 static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
@@ -178,6 +180,11 @@ static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
         !input.connected || input.guid.empty() || input.guid != capture.initial.guid ||
         !capture.calibration.enabled || !WheelInput::Valid(capture.calibration, capture.role == 0) || !std::isfinite(capture.deadzone) ||
         capture.deadzone < 0 || capture.deadzone >= 1) return false;
+    if (capture.role == 0 && !DInputRemap::CanAdoptPrimaryInput(input.guid)) return false;
+    const auto oldPrimary = DInputRemap::PrimaryInputGuid();
+    const bool replacingPrimary = capture.role == 0 && !oldPrimary.empty() && oldPrimary != input.guid;
+    const bool pinThrottle = replacingPrimary && Settings::DIRemapAccelDeviceGuid.empty();
+    const bool pinBrake = replacingPrimary && Settings::DIRemapBrakeDeviceGuid.empty();
     const auto previousPending = pending;
     const auto prefix = std::string(AxisPrefix(capture.role));
     Queue("DirectInput", capture.key, capture.candidate);
@@ -189,7 +196,14 @@ static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
     const char* deadzoneKey = capture.role == 0 ? "SteeringDeadZone" : capture.role == 1 ? "AccelerationDeadzone" : "BrakeDeadzone";
     Queue("DirectInput", invertKey, capture.invert);
     Queue(capture.role == 0 ? "Controls" : "DirectInput", deadzoneKey, capture.deadzone);
-    Queue("DirectInput", "DeviceGuid", input.guid);
+    if (capture.role == 0) Queue("DirectInput", "DeviceGuid", input.guid);
+    else
+    {
+        Queue("DirectInput", capture.role == 1 ? "ThrottleDeviceGuid" : "BrakeDeviceGuid", input.guid);
+        Queue("DirectInput", capture.role == 1 ? "ThrottleDeviceName" : "BrakeDeviceName", input.name);
+    }
+    if (pinThrottle) Queue("DirectInput", "ThrottleDeviceGuid", oldPrimary);
+    if (pinBrake) Queue("DirectInput", "BrakeDeviceGuid", oldPrimary);
     if (!SavePending())
     {
         // Never flush a provisional calibration later through Stop/view/close.
@@ -200,10 +214,19 @@ static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
     Settings::DIRemapCalibration[capture.role] = capture.calibration;
     AxisInvert(capture.role) = capture.invert;
     AxisDeadzone(capture.role) = capture.deadzone;
+    if (capture.role == 0)
     {
         const bool identityChanged = Settings::DIRemapDeviceGuid != input.guid;
         Settings::DIRemapDeviceGuid = input.guid;
-        if (identityChanged && Settings::FFBDeviceGuid == "steering") FFB::SelectionChanged();
+        if (identityChanged) FFB::SelectionChanged(); // Zero before the input-handle swap too.
+        if (pinThrottle) Settings::DIRemapAccelDeviceGuid = oldPrimary;
+        if (pinBrake) Settings::DIRemapBrakeDeviceGuid = oldPrimary;
+        DInputRemap::AdoptPrimaryInput(input.guid);
+    }
+    else
+    {
+        (capture.role == 1 ? Settings::DIRemapAccelDeviceGuid : Settings::DIRemapBrakeDeviceGuid) = input.guid;
+        (capture.role == 1 ? Settings::DIRemapAccelDeviceName : Settings::DIRemapBrakeDeviceName) = input.name;
     }
     return true;
 }
@@ -212,16 +235,47 @@ static void AxisCalibrationPanel(const DInputRemap::UiSnapshot& input)
 {
     const bool steering = capture.role == 0;
     ImGui::Text("Calibrate %s", capture.label);
-    ImGui::TextWrapped("Wheel: %s", input.name.c_str());
+    ImGui::TextWrapped("Device: %s", input.connected ? input.name.c_str() : "Missing or unavailable");
     ImGui::TextWrapped("Your current binding remains unchanged until Save calibration.");
     if (capture.stage == 0)
     {
+        {
+            ImGui::TextUnformatted("Input device");
+            ImGui::SameLine(180 * UiScale());
+            ImGui::SetNextItemWidth(-1);
+            ImGui::BeginDisabled(capture.fixedAxis >= 0);
+            if (ImGui::BeginCombo("##input-device", input.connected ? input.name.c_str() : "Choose a connected device"))
+            {
+                const auto& devices = DInputRemap::UiInputDevices();
+                for (const auto& device : devices)
+                {
+                    auto name = device.name;
+                    if (std::count_if(devices.begin(), devices.end(), [&](const auto& other) { return other.name == name; }) > 1)
+                        name += " [" + device.guid.substr(1, 8) + "]";
+                    ImGui::PushID(device.guid.c_str());
+                    if (ImGui::Selectable(name.c_str(), device.guid == capture.initial.guid))
+                    {
+                        capture.initial = DInputRemap::ReadDeviceUiSnapshot(device.guid);
+                        capture.deadline = ImGui::GetTime() + 90;
+                        // Release the previous provisional device on cancellation/save.
+                    }
+                    ImGui::PopID();
+                }
+                if (devices.empty()) ImGui::TextDisabled("No input devices found");
+                ImGui::EndCombo();
+            }
+            ImGui::EndDisabled();
+            if (ImGui::Button("Refresh devices")) DInputRemap::RefreshUiInputDevices();
+            if (capture.fixedAxis >= 0) ImGui::TextWrapped("Use Cancel, then Bind to choose a different device or axis.");
+        }
         ImGui::TextWrapped(steering ? "Center the wheel and leave other controls still." : "Release this pedal fully and leave other controls still.");
+        ImGui::BeginDisabled(!input.connected || input.guid != capture.initial.guid);
         if (ImGui::Button(steering ? "Capture center" : "Capture rest"))
         {
             capture.travel.Begin(input.axes);
             capture.stage = 1;
         }
+        ImGui::EndDisabled();
     }
     else if (capture.stage == 1)
     {
@@ -266,18 +320,20 @@ static void AxisCalibrationPanel(const DInputRemap::UiSnapshot& input)
         ImGui::SetNextItemWidth(-1);
         if (ImGui::SliderFloat("##calibration-deadzone", &percent, 0, 95, "%.0f%%")) capture.deadzone = percent / 100;
         ImGui::TextWrapped("%s", steering ? "Check center is 0%, left is -100% and right is +100%." : "Check released is 0%, partial travel is smooth and fully pressed is 100%.");
-        if (ImGui::Button("Save calibration") && SaveAxisCalibration(input)) { capture = {}; return; }
+        if (ImGui::Button("Save calibration") && SaveAxisCalibration(input)) { EndCapture(); return; }
         ImGui::SameLine();
         if (ImGui::Button("Start again")) capture.stage = 0;
     }
-    if (ImGui::Button("Cancel")) capture = {};
+    if (ImGui::Button("Cancel")) EndCapture();
 }
 
-static void CapturePanel(const DInputRemap::UiSnapshot& input)
+static void CapturePanel(const DInputRemap::UiSnapshot& primaryInput)
 {
     if (!IsCapturing()) return;
-    if (!input.connected || input.guid != capture.initial.guid || GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
-        ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { capture = {}; return; }
+    const auto input = capture.axis && capture.role >= 0 ? DInputRemap::ReadDeviceUiSnapshot(capture.initial.guid) : primaryInput;
+    const bool choosingDevice = capture.axis && capture.role >= 0 && capture.stage == 0;
+    if ((!choosingDevice && (!input.connected || input.guid != capture.initial.guid)) || GetForegroundWindow() != Game::GameHwnd() || ImGui::GetTime() > capture.deadline ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { EndCapture(); return; }
     if (capture.axis && capture.role >= 0) { AxisCalibrationPanel(input); return; }
     ImGui::Separator();
     ImGui::Text("Bind %s", capture.label);
@@ -314,7 +370,7 @@ static void CapturePanel(const DInputRemap::UiSnapshot& input)
                 Settings::DIRemapDeviceGuid = input.guid;
                 if (Settings::FFBDeviceGuid == "steering") FFB::SelectionChanged();
             }
-            capture = {};
+            EndCapture();
         }
         else
         {
@@ -328,23 +384,28 @@ static void CapturePanel(const DInputRemap::UiSnapshot& input)
     {
         // A failed provisional save must not be retried after cancellation.
         pending.erase({"DirectInput", capture.key});
-        capture = {};
+        EndCapture();
     }
 }
 
 static void AxisRow(int role, const char* label, int& axis, bool& invert, const char* key, const char* invertKey,
-    float value, const DInputRemap::UiSnapshot& input)
+    float value, const DInputRemap::UiSnapshot& primaryInput)
 {
+    const auto input = role == 0 ? primaryInput : DInputRemap::ReadAxisUiSnapshot(role);
     ImGui::PushID(label);
     if (axis >= 0) ImGui::Text("%s - Axis %d", label, axis + 1);
     else ImGui::Text("%s - Not bound", label);
     ImGui::SameLine();
-    ImGui::BeginDisabled(!input.connected || IsCapturing());
+    ImGui::BeginDisabled(IsCapturing());
+    ImGui::BeginDisabled(!Settings::UseDirectInputRemap || Settings::UseNewInput);
     if (ImGui::Button("Bind")) BeginAxisCalibration(axis, key, role, false, input);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(axis < 0 || !input.connected);
+    if (ImGui::Button("Calibrate")) BeginAxisCalibration(axis, key, role, true, input);
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(axis < 0);
-    if (ImGui::Button("Calibrate")) BeginAxisCalibration(axis, key, role, true, input);
-    ImGui::SameLine();
     if (ImGui::Button("Clear"))
     {
         if (Save("DirectInput", key, -1)) axis = -1;
@@ -352,6 +413,11 @@ static void AxisRow(int role, const char* label, int& axis, bool& invert, const 
     }
     ImGui::EndDisabled();
     ImGui::EndDisabled();
+    if (role > 0)
+    {
+        const auto& savedName = role == 1 ? Settings::DIRemapAccelDeviceName : Settings::DIRemapBrakeDeviceName;
+        ImGui::TextWrapped("Device: %s%s", input.connected ? input.name.c_str() : savedName.empty() ? "Unavailable" : savedName.c_str(), input.connected ? "" : " (missing)");
+    }
     if (input.connected)
     {
         char text[40];
@@ -486,7 +552,7 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         AxisRow(1, "Throttle", Settings::DIRemapAccelAxis, Settings::DIRemapAccelInvert, "AccelerationAxis", "AccelerationInvert", input.throttle, input);
         AxisRow(2, "Brake", Settings::DIRemapBrakeAxis, Settings::DIRemapBrakeInvert, "BrakeAxis", "BrakeInvert", input.brake, input);
         Percent("Steering deadzone", Settings::SteeringDeadZone, "Controls", "SteeringDeadZone", 0.95f);
-        ImGui::TextWrapped("Values here are game input. Calibration previews show device input. Separate pedal-device binding is not implemented yet.");
+        ImGui::TextWrapped("Values here are game input. Bind lets each pedal use its own device; a missing saved device outputs zero until it returns or you bind a replacement.");
         ImGui::TextDisabled("Handbrake: no handbrake action is exposed by this game adapter.");
         if (ImGui::CollapsingHeader("Driving buttons"))
         {

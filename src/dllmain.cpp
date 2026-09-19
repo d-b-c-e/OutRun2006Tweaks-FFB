@@ -7,6 +7,7 @@
 #include "resource.h"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "wheel_settings_policy.hpp"
 
 void InitExceptionHandler(); // hooks_exceptions.cpp
 
@@ -286,6 +287,10 @@ namespace Settings
 		DIRemapBrakeInvert = ini.Get("DirectInput", "BrakeInvert", DIRemapBrakeInvert);
 		DIRemapAccelDeadzone = ini.Get("DirectInput", "AccelerationDeadzone", DIRemapAccelDeadzone);
 		DIRemapBrakeDeadzone = ini.Get("DirectInput", "BrakeDeadzone", DIRemapBrakeDeadzone);
+		DIRemapAccelDeviceGuid = ini.Get("DirectInput", "ThrottleDeviceGuid", DIRemapAccelDeviceGuid);
+		DIRemapAccelDeviceName = ini.Get("DirectInput", "ThrottleDeviceName", DIRemapAccelDeviceName);
+		DIRemapBrakeDeviceGuid = ini.Get("DirectInput", "BrakeDeviceGuid", DIRemapBrakeDeviceGuid);
+		DIRemapBrakeDeviceName = ini.Get("DirectInput", "BrakeDeviceName", DIRemapBrakeDeviceName);
 		DIRemapCalibration[0].enabled = ini.Get("DirectInput.Calibration", "SteeringEnabled", DIRemapCalibration[0].enabled);
 		DIRemapCalibration[0].minimum = ini.Get("DirectInput.Calibration", "SteeringMinimum", DIRemapCalibration[0].minimum);
 		DIRemapCalibration[0].center = ini.Get("DirectInput.Calibration", "SteeringCenter", DIRemapCalibration[0].center);
@@ -345,8 +350,7 @@ namespace Settings
 
 		DirectInputFFB = ini.Get("FFB", "DirectInputFFB", DirectInputFFB);
 		FFBDevice = ini.Get("FFB", "FFBDevice", FFBDevice);
-		const auto ffbKeys = ini.Keys("FFB");
-		const bool legacySelection = FFBDevice >= 0 && ffbKeys.count("FFBDevice") && !ffbKeys.count("FFBDeviceGuid");
+		const bool legacySelection = WheelSettingsPolicy::RequiresLegacyFfbSelection(ini, FFBDevice);
 		if (legacySelection) FFBDeviceGuid = "legacy-index";
 		FFBDeviceGuid = ini.Get("FFB", "FFBDeviceGuid", FFBDeviceGuid);
 		FFBDeviceName = ini.Get("FFB", "FFBDeviceName", FFBDeviceName);

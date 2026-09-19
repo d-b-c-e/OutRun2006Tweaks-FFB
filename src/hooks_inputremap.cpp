@@ -1,7 +1,7 @@
 // DirectInput axis/button remapping for steering wheels and custom controllers.
 // Hooks the game's GetVolume/SwitchOn/SwitchNow functions to read from
 // user-configured DirectInput devices with custom axis/button mapping.
-// Supports up to 3 devices: Primary (wheel), Shifter, Aux (button box).
+// Primary (wheel), Shifter, Aux (button box), plus explicit per-pedal identities.
 // Mutually exclusive with UseNewInput (SDL3-based input).
 
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <map>
+#include <memory>
 
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
@@ -33,11 +35,18 @@ namespace DInputRemap
 		std::string name;        // for log messages
 		bool initialized = false;
 		bool initAttempted = false;
+		bool connected = false;
+		GUID guid{};
+		DWORD lastInitAttempt = 0;
 	};
 
 	static DeviceSlot primary;
 	static DeviceSlot shifter;
 	static DeviceSlot aux;
+	// Only explicit saved/capture identities enter this map. Reuses the game's
+	// existing DirectInput instance; these handles never create force effects.
+	static std::map<std::string, std::unique_ptr<DeviceSlot>> extraInputs;
+	static std::vector<InputDeviceChoice> uiInputDevices;
 
 	// Overall init state (true once primary succeeds)
 	static bool initialized = false;
@@ -234,6 +243,32 @@ namespace DInputRemap
 		MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, wide, 64);
 		return SUCCEEDED(CLSIDFromString(wide, &out));
 	}
+	static std::string GuidText(const GUID& guid)
+	{
+		wchar_t text[40]{};
+		StringFromGUID2(guid, text, 40);
+		std::string result;
+		for (const auto* p = text; *p; ++p) result += static_cast<char>(*p);
+		return result;
+	}
+	static const std::string& PedalGuid(int role)
+	{
+		return role == 1 ? Settings::DIRemapAccelDeviceGuid : Settings::DIRemapBrakeDeviceGuid;
+	}
+	static bool IsPrimaryGuid(const std::string& text)
+	{
+		GUID guid{};
+		return text.empty() || (primaryGuidValid && ParseGuid(text, guid) && IsEqualGUID(guid, primaryGuid));
+	}
+	static DeviceSlot* PedalSlot(int role)
+	{
+		const auto& text = PedalGuid(role);
+		if (IsPrimaryGuid(text)) return &primary;
+		GUID guid{};
+		if (!ParseGuid(text, guid)) return nullptr;
+		const auto found = extraInputs.find(GuidText(guid));
+		return found == extraInputs.end() ? nullptr : found->second.get();
+	}
 
 	// ---------- Init a single device slot ----------
 
@@ -242,6 +277,7 @@ namespace DInputRemap
 		if (slot.initAttempted)
 			return slot.initialized;
 		slot.initAttempted = true;
+		slot.lastInitAttempt = GetTickCount();
 		slot.name = slotName;
 
 		spdlog::info("DInputRemap: Initializing {} slot...", slotName);
@@ -318,6 +354,9 @@ namespace DInputRemap
 
 		// Track opened GUID so other slots skip it during auto-detect
 		openedGuids.push_back(targetGuid);
+		slot.guid = targetGuid;
+		DIDEVICEINSTANCEA info{}; info.dwSize = sizeof(info);
+		if (SUCCEEDED(slot.device->GetDeviceInfo(&info))) slot.name = info.tszInstanceName;
 
 		// Remember the primary GUID so the FFB engine can open its own
 		// exclusive handle on the same physical device
@@ -329,6 +368,24 @@ namespace DInputRemap
 
 		slot.initialized = true;
 		return true;
+	}
+	static DeviceSlot* EnsureExtraInput(const std::string& text)
+	{
+		if (IsPrimaryGuid(text)) return &primary;
+		if (!Settings::UseDirectInputRemap || Settings::UseNewInput) return nullptr;
+		GUID guid{};
+		if (!ParseGuid(text, guid)) return nullptr; // Never auto-select for a saved pedal.
+		auto* di = g_RealDirectInput8 ? g_RealDirectInput8 : (Game::DirectInput8_ptr ? Game::DirectInput8() : nullptr);
+		if (!di || !Game::hWnd_ptr || !Game::GameHwnd()) return nullptr;
+		const auto key = GuidText(guid);
+		auto& slot = extraInputs[key];
+		if (!slot) slot = std::make_unique<DeviceSlot>();
+		if (!slot->initialized && (!slot->initAttempted || GetTickCount() - slot->lastInitAttempt >= 1000))
+		{
+			slot->initAttempted = false;
+			InitSlot(*slot, key, "Pedal input", di);
+		}
+		return slot.get();
 	}
 
 	// ---------- Deferred init (called on first frame) ----------
@@ -395,8 +452,9 @@ namespace DInputRemap
 		if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED)
 		{
 			slot.device->Acquire();
-			slot.device->GetDeviceState(sizeof(DIJOYSTATE2), &slot.currentState);
+			hr = slot.device->GetDeviceState(sizeof(DIJOYSTATE2), &slot.currentState);
 		}
+		slot.connected = SUCCEEDED(hr);
 	}
 
 	// ---------- H-pattern shifter logic ----------
@@ -435,6 +493,11 @@ namespace DInputRemap
 		PollSlot(primary);
 		PollSlot(shifter);
 		PollSlot(aux);
+		for (int role = 1; role <= 2; ++role)
+		{
+			auto* slot = EnsureExtraInput(PedalGuid(role));
+			if (slot && slot != &primary && (role == 1 || slot != PedalSlot(1))) PollSlot(*slot);
+		}
 		UpdateHPattern();
 
 		// Reset per-frame H-pattern cache so it's recomputed once this frame
@@ -479,6 +542,7 @@ namespace DInputRemap
 		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapSteeringAxis);
 		if (Settings::DIRemapCalibration[0].enabled)
 		{
+			if (!primary.connected) return 0;
 			const float value = WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[0],
 				true, Settings::DIRemapSteeringInvert, Settings::SteeringDeadZone);
 			return static_cast<int>(std::clamp(value * Settings::DIRemapSteeringSensitivity * 127.0f, -127.0f, 127.0f));
@@ -506,7 +570,9 @@ namespace DInputRemap
 	static int GetAcceleration()
 	{
 		if (Settings::DIRemapAccelAxis < 0) return 0;
-		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapAccelAxis);
+		auto* source = PedalSlot(1);
+		if (!source || (source != &primary && !source->connected)) return 0;
+		LONG raw = ReadAxisRaw(source->currentState, Settings::DIRemapAccelAxis);
 		if (Settings::DIRemapCalibration[1].enabled)
 			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
 				false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
@@ -519,7 +585,9 @@ namespace DInputRemap
 	static int GetBrake()
 	{
 		if (Settings::DIRemapBrakeAxis < 0) return 0;
-		LONG raw = ReadAxisRaw(primary.currentState, Settings::DIRemapBrakeAxis);
+		auto* source = PedalSlot(2);
+		if (!source || (source != &primary && !source->connected)) return 0;
+		LONG raw = ReadAxisRaw(source->currentState, Settings::DIRemapBrakeAxis);
 		if (Settings::DIRemapCalibration[2].enabled)
 			return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
 				false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
@@ -787,28 +855,108 @@ namespace DInputRemap
 		return mask;
 	}
 
-	// Accessors for the FFB engine to share the primary device handle
-	UiSnapshot ReadUiSnapshot()
+	static BOOL CALLBACK UiEnumCallback(const DIDEVICEINSTANCEA* info, VOID*)
+	{
+		if (!IsVirtualDevice(info->tszInstanceName))
+			uiInputDevices.push_back({GuidText(info->guidInstance), info->tszInstanceName});
+		return DIENUM_CONTINUE;
+	}
+	void RefreshUiInputDevices()
+	{
+		uiInputDevices.clear();
+		auto* di = g_RealDirectInput8 ? g_RealDirectInput8 : (Game::DirectInput8_ptr ? Game::DirectInput8() : nullptr);
+		if (di) di->EnumDevices(DI8DEVCLASS_GAMECTRL, UiEnumCallback, nullptr, DIEDFL_ATTACHEDONLY);
+	}
+	const std::vector<InputDeviceChoice>& UiInputDevices() { return uiInputDevices; }
+	std::string PrimaryInputGuid() { return primaryGuidValid ? GuidText(primaryGuid) : ""; }
+	bool CanAdoptPrimaryInput(const std::string& text)
+	{
+		if (IsPrimaryGuid(text)) return primary.initialized && primary.connected;
+		GUID guid{};
+		if (!ParseGuid(text, guid)) return false;
+		const auto found = extraInputs.find(GuidText(guid));
+		return found != extraInputs.end() && found->second->initialized && found->second->connected;
+	}
+	void AdoptPrimaryInput(const std::string& text)
+	{
+		if (IsPrimaryGuid(text) || !CanAdoptPrimaryInput(text)) return;
+		GUID guid{}; ParseGuid(text, guid);
+		const auto key = GuidText(guid);
+		auto replacement = std::move(extraInputs.at(key));
+		extraInputs.erase(key);
+		if (primary.initialized)
+		{
+			// Keep the old primary available to pedal roles pinned during the
+			// same atomic UI save; do not discard their calibrated input source.
+			const auto oldKey = GuidText(primary.guid);
+			auto old = extraInputs.find(oldKey);
+			if (old != extraInputs.end() && old->second->device)
+			{
+				old->second->device->Unacquire(); old->second->device->Release();
+			}
+			extraInputs[oldKey] = std::make_unique<DeviceSlot>(std::move(primary));
+		}
+		primary = std::move(*replacement);
+		primary.previousState = primary.currentState; // No synthetic held-button edge.
+		primaryGuid = guid; primaryGuidValid = true;
+		initialized = initAttempted = true;
+	}
+	void ReleaseUnusedUiDevices()
+	{
+		for (auto it = extraInputs.begin(); it != extraInputs.end();)
+		{
+			bool used = false;
+			for (int role = 1; role <= 2; ++role)
+			{
+				GUID guid{};
+				if (!IsPrimaryGuid(PedalGuid(role)) && ParseGuid(PedalGuid(role), guid) && GuidText(guid) == it->first) used = true;
+			}
+			if (used) { ++it; continue; }
+			if (it->second->device) { it->second->device->Unacquire(); it->second->device->Release(); }
+			const auto guid = it->second->guid;
+			const auto opened = std::find_if(openedGuids.begin(), openedGuids.end(), [&](const GUID& other) { return IsEqualGUID(guid, other); });
+			if (opened != openedGuids.end()) openedGuids.erase(opened);
+			it = extraInputs.erase(it);
+		}
+	}
+	static UiSnapshot ReadSlotUiSnapshot(DeviceSlot* slot)
 	{
 		UiSnapshot snapshot;
-		snapshot.name = primary.name;
-		if (!primary.device || !primary.initialized) return snapshot;
-		// Read the existing handle without enumeration, acquisition or changing
-		// the input backend. Game I/O is suspended while the overlay is open.
-		DIJOYSTATE2 state{};
-		primary.device->Poll();
-		if (FAILED(primary.device->GetDeviceState(sizeof(state), &state))) return snapshot;
+		if (!slot) return snapshot;
+		snapshot.name = slot->name;
+		snapshot.guid = GuidText(slot->guid);
+		if (!slot->device || !slot->initialized) return snapshot;
+		PollSlot(*slot);
+		if (!slot->connected) return snapshot;
 		snapshot.connected = true;
-		wchar_t guidText[40]{};
-		if (primaryGuidValid && StringFromGUID2(primaryGuid, guidText, 40))
-			for (const auto* p = guidText; *p; ++p) snapshot.guid += static_cast<char>(*p);
+		const auto& state = slot->currentState;
 		for (int i = 0; i < 8; ++i) snapshot.axes[i] = ReadAxisRaw(state, i);
 		for (int i = 0; i < 128; ++i) snapshot.buttons[i] = (state.rgbButtons[i] & 0x80) != 0;
-		primary.currentState = state;
+		return snapshot;
+	}
+	UiSnapshot ReadDeviceUiSnapshot(const std::string& guid)
+	{
+		auto snapshot = ReadSlotUiSnapshot(EnsureExtraInput(guid));
+		GUID parsed{};
+		if (ParseGuid(guid, parsed)) snapshot.guid = GuidText(parsed); // Keep a missing saved identity.
+		return snapshot;
+	}
+	UiSnapshot ReadUiSnapshot()
+	{
+		auto snapshot = ReadSlotUiSnapshot(&primary);
+		for (int role = 1; role <= 2; ++role)
+		{
+			auto* slot = EnsureExtraInput(PedalGuid(role));
+			if (slot && slot != &primary && (role == 1 || slot != PedalSlot(1))) PollSlot(*slot);
+		}
 		snapshot.steering = GetSteering() / 127.0f;
 		snapshot.throttle = GetAcceleration() / 255.0f;
 		snapshot.brake = GetBrake() / 255.0f;
 		return snapshot;
+	}
+	UiSnapshot ReadAxisUiSnapshot(int role)
+	{
+		return role == 0 ? ReadSlotUiSnapshot(&primary) : ReadDeviceUiSnapshot(PedalGuid(role));
 	}
 
 	IDirectInputDevice8A* GetPrimaryDevice() { return primary.device; }
@@ -826,8 +974,8 @@ namespace DInputRemap
 	// Returns -1 when there is no primary device, so the caller can leave the
 	// packet field alone rather than transmitting a confident zero (which a
 	// brake light would read as "pedal released" rather than "no data").
-	int GetTelemetryAccel() { return primary.initialized ? GetAcceleration() : -1; }
-	int GetTelemetryBrake() { return primary.initialized ? GetBrake() : -1; }
+	int GetTelemetryAccel() { const auto* slot = PedalSlot(1); return slot && slot->initialized && (slot == &primary || slot->connected) ? GetAcceleration() : -1; }
+	int GetTelemetryBrake() { const auto* slot = PedalSlot(2); return slot && slot->initialized && (slot == &primary || slot->connected) ? GetBrake() : -1; }
 	bool GetPrimaryDeviceGuid(GUID* out)
 	{
 		if (!primaryGuidValid || !out)
@@ -874,9 +1022,12 @@ class DirectInputRemapHook : public Hook
 			if (Settings::DIRemapSteeringAxis < 0) return 0;
 			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapSteeringAxis);
 			if (Settings::DIRemapCalibration[0].enabled)
+			{
+				if (!DInputRemap::primary.connected) return 0;
 				return static_cast<int>(std::clamp(127 * Settings::DIRemapSteeringSensitivity * WheelInput::Normalize(
 					static_cast<float>(raw), Settings::DIRemapCalibration[0], true, Settings::DIRemapSteeringInvert,
 					Settings::SteeringDeadZone), -127.0f, 127.0f));
+			}
 			float n = (static_cast<float>(raw) - 32767.5f) / 32767.5f;
 			if (Settings::DIRemapSteeringInvert) n = -n;
 			return static_cast<int>(std::clamp(n * 127.0f, -127.0f, 127.0f));
@@ -884,7 +1035,9 @@ class DirectInputRemapHook : public Hook
 		case ADChannel::Acceleration:
 		{
 			if (Settings::DIRemapAccelAxis < 0) return 0;
-			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapAccelAxis);
+			auto* source = DInputRemap::PedalSlot(1);
+			if (!source || (source != &DInputRemap::primary && !source->connected)) return 0;
+			LONG raw = DInputRemap::ReadAxisRaw(source->previousState, Settings::DIRemapAccelAxis);
 			if (Settings::DIRemapCalibration[1].enabled)
 				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[1],
 					false, Settings::DIRemapAccelInvert, Settings::DIRemapAccelDeadzone));
@@ -895,7 +1048,9 @@ class DirectInputRemapHook : public Hook
 		case ADChannel::Brake:
 		{
 			if (Settings::DIRemapBrakeAxis < 0) return 0;
-			LONG raw = DInputRemap::ReadAxisRaw(DInputRemap::primary.previousState, Settings::DIRemapBrakeAxis);
+			auto* source = DInputRemap::PedalSlot(2);
+			if (!source || (source != &DInputRemap::primary && !source->connected)) return 0;
+			LONG raw = DInputRemap::ReadAxisRaw(source->previousState, Settings::DIRemapBrakeAxis);
 			if (Settings::DIRemapCalibration[2].enabled)
 				return static_cast<int>(255 * WheelInput::Normalize(static_cast<float>(raw), Settings::DIRemapCalibration[2],
 					false, Settings::DIRemapBrakeInvert, Settings::DIRemapBrakeDeadzone));
