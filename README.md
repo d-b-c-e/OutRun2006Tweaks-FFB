@@ -29,6 +29,10 @@ advance from the title screen, including before the first F6 press; its cause
 is unresolved. Input isolation has offline production-hook evidence and the
 mod has **not been driven**. Player-camera identification and live pedal/force
 acceptance remain work.
+Advanced Help now provides read-only input dispatch counters for that
+investigation. The [native input comparison plan](docs/NATIVE-INPUT-DIAGNOSIS-2026-09-19.md)
+separates the saved pre-session baseline from the current candidate and keeps
+force output disabled throughout.
 See the
 [exact inventory and acceptance gaps](docs/UX-OVERNIGHT-2026-09-16.md).
 The old Off default remains until the force signal is validated.
