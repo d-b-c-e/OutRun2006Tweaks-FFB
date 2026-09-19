@@ -22,6 +22,9 @@ are open, and held menu inputs must release before resuming.
 Use the packaged **Install.bat** with the game closed. It recognizes existing
 Tweaks, backs up the runtime, retains settings and bindings, and verifies the
 installed hashes. [Install and restore instructions](docs/INSTALL-WHEEL-SETTINGS.md).
+Use the current **stage-6 installer revision 1** package in the
+[deployment receipt](docs/DEPLOYMENT-2026-09-19.md); it fixes the Windows
+PowerShell 5.1 default-path launch while retaining the same verified DLLs.
 
 A zero-output stage-5 smoke verified startup, the actual 3840x2160 F6 panel,
 page navigation and shortcut capture/cancel. Native menu confirmation did not

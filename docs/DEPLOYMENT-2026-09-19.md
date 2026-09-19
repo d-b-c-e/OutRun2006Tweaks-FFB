@@ -1,5 +1,41 @@
 # Local deployments — 2026-09-19
 
+## Current installer package: stage 6, installer revision 1
+
+The earlier stage-6 `Install.bat` route failed in Windows PowerShell 5.1 when
+PackageDirectory was omitted: CmdletBinding evaluated its PSScriptRoot default
+as empty. Earlier successful deployments supplied the path explicitly. The
+fixed installer resolves the default in the script body; the batch also retains
+the PowerShell failure status through its pause. Old ZIPs remain immutable.
+
+Installer/packaging source: `81591845ccfcd50c3630477c45e330373ae742ca`.
+Runtime source is still **`d3d7f2361813b393f137fbdb3be17f4fae825d40`**, with no
+native rebuild or gameplay changes. Both identities are explicit in the package
+manifest and install receipt.
+
+Current package: `build/packages/wheel-settings-20260919-stage6-installer1.zip`.
+SHA256: `e0f62fad11ea6bd49dec69cb9af393a63fcef4627e98f2619470afaf372511e5`.
+Proxy remains `61b701fd7899aad693fdc37a7d5d2a873967c4747d236c26529d9ea5b34487df`;
+WheelFfb remains `95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31`.
+
+Actual Windows PowerShell 5.1 `-File` installation to the same verified game
+target, with **PackageDirectory omitted** and a different working directory,
+completed **21:35:11 UTC**. The game was closed throughout. All five owner files
+were retained byte for byte and both runtime hashes match the frozen stage-6
+package. Backup: `.wheel-settings-backups/20260919-213510-975-baa2df1d/receipt.json`.
+Receipts: `build/deployment-stage6-installer1-result.json` and
+`build/deployment-stage6-installer1-invocation.json`.
+
+The existing installer suite and six real player workflows passed. The final
+package was copied into spaced fixture paths and tested from an unrelated CWD:
+omitted package path, restore, the actual batch's game-folder prompt, explicit
+override, locked-second-DLL rollback and actual-batch corrupt-package failure.
+Evidence: `build/installer-player-package-gate.log` and
+`build/player installer fixture e64a473d5c8e485482d3f7da61a60780/`.
+The fixture gives PS5.1 its own default module path, removing inherited PS7
+module paths only in the child environment. No system environment was changed.
+No fixture/game/device was launched; earlier live acceptance limits below remain.
+
 ## Current installation: stage 6
 
 Installed **21:00:23 UTC**, clean/pushed source

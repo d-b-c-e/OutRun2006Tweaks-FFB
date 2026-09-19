@@ -478,5 +478,7 @@ All use unrelated working directories and spaced paths. The original synthetic
 installer suite also passes. No fixture executes its synthetic EXE, loads a
 runtime DLL or accesses a device. Installer-only packaging copies the exact
 frozen stage-6 runtime and records runtime and installer commits separately;
-previous packages remain immutable. The local installed runtime already matches
-those DLLs and does not need a replacement merely for this installer fix.
+previous packages remain immutable. The fixed default-path PS5.1 invocation was
+also verified on the closed installed game at 21:35:11 UTC. Both runtime hashes
+are unchanged and all five owner files were retained. The current package and
+new backup receipt are recorded in [deployment evidence](DEPLOYMENT-2026-09-19.md).
