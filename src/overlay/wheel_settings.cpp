@@ -194,7 +194,7 @@ static std::string& OptionalGuid(const char* section)
     return std::string(section) == "DirectInput.Shifter" ? Settings::DIShifterDeviceGuid : Settings::DIAuxDeviceGuid;
 }
 
-static std::string ButtonConflict(const DInputRemap::UiSnapshot& input)
+static std::string ButtonConflict(const DInputRemap::UiSnapshot& input, bool movingPrimary = false)
 {
     const auto context = [](const char* key)
     {
@@ -241,9 +241,11 @@ static std::string ButtonConflict(const DInputRemap::UiSnapshot& input)
         }
         return std::string{};
     };
-    if (auto conflict = check(capture.destination, capture.key, capture.candidate); !conflict.empty()) return conflict;
-    if (std::string(capture.section) != "DirectInput" &&
-        !WheelSettingsPolicy::Equal(OptionalGuid(capture.section), input.guid))
+    if (!movingPrimary)
+        if (auto conflict = check(capture.destination, capture.key, capture.candidate); !conflict.empty()) return conflict;
+    const bool optional = std::string(capture.section) != "DirectInput";
+    if ((optional || movingPrimary) &&
+        !WheelSettingsPolicy::Equal(optional ? OptionalGuid(capture.section) : primaryGuid, input.guid))
     {
         // A role has one device identity. Moving it moves retained buttons too;
         // preflight that whole proposal, not just the newly captured button.
@@ -341,6 +343,11 @@ static bool SaveAxisCalibration(const DInputRemap::UiSnapshot& input)
     if (capture.role == 0 && !DInputRemap::CanAdoptPrimaryInput(input.guid)) return false;
     const auto oldPrimary = DInputRemap::PrimaryInputGuid();
     const bool replacingPrimary = capture.role == 0 && !oldPrimary.empty() && oldPrimary != input.guid;
+    if (capture.role == 0 && !WheelSettingsPolicy::Equal(oldPrimary, input.guid))
+    {
+        capture.message = ButtonConflict(input, true);
+        if (!capture.message.empty()) return false;
+    }
     const bool pinThrottle = replacingPrimary && Settings::DIRemapAccelDeviceGuid.empty();
     const bool pinBrake = replacingPrimary && Settings::DIRemapBrakeDeviceGuid.empty();
     const auto previousPending = pending;
@@ -395,6 +402,7 @@ static void AxisCalibrationPanel(const DInputRemap::UiSnapshot& input)
     ImGui::Text("Calibrate %s", capture.label);
     ImGui::TextWrapped("Device: %s", input.connected ? input.name.c_str() : "Missing or unavailable");
     ImGui::TextWrapped("Your current binding remains unchanged until Save calibration.");
+    if (!capture.message.empty()) ImGui::TextWrapped("%s", capture.message.c_str());
     if (capture.stage == 0)
     {
         {

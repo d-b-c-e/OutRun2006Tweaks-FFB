@@ -305,6 +305,24 @@ int main(int argc, char** argv)
     BeginAxisCalibration(Settings::DIRemapSteeringAxis, "SteeringAxis", 0, false, newWheel);
     capture.candidate = 0; capture.stage = 2;
     capture.calibration = {true, 1000, 30000, 61000};
+    Settings::DIAuxDeviceGuid = newWheel.guid;
+    Settings::DIAuxButtonB = Settings::DIRemapButtonA;
+    const auto beforePrimaryRetarget = Read(Module::UserIniPath);
+    const int zerosBeforeRetarget = zeros;
+    assert(!SaveAxisCalibration(newWheel));
+    assert(capture.message.find("group's saved buttons") != std::string::npos);
+    assert(Read(Module::UserIniPath) == beforePrimaryRetarget && pending.empty());
+    assert(Settings::DIRemapDeviceGuid == steeringIdentity && zeros == zerosBeforeRetarget);
+    const auto previouslyConnectedPrimary = fixtureInput.guid;
+    const auto beforeFirstSteeringAxis = Settings::DIRemapSteeringAxis;
+    fixtureInput.guid.clear(); Settings::DIRemapDeviceGuid.clear();
+    assert(!SaveAxisCalibration(newWheel));
+    assert(capture.message.find("group's saved buttons") != std::string::npos);
+    assert(Read(Module::UserIniPath) == beforePrimaryRetarget && pending.empty());
+    assert(Settings::DIRemapDeviceGuid.empty() && fixtureInput.guid.empty());
+    assert(Settings::DIRemapSteeringAxis == beforeFirstSteeringAxis && zeros == zerosBeforeRetarget);
+    fixtureInput.guid = previouslyConnectedPrimary; Settings::DIRemapDeviceGuid = steeringIdentity;
+    Settings::DIAuxDeviceGuid.clear(); Settings::DIAuxButtonB = -1;
     assert(SaveAxisCalibration(newWheel));
     assert(Settings::DIRemapDeviceGuid == newWheel.guid && primaryAdoptions >= 2);
     assert(Settings::DIRemapAccelDeviceGuid == previousPedalGuid); // Explicit pedal override retained.

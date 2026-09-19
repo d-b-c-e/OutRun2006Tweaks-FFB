@@ -411,3 +411,15 @@ fixture covers both empty/follow-primary and explicit primary GUIDs after
 adoption, stale nonzero current/previous values, disconnect and reconnect.
 Release x86 build and all three offline fixture executables pass; fixture run
 `run-3055c749f7b14cb1a9e695fb1cdaa64d`. No device acquisition or force output.
+
+## Stage 5 Steering identity preflight — 2026-09-19
+
+Steering Bind now preflights every retained primary button when changing the
+primary identity, including assignment from an empty identity. The same
+context-aware conflict policy already applied to optional role retargets. A
+conflict leaves the INI, pending writes, live identity/axis and force-stop count
+unchanged; the captured proposal remains available to cancel or retry. Pedal
+pinning still applies only when replacing a nonempty previous primary identity.
+Source fixtures cover both replacement and first assignment against an existing
+Aux action. This is offline transaction evidence; physical-device adoption and
+live conflict presentation remain unaccepted.
