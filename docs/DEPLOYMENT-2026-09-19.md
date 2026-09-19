@@ -1,4 +1,38 @@
-# Local deployment — 2026-09-19, stage 1
+# Local deployments — 2026-09-19
+
+## Current installation: stage 2
+
+Installed **19:20:56 UTC** from clean source
+`310b36dea0e6193da2e66a0eed241b5834ea0382`, pushed on the same scoped branch.
+This successor fixes the older-INI startup exception and adds per-device
+Steering/Throttle/Brake selection with transactional calibration. Pedals retain
+their old source when the primary wheel is replaced; FFB is zeroed before swap.
+
+Package: `build/packages/wheel-settings-20260919-stage2.zip`, SHA256
+`a80524364bae4c8fb8208a89a88cd912f1353100cdcdfecff2b75e81a8e9f10c`.
+Installed `dinput8.dll` SHA256:
+`a2f68db457a82adc9e744f473f0de68ba84dd3887e8ee9922ed48117b28b9dd9`.
+The native output DLL is unchanged from the hash in the stage-1 table below.
+Both installed hashes match the package and x86 build.
+
+Target is the same verified Tweaks folder below. Runtime backup:
+`.wheel-settings-backups/20260919-192056-090-050f7aba/receipt.json`.
+All four original configuration hashes below remain unchanged. The profile
+added by stage 1 is also retained unchanged, SHA256
+`43c45a9d57a8f259db7fcb74922644546eb5d344ffe3fd5d04700be1388f921e`.
+No files were seeded during this second install; no user binding/tune was edited.
+
+The x86 build and offline parser/UI/input/fake-ABI suites pass. Real-parser
+cases cover missing FFB sections, Off-only overrides, legacy indices and saved
+GUIDs. Source fixtures cover independent/shared/missing pedal identities and
+primary adoption with pedal-source preservation. There are 30 actual ImGui
+draw-data PNGs at
+`build/wheel-settings-fixture/run-500e6b16b92f4cf0b130604166e18925`.
+Coverage is 166 parsed settings / 194 template keys (28 known-dead upstream
+CDTracks entries). Live startup/camera identification is pending the next
+serialized zero-output slot; physical wheel/force acceptance remains pending.
+
+## Stage 1: superseded and rolled back
 
 **Rolled back after startup validation.** At 19:08:58 UTC the first authorized
 zero-output launch failed with Windows `0xc0000142` before a game window. Its
