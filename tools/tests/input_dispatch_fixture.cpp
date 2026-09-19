@@ -15,8 +15,8 @@ static volatile uint32_t nativePrevious = 0;
 static bool chordRoute = false;
 static volatile int rawVolume = 193, rawOldVolume = 171, rawNavigation = 1;
 static int reads = 0;
-__declspec(noinline) static int __cdecl StockNow(uint32_t mask) { ++reads; return chordRoute ? (nativeNow & mask) == mask : (nativeNow & mask) != 0; }
-__declspec(noinline) static int __cdecl StockOn(uint32_t mask) { ++reads; return chordRoute ? (nativeNow & mask) == mask && (nativePrevious & mask) != mask : (nativeEdge & mask) != 0; }
+__declspec(noinline) static int __cdecl StockNow(uint32_t mask) { ++reads; return chordRoute ? (nativeNow & mask) == mask : static_cast<int>(nativeNow & mask); }
+__declspec(noinline) static int __cdecl StockOn(uint32_t mask) { ++reads; return chordRoute ? (nativeNow & mask) == mask && (nativePrevious & mask) != mask : static_cast<int>(nativeEdge & mask); }
 __declspec(noinline) static int __cdecl StockVolume(ADChannel) { ++reads; return rawVolume; }
 __declspec(noinline) static int __cdecl StockOld(ADChannel) { ++reads; return rawOldVolume; }
 __declspec(noinline) static int __cdecl StockNavigation(ADChannel) { ++reads; return rawNavigation; }
@@ -33,7 +33,8 @@ int main()
     assert(onHook && nowHook && volumeHook && oldVolumeHook && volumeSwitchHook);
     constexpr uint32_t confirm = 1u << 2, camera = 1u << 18, navigation = 1u << 20;
     nativeNow = nativeEdge = confirm | camera | navigation;
-    assert(StockNow(confirm) && StockOn(camera));
+    assert(StockNow(confirm | camera) == static_cast<int>(confirm | camera));
+    assert(StockOn(camera) == static_cast<int>(camera)); // Stock ABI returns raw bits, not 1.
     assert(StockVolume(ADChannel::Acceleration) == 193 && StockOld(ADChannel::Brake) == 171);
     chordRoute = true; nativeNow = confirm; nativePrevious = 0;
     assert(!StockNow(confirm | camera) && !StockOn(confirm | camera));
