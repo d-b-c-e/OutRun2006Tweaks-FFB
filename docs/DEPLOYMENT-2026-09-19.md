@@ -1,6 +1,31 @@
 # Local deployments — 2026-09-19
 
-## Current installation: stage 4
+## Current installation: stage 5
+
+Installed **20:29:05 UTC**, clean/pushed source
+`3d0b51dc14b3e585854e399a426c407ff36eb478`. Steering identity changes now
+preflight all retained primary button assignments, including the first
+assignment from an empty primary identity. Conflicts are refused before any
+INI, pending-write, live identity/axis or force-stop mutation. Coordinator review
+closed both replacement and first-assignment cases; the x86 build and all four
+production fixtures pass (`build/ux-stage5-build.log`, `build/ux-stage5-fixtures.log`).
+
+Package `build/packages/wheel-settings-20260919-stage5.zip`, SHA256
+`016fdc8c2068b162b9e35b6a5e586b79e6e25c08c609abc92932ea7049c9408c`.
+Installed proxy SHA256
+`58fe0efeecc80b88c8a8b5177fd1892a3a98cb4396b36f22dc9f253d5751a600`;
+native WheelFfb remains
+`95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31`.
+Both match the package. Backup:
+`.wheel-settings-backups/20260919-202905-720-26555345/receipt.json`.
+All five owner settings remain byte-identical, temporary user/layout overrides
+are absent and SaveGame remains empty. Game was closed throughout deployment.
+Exact receipt: `build/deployment-stage5-result.json`.
+
+Live 4K layout, input isolation and player-camera identification remain pending.
+No physical controls or nonzero force are accepted.
+
+## Stage 4: superseded by stage 5
 
 Installed **20:13:22 UTC** from clean/pushed source `72730f51cf270672ebe46e16fd3793562486b21e`.
 This adds Simple shifter/button-box capture, function-key Settings/Stop bindings,
