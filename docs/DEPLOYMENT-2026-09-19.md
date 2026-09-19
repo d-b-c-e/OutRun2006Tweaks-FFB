@@ -1,6 +1,29 @@
 # Local deployments — 2026-09-19
 
-## Current installation: stage 5
+## Current installation: stage 6
+
+Installed **21:00:23 UTC**, clean/pushed source
+`d3d7f2361813b393f137fbdb3be17f4fae825d40`. Native text-entry isolation and
+read-only Advanced input diagnostics passed independent source review, x86
+Release build and all four offline fixtures. Actual ImGui Help frames were
+inspected at 1280x720 and 3840x2160 in
+`build/wheel-settings-fixture/run-ec5dcfbecda145aaa31521c658a25469`.
+
+Package `build/packages/wheel-settings-20260919-stage6.zip`, SHA256
+`558834f7e82c843b923971698b6ca8d737a652b5b526984dcbd493095136fdcc`.
+Installed proxy SHA256
+`61b701fd7899aad693fdc37a7d5d2a873967c4747d236c26529d9ea5b34487df`;
+native WheelFfb remains
+`95db6175354db9018ef6143291e293e75864d96919c22928aa19e6d11c8cbe31`.
+Both match the package. Backup:
+`.wheel-settings-backups/20260919-210023-261-717cb8e2/receipt.json`.
+All five owner settings remain byte-identical. Game was closed throughout
+deployment. Exact receipt: `build/deployment-stage6-result.json`.
+The next native-title comparison is described in
+[the diagnosis plan](NATIVE-INPUT-DIAGNOSIS-2026-09-19.md); stage 6 has not yet
+run in the game. No force or camera acceptance is implied by this installation.
+
+## Previous installation: stage 5
 
 Installed **20:29:05 UTC**, clean/pushed source
 `3d0b51dc14b3e585854e399a426c407ff36eb478`. Steering identity changes now
