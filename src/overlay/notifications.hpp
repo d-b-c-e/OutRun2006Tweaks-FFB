@@ -5,6 +5,7 @@
 #include <mutex>
 #include "game_addrs.hpp"
 #include "overlay.hpp"
+#include "triple_span.hpp"
 
 inline size_t maxNotifications = 5;
 inline std::chrono::seconds displayDuration = std::chrono::seconds(10);
@@ -76,11 +77,9 @@ public:
 		ImVec2 screenSize = ImGui::GetIO().DisplaySize;
 
 		// Calculate starting position for the latest notification
-		// (move it outside of letterbox if letterboxing enabled)
-		float contentWidth = screenSize.y / (3.f / 4.f);
-		float borderWidth = ((screenSize.x - contentWidth) / 2) + 0.5f;
-		if (Settings::UILetterboxing != 1 || Game::is_in_game())
-			borderWidth = 0;
+		// (outside the menu letterbox, or in a race at the HUD's right edge: the centre screen of a triple)
+		float borderWidth = NotificationBorder(screenSize.x, screenSize.y, Game::is_in_game(), Settings::UILetterboxing,
+			Settings::TripleScreens);
 
 		float startX = screenSize.x - notificationSize.x - borderWidth - 10.f;  // 10px padding from the right
 		float curY = (screenSize.y / 4.0f) - (notifications.size() * (notificationSize.y + notificationSpacing) / 2.0f);
