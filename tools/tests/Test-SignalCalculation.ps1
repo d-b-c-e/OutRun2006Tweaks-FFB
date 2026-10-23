@@ -23,6 +23,8 @@ Push-Location $out
 try {
  & $runner
  if($LASTEXITCODE -ne 0){throw 'compile failed'}
+ & $exe --shared-events
+ if($LASTEXITCODE -ne 0){throw 'shared event lifecycle failed'}
  $header='dbce.outrun2006.calculation-input,1,legacy-defaults,60'
  $rows=@($header)
  for($i=0;$i -lt 48;$i++){

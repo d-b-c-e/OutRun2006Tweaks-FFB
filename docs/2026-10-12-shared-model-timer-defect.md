@@ -24,3 +24,36 @@ model branches (or in the shared branch too), and add a fixture case with `useSh
 
 Also seen while building the fixture at `34b2040`: it no longer links (`RemapInject::Observe` unresolved,
 referenced from `FFB::ProcessMutedSignals`), so `tools/tests/Test-SignalCalculation.ps1` fails at head.
+
+## October 23 source correction
+
+From `51acc20`, isolated `garu/outrun-shared-event-20261023`: the shared branch
+now decrements `crashImpulseTimer` once after sampling the one-tick impact.
+Both crash detectors keep their existing 90-tick cooldown. The model still owns
+the impact envelope; no profile, gain, direction, rate, legacy arithmetic or
+owner setting changes. The shared gear path already emits one edge through
+`sharedPrevGear`; its model owns expiry, so it does not need `gearShiftTimer`.
+The earlier note's proposed shared gear-timer change is unnecessary.
+
+Caller inspection covered normal `Update`, software-only muted calculation,
+the watchdog and gameplay gates, initialization/release and explicit
+`ResetCalculationState`. The latter clears both gear histories, collision and
+cooldown state and resets the model/shaper; normal output gates and their
+existing reset behavior are unchanged. This fixes active calculation ticks,
+not a broader menu/resume or device-lifecycle contract.
+
+`Test-SignalCalculation.ps1` now runs `--shared-events` in its existing x86
+calculation executable. It calls the actual producer and vendored model/shaper
+with synthetic event-enabled model settings and memory-only sinks: held contact must
+expire, a fresh edge during cooldown is suppressed, later contact and speed-loss
+impacts retrigger, held gears expire, new gear edges retrigger, and reset clears
+active events/gear history. An inert `RemapInject::Observe` test stub restores
+the route's missing link dependency without invoking the observer or changing
+production injection.
+
+Before the production fix, the new case fails with
+`held contact restarts the impact envelope`. After the fix the full route passes,
+including the existing legacy golden output, recording/recalculation and
+muted-capture cases. Logs are retained in the worktree's ignored
+`build/event-lifecycle/{before.log,after.log}`. No game,
+native output, screens, install, force tuning or physical acceptance is claimed.

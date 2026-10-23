@@ -235,6 +235,8 @@ static void CalculateSignals(EVWORK_CAR* car, float roughness, DWORD waterFlag,
 				in.impact = std::min(1.0f, std::abs(crashImpulseForce));
 				in.impact_direction = crashImpulseForce >= 0.0f ? 1.0f : -1.0f;
 			}
+			// The model owns the pulse; the producer must still expire its crash cooldown.
+			if (crashImpulseTimer > 0) --crashImpulseTimer;
 			in.gear_shift = (curGear != sharedPrevGear && sharedPrevGear != 0);
 			sharedPrevGear = curGear;
 

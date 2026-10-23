@@ -2,6 +2,7 @@
 #define OUTRUN_OFFLINE_SIGNALS
 #include "../../src/hooks_dinputffb.cpp"
 namespace TickDiscovery { void Observe(EVWORK_CAR*, bool) {} void NoteHooks(bool, bool) {} } // inert without an armed window
+namespace RemapInject { bool Observe(float, float, int, uint32_t, uint32_t, bool) { return false; } }
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -106,9 +107,59 @@ static std::string Run(std::vector<Frame> frames,bool periodic) {
     }
     observed<<"complete,"<<frames.size()<<"\n"; return observed.str();
 }
+static void SharedEvents() {
+    auto require=[](bool ok,const char* why) { if(!ok)throw std::runtime_error(why); };
+    dbce::force::ModelSettings settings;
+    settings.impact_strength=0.4f; settings.shift_strength=0.2f;
+    dbce::force::Model model(settings);
+    dbce::force::Shaper shaper{dbce::force::ShaperSettings()};
+    FFB::sharedModel=&model; FFB::sharedShaper=&shaper;
+    FFB::ffbLoaded=true; FFB::useSharedModel=true; FFB::periodicsActive=false;
+    Settings::FFBDiagnosticLog=false; Settings::TelemetryEnabled=false;
+    EVWORK_CAR car{};
+    auto step=[&](float speed,uint32_t flags,uint32_t gear) {
+        car.field_1C4=speed; car.field_8=flags; car.cur_gear_208=gear;
+        FFB::CalculateSignals(&car,0,0,{Constant,Periodic},Clock);
+        return model.last_was_event;
+    };
+    FFB::ResetCalculationState();
+    require(step(.8f,0x1000,2),"first contact impact missing");
+    for(int i=0;i<20;++i)step(.8f,0x1000,2);
+    require(!model.last_was_event,"held contact restarts the impact envelope");
+    step(.8f,0,2);
+    require(!step(.8f,0x1000,2),"contact edge bypassed crash cooldown");
+    for(int i=0;i<100;++i)
+        require(!step(.8f,0x1000,2),"held contact retriggered after cooldown");
+    require(FFB::crashImpulseTimer==0,"shared crash cooldown never expired");
+    step(.8f,0,2);
+    require(step(.8f,0x1000,2),"second contact impact missing");
+
+    FFB::ResetCalculationState();
+    require(!model.last_was_event && FFB::crashImpulseTimer==0,"reset retained impact state");
+    for(int i=0;i<8;++i)step(.8f,0,2);
+    require(step(.7f,0,2),"first speed-window impact missing");
+    for(int i=0;i<100;++i) {
+        const bool event=step(.7f,0,2);
+        if(i>=20)require(!event,"speed-window impact envelope never expired");
+    }
+    for(int i=0;i<8;++i)step(.8f,0,2);
+    require(step(.6f,0,2),"second speed-window impact missing");
+
+    FFB::ResetCalculationState();
+    require(!step(.8f,0,3),"initial gear emitted a shift");
+    require(step(.8f,0,4),"gear edge emitted no shift");
+    for(int i=0;i<20;++i)step(.8f,0,4);
+    require(!model.last_was_event,"held gear restarted the shift envelope");
+    require(step(.8f,0,5),"second gear edge emitted no shift");
+    FFB::ResetCalculationState();
+    require(!step(.8f,0,6),"reset retained gear edge or event envelope");
+    FFB::sharedModel=nullptr; FFB::sharedShaper=nullptr; FFB::useSharedModel=false;
+    std::cout<<"PASS: shared contact/speed impacts expire and retrigger; held contact/cooldown suppression; gear edges, expiry and reset; memory-only sinks\n";
+}
 int main(int argc,char** argv) {
     try {
         spdlog::set_level(spdlog::level::off); // Keep wall-clock diagnostics out of observations.
+        if(argc==2 && std::string_view(argv[1])=="--shared-events") { SharedEvents(); return 0; }
         if(argc!=2 && argc!=3) throw std::runtime_error("usage: signal-calculation input [expected-observation]");
         auto frames=Read(argv[1]); auto result=Run(frames,false);
         if(result!=Run(frames,false) || Run(frames,true)!=Run(frames,true))
