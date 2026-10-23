@@ -17,6 +17,13 @@ static SHORT FixtureKey(int key) { return key == VK_RETURN && fixtureReturn ? SH
 
 IDirectInput8A* g_RealDirectInput8 = nullptr;
 Hook::Hook() {}
+namespace RemapInject {
+bool Armed() { return false; }
+void Poll() { std::abort(); }
+int Deliver(const GUID&, IDirectInputDevice8A*, DIJOYSTATE2&) { std::abort(); }
+void DeviceGone(const GUID&) {}
+int NoteVolume(Volume, int value) { return value; }
+}
 static int consumerReleases = 0, consumerUnacquires = 0, borrowedCalls = 0;
 static ULONG __stdcall FakeRelease(void*) { ++consumerReleases; return 0; }
 static HRESULT __stdcall FakeUnacquire(void*) { ++consumerUnacquires; return S_OK; }
@@ -195,6 +202,31 @@ static void TestPollingEdges()
     const auto readsBeforeResume = stateReads;
     BeginInputTick(); Poll();
     RequireInput(stateReads == readsBeforeResume + 1, "resumed input must refresh on next update");
+    polledState.rgbButtons[127] = 0x80;
+    for (int hat = 0; hat < 4; ++hat) {
+        for (int direction = 0; direction < 4; ++direction) {
+            for (auto& pov : polledState.rgdwPOV) pov = 0xffffffff;
+            polledState.rgdwPOV[hat] = direction * 9000;
+            BeginInputTick();
+            const auto snapshot = ReadUiSnapshot();
+            const int binding = PovBinding::Encode(hat, direction * 9000);
+            RequireInput(binding < int(snapshot.buttons.size()) && snapshot.buttons[binding],
+                "POV direction must reach the UI capture snapshot");
+            RequireInput(snapshot.buttons[127], "POV snapshot must retain physical button 128");
+            for (int i = PovBinding::Base; i <= PovBinding::Last; ++i)
+                RequireInput(snapshot.buttons[i] == (i == binding), "POV snapshot retained another direction");
+        }
+        polledState.rgdwPOV[hat] = 4500;
+        BeginInputTick();
+        const auto diagonal = ReadUiSnapshot();
+        RequireInput(diagonal.buttons[PovBinding::Encode(hat, 0)] && diagonal.buttons[PovBinding::Encode(hat, 9000)],
+            "diagonal must expose both directions so capture can refuse ambiguity");
+        polledState.rgdwPOV[hat] = 0xffff;
+        BeginInputTick();
+        const auto centered = ReadUiSnapshot();
+        for (int i = PovBinding::Base; i <= PovBinding::Last; ++i)
+            RequireInput(!centered.buttons[i], "centered POV must release capture directions");
+    }
     primary = {};
     primaryGuidValid = false; Settings::DIShifterDeviceGuid.clear();
     Settings::DIShifterGearMode = "sequential"; Game::current_mode = oldMode;

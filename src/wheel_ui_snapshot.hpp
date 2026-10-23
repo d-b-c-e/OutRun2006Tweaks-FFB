@@ -2,6 +2,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include "pov_binding.hpp"
 
 namespace DInputRemap
 {
@@ -11,7 +12,8 @@ struct UiSnapshot
     std::string name;
     std::string guid;
     std::array<long, 8> axes{};
-    std::array<bool, 128> buttons{};
+    // Physical buttons 0..127, then POV directions in the existing binding encoding.
+    std::array<bool, PovBinding::Last + 1> buttons{};
     float steering = 0, throttle = 0, brake = 0;
 };
 UiSnapshot ReadUiSnapshot();

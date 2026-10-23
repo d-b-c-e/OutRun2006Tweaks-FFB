@@ -194,6 +194,13 @@ static void BeginCapture(int& value, const char* label, const char* key, bool ax
     if (std::string(section) != "DirectInput") DInputRemap::RefreshUiInputDevices();
 }
 
+static bool CapturingHPatternGear()
+{
+    const std::string_view key(capture.key);
+    return std::string_view(capture.section) == "DirectInput.Shifter" && key.starts_with("ButtonGear") &&
+        key != "ButtonGearUp" && key != "ButtonGearDown";
+}
+
 static std::string& OptionalGuid(const char* section)
 {
     return std::string(section) == "DirectInput.Shifter" ? Settings::DIShifterDeviceGuid : Settings::DIAuxDeviceGuid;
@@ -274,7 +281,8 @@ static bool SaveCapturedBinding(const DInputRemap::UiSnapshot& input)
                 (capture.destination != &Settings::WheelStopKey && capture.candidate == Settings::WheelStopKey) ||
                 (capture.destination != &Settings::WheelSettingsKey && capture.candidate == Settings::WheelSettingsKey)) return false;
         }
-        else if (capture.candidate < 0 || capture.candidate >= 128 || input.buttons[capture.candidate]) return false;
+        else if (capture.candidate < 0 || capture.candidate >= int(input.buttons.size()) ||
+            (CapturingHPatternGear() && PovBinding::IsPov(capture.candidate)) || input.buttons[capture.candidate]) return false;
         if (!capture.keyboard && !(capture.message = ButtonConflict(input)).empty()) return false;
     }
     if (!capture.clear && !capture.keyboard && (!input.connected || input.guid.empty() || input.guid != capture.initial.guid)) return false;
@@ -503,7 +511,8 @@ static void ObserveButtonCapture(DInputRemap::UiSnapshot& input)
     // Picker edits can occur during this frame, after its first device read.
     if (input.guid != capture.initial.guid) input = capture.initial;
     int newlyPressed = -1, count = 0;
-    for (int i = 0; i < 128; ++i)
+    const int limit = CapturingHPatternGear() ? PovBinding::Base : int(input.buttons.size());
+    for (int i = 0; i < limit; ++i)
     {
         if (!input.buttons[i]) capture.initial.buttons[i] = false;
         if (input.buttons[i] && !capture.initial.buttons[i]) { newlyPressed = i; ++count; }
@@ -511,7 +520,7 @@ static void ObserveButtonCapture(DInputRemap::UiSnapshot& input)
     if (count > 1)
     {
         capture.candidate = -1; capture.initial.buttons = input.buttons;
-        capture.message = "More than one button moved. Release them and press only the intended button.";
+        capture.message = "More than one input moved. Release them and press only the input you want to bind.";
     }
     else if (count == 1) { capture.candidate = newlyPressed; capture.message = ButtonConflict(input); }
 }
@@ -554,7 +563,8 @@ static void CapturePanel(const DInputRemap::UiSnapshot& primaryInput)
         }
         ObserveButtonCapture(input);
         ImGui::TextWrapped("Device: %s", input.connected ? input.name.c_str() : "Missing or unavailable");
-        ImGui::TextWrapped("Press and release one button, then Save binding. Your current assignment stays active until saved.");
+        ImGui::TextWrapped("Press and release one %s, then Save binding. Your current assignment stays active until saved.",
+            CapturingHPatternGear() ? "button" : "button or POV direction");
     }
     if (!capture.message.empty()) ImGui::TextWrapped("%s", capture.message.c_str());
     if (!capture.clear)
@@ -562,6 +572,8 @@ static void CapturePanel(const DInputRemap::UiSnapshot& primaryInput)
         if (capture.candidate >= 0)
         {
             if (capture.keyboard) ImGui::Text("Detected: %s", ShortcutLabel(capture.candidate).c_str());
+            else if (PovBinding::IsPov(capture.candidate)) ImGui::Text("Detected: POV %d %s",
+                PovBinding::Hat(capture.candidate) + 1, PovBinding::DirectionName(capture.candidate));
             else ImGui::Text("Detected: Button %d", capture.candidate + 1);
         }
         else ImGui::TextUnformatted("Waiting for input...");

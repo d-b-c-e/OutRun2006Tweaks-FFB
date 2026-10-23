@@ -11,10 +11,10 @@ Seeded 2026-10-04 from what was verified that day; `unchecked` rows need a look.
 | STD-001 | One mod per game | unchecked |  |
 | STD-002 | Recording and playback from launch | n/a | Superseded by STD-012; input determinism is not established. |
 | STD-003 | Normalized FFB strength | unchecked |  |
-| STD-004 | Consistent settings UX | unchecked |  |
+| STD-004 | Consistent settings UX | unchecked | October 23 focused F6 POV capture/preview/save source fixtures pass; H-pattern POV gears remain refused. Full UX/game-render and physical acceptance remain open. See docs/2026-10-23-pov-capture-and-surround-gates.md. |
 | STD-005 | Camera numpad layout 8/2 9/3 4/6 7/1 +/- 5 | unchecked |  |
 | STD-006 | Camera step sizes are settings | unchecked |  |
-| STD-007 | Triple screens in one wide window | partial (source) | f4e9f01: one borderless window, planar wide view (Surround native; separate monitors via [Triple] Screens). Not angle-correct side views. |
+| STD-007 | Triple screens in one wide window | partial (source) | f4e9f01: one borderless window, planar wide view (Surround native; separate monitors via [Triple] Screens). October 23 pinned camera-byte inspection establishes no projection fix; actual Surround race/back-buffer/HUD/culling remains open. Not angle-correct side views. |
 | STD-008 | Display changes: game applies once | unchecked |  |
 | STD-009 | Dashboard telemetry matches the HUD | partial | Supported-executable HUD base +0x1F8 agrees with three October 8 Dino km/h frames under muted delivery. Source candidate replaces Forza raw*90 with validated HUD-base/3.6; 41 encoded packet checks and full build pass. Installed runtime still has the old estimate; live UDP/all-car/mph qualification pending. See docs/2026-10-08-hud-speed-discovery.md. |
 | STD-010 | Install the latest build for testing | adopted | Reviewed private e5b44f8 installed October 8 with 41-export native 50ba139; both runtime hashes and five retained INIs verified. docs/2026-10-08-force-delivery-acknowledgment.md. Later schema-3 source awaits review/live input observation; no physical acceptance inferred. |

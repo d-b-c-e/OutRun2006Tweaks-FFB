@@ -1072,7 +1072,7 @@ namespace DInputRemap
 		snapshot.connected = true;
 		const auto& state = slot->currentState;
 		for (int i = 0; i < 8; ++i) snapshot.axes[i] = ReadAxisRaw(state, i);
-		for (int i = 0; i < 128; ++i) snapshot.buttons[i] = (state.rgbButtons[i] & 0x80) != 0;
+		for (int i = 0; i < int(snapshot.buttons.size()); ++i) snapshot.buttons[i] = IsButtonPressed(*slot, i);
 		return snapshot;
 	}
 	UiSnapshot ReadDeviceUiSnapshot(const std::string& guid)
