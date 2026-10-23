@@ -34,3 +34,14 @@ inline float TripleHudWidth(float width, float height, int tripleScreens)
 		return width;
 	return (std::max)(width / 3, height * 4 / 3);
 }
+
+// Overlay notifications (overlay/notifications.hpp) keep this far in from the window's right edge: in a race, to the
+// HUD width above (the centre screen of a triple), else outside the menus' letterboxed 4:3 with UILetterboxing = 1.
+inline float NotificationBorder(float width, float height, bool inGame, int uiLetterboxing, int tripleScreens)
+{
+	if (inGame)
+		return (width - TripleHudWidth(width, height, tripleScreens)) / 2;
+	if (uiLetterboxing != 1)
+		return 0;
+	return ((width - height / (3.f / 4.f)) / 2) + 0.5f;
+}
