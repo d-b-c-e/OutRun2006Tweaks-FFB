@@ -26,7 +26,8 @@ inline bool TripleSpanFromMonitors(std::vector<RECT> r, RECT& out)
 }
 
 // HUD on the centre screen (STD-007/019): on a window at least three screens wide (the toolkit's 2.9:1 wide-primary
-// rule), the width that edge-anchored HUD sprites spread to is the centre screen, never narrower than the 4:3 HUD.
+// rule), the width that edge-anchored HUD sprites spread to is the middle third, never narrower than the 4:3 HUD.
+// A single 32:9 monitor gets that centred 4:3 area (wider than its middle third; it has no centre panel).
 inline float TripleHudWidth(float width, float height, int tripleScreens)
 {
 	if (tripleScreens == 0 || !(height > 0) || width < height * 2.9f)
