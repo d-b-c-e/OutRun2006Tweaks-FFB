@@ -19,6 +19,7 @@
 #include "plugin.hpp"
 #include "game_addrs.hpp"
 #include "wheel_ui_snapshot.hpp"
+#include "hpattern_gate.hpp"
 #include "consumer_lifecycle.hpp"
 #include "pov_binding.hpp"
 #include "remap_inject.hpp"
@@ -81,7 +82,8 @@ namespace DInputRemap
 
 	struct HPatternState
 	{
-		int targetGear = 0;       // 0=neutral, 1-6=forward, -1=reverse
+		int targetGear = 0;       // the one held gate 1-6, else 0 (hpattern_gate.hpp: no neutral or reverse in OutRun)
+		HPatternPulses pulses;    // bounded pulses toward targetGear
 		int cooldownFrames = 0;   // frames remaining before next shift allowed
 		int prevTargetGear = 0;   // for edge detection
 		uint32_t cachedMask = 0;  // per-frame cached H-pattern emissions
@@ -542,22 +544,22 @@ namespace DInputRemap
 			return;
 		}
 
-		// Read which gear button is pressed on the shifter device (mutually exclusive)
 		auto isPressed = [](const DeviceSlot& s, int btn) -> bool {
 			return btn >= 0 && btn < 128 && (s.currentState.rgbButtons[btn] & 0x80) != 0;
 		};
 
-		int target = 0;
-		if (isPressed(shifter, Settings::DIShifterButtonGear1))           target = 1;
-		else if (isPressed(shifter, Settings::DIShifterButtonGear2))      target = 2;
-		else if (isPressed(shifter, Settings::DIShifterButtonGear3))      target = 3;
-		else if (isPressed(shifter, Settings::DIShifterButtonGear4))      target = 4;
-		else if (isPressed(shifter, Settings::DIShifterButtonGear5))      target = 5;
-		else if (isPressed(shifter, Settings::DIShifterButtonGear6))      target = 6;
-		else if (isPressed(shifter, Settings::DIShifterButtonGearReverse)) target = -1;
-		// else target = 0 (neutral — no shifts emitted)
+		const bool gates[6] = { isPressed(shifter, Settings::DIShifterButtonGear1), isPressed(shifter, Settings::DIShifterButtonGear2),
+			isPressed(shifter, Settings::DIShifterButtonGear3), isPressed(shifter, Settings::DIShifterButtonGear4),
+			isPressed(shifter, Settings::DIShifterButtonGear5), isPressed(shifter, Settings::DIShifterButtonGear6) };
+		hpattern.targetGear = HPatternGate(gates);
 
-		hpattern.targetGear = target;
+		// OutRun has no reverse gear: that gate selects none (the car keeps its gear), as neutral does.
+		static bool reverseLogged = false;
+		if (!reverseLogged && isPressed(shifter, Settings::DIShifterButtonGearReverse))
+		{
+			reverseLogged = true;
+			spdlog::info("DInputRemap: H-pattern reverse gate held; OutRun has no reverse gear, so the car keeps its gear");
+		}
 	}
 
 	static uint32_t GetKeyboardMask();
@@ -930,25 +932,19 @@ namespace DInputRemap
 				hpattern.cachedMask = 0;
 				hpattern.maskComputed = true;
 
-				if (hpattern.targetGear != 0 && hpattern.cooldownFrames == 0)
+				if (hpattern.cooldownFrames == 0)
 				{
 					EVWORK_CAR* car = Game::pl_car();
 					if (car)
 					{
-						int currentGear = static_cast<int>(car->cur_gear_208);
-						if (hpattern.targetGear > currentGear)
+						const uint32_t currentGear = car->cur_gear_208;
+						const int shift = hpattern.pulses.Step(hpattern.targetGear, currentGear);
+						if (shift != 0)
 						{
-							hpattern.cachedMask |= (1 << static_cast<int>(SwitchId::GearUp));
+							hpattern.cachedMask |= (1 << static_cast<int>(shift > 0 ? SwitchId::GearUp : SwitchId::GearDown));
 							hpattern.cooldownFrames = HPATTERN_COOLDOWN;
-							spdlog::trace("DInputRemap: H-pattern shift UP (target={}, current={})",
-								hpattern.targetGear, currentGear);
-						}
-						else if (hpattern.targetGear < currentGear)
-						{
-							hpattern.cachedMask |= (1 << static_cast<int>(SwitchId::GearDown));
-							hpattern.cooldownFrames = HPATTERN_COOLDOWN;
-							spdlog::trace("DInputRemap: H-pattern shift DOWN (target={}, current={})",
-								hpattern.targetGear, currentGear);
+							spdlog::trace("DInputRemap: H-pattern shift {} (target={}, current={}, pulse {})",
+								shift > 0 ? "UP" : "DOWN", hpattern.targetGear, currentGear, hpattern.pulses.sent);
 						}
 					}
 				}
