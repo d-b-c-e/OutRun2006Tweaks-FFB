@@ -139,7 +139,8 @@ int main(int argc, char** argv)
         std::ofstream(probe) << "[Telemetry]\nEnable = false\n";
         assert(!inih::INIReader(probe).Get("Telemetry", "Enable", Settings::TelemetryEnabled)); // explicit opt-out
         const auto shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / "OutRun2006Tweaks.ini";
-        assert(std::filesystem::exists(shipped) && inih::INIReader(shipped).Get("Telemetry", "Enable", false));
+        bool absent = false; // INIReader::Get takes its default by reference
+        assert(std::filesystem::exists(shipped) && inih::INIReader(shipped).Get("Telemetry", "Enable", absent));
     }
     Module::UserIniPath = directory / "fixture.user.ini";
     Module::DllPath = directory / "dinput8.dll";
