@@ -36,6 +36,15 @@ int main()
 	check(!TripleSpanFromMonitors({ R(0, 0, 2560, 1440), R(0, 1440, 2560, 2880), R(0, 2880, 2560, 4320) }, out),
 		"three stacked monitors are rejected");
 	check(!TripleSpanFromMonitors({ R(0, 0, 0, 1440), R(0, 0, 0, 1440), R(0, 0, 0, 1440) }, out), "empty rectangles are rejected");
+	// HUD edge anchors: (anchor width - 4:3 HUD width) / 2 is the OnlineArcade side spacing in hooks_uiscaling.cpp.
+	check(TripleHudWidth(7680, 1440, 1) == 2560 && (TripleHudWidth(7680, 1440, 1) - 1920) / 2 == 320,
+		"Surround 7680x1440: side HUD stops 320 px outside the 4:3 HUD, at the centre screen's edges");
+	check(TripleHudWidth(5760, 1080, 2) == 1920, "Separate monitors 5760x1080: the centre 1920 px");
+	check(TripleHudWidth(7680, 1440, 0) == 7680, "Off keeps the full width");
+	check(TripleHudWidth(2560, 1440, 1) == 2560, "a single 16:9 window is unchanged");
+	check(TripleHudWidth(3440, 1440, 1) == 3440, "21:9 (2.4:1) is unchanged");
+	check(TripleHudWidth(5120, 1440, 1) == 1920, "32:9 counts as wide (2.9 rule) but never narrower than the 4:3 HUD");
+	check(TripleHudWidth(7680, 0, 1) == 7680, "zero height keeps the full width");
 	std::printf("%s triple span topology, %d failures\n", failures ? "FAIL" : "ok", failures);
 	return failures ? 1 : 0;
 }

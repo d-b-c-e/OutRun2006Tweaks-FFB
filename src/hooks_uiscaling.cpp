@@ -1,6 +1,7 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "triple_span.hpp"
 
 enum class ScalingMode
 {
@@ -195,7 +196,8 @@ class UIScaling : public Hook
 		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
 		if (mode == ScalingMode::OnlineArcade && ScalingType != SpriteScaleType::Disabled)
 		{
-			float spacing = -((Game::screen_scale->y * Game::original_resolution.x) - Game::screen_resolution->x) / 2;
+			float spacing = -((Game::screen_scale->y * Game::original_resolution.x) -
+				TripleHudWidth(Game::screen_resolution->x, Game::screen_resolution->y, Settings::TripleScreens)) / 2;
 
 			// Space out the UI elements if they're on the sides of the screen
 			float* m = *Module::exe_ptr<float*>(0x49B564);
@@ -349,7 +351,8 @@ class UIScaling : public Hook
 		if (mode != ScalingMode::OnlineArcade)
 			return;
 
-		float spacing = -((Game::screen_scale->y * Game::original_resolution.x) - Game::screen_resolution->x) / 2;
+		float spacing = -((Game::screen_scale->y * Game::original_resolution.x) -
+			TripleHudWidth(Game::screen_resolution->x, Game::screen_resolution->y, Settings::TripleScreens)) / 2;
 		spacing = spacing / Game::screen_scale->x;
 
 		// round our spacing value to nearest if this is integer, fixes REV indicator light being slightly offset
