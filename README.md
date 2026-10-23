@@ -124,7 +124,8 @@ A 311-byte Forza "Data Out" packet to `127.0.0.1:8000` (SimHub, MOZA Pit House)
 plus a shared-memory struct. RPM is synthesised — OutRun exposes none. Throttle
 and brake come from the input remap layer's own reads, so they are true pedal
 travel; when no wheel is bound they are reported as absent rather than as zero,
-which a brake light would read as "released".
+which a brake light would read as "released". Telemetry is on by default, including
+for an existing INI without a `[Telemetry]` section; `[Telemetry] Enable = false` turns it off.
 
 ### Installing
 

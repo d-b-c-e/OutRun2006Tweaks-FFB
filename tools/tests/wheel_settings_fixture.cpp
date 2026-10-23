@@ -130,6 +130,17 @@ int main(int argc, char** argv)
     if (argc != 2) return 2;
     const auto directory = std::filesystem::absolute(argv[1]);
     std::filesystem::create_directories(directory);
+    {
+        // STD-016: telemetry is on by default. The loader is dllmain.cpp's ini.Get("Telemetry", "Enable", default).
+        assert(Settings::TelemetryEnabled);
+        const auto probe = directory / "telemetry-default.ini";
+        std::ofstream(probe) << "[Controls]\nUseNewInput = false\n";
+        assert(inih::INIReader(probe).Get("Telemetry", "Enable", Settings::TelemetryEnabled)); // no section: on
+        std::ofstream(probe) << "[Telemetry]\nEnable = false\n";
+        assert(!inih::INIReader(probe).Get("Telemetry", "Enable", Settings::TelemetryEnabled)); // explicit opt-out
+        const auto shipped = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / "OutRun2006Tweaks.ini";
+        assert(std::filesystem::exists(shipped) && inih::INIReader(shipped).Get("Telemetry", "Enable", false));
+    }
     Module::UserIniPath = directory / "fixture.user.ini";
     Module::DllPath = directory / "dinput8.dll";
     HWND hwnd = reinterpret_cast<HWND>(1);

@@ -241,8 +241,8 @@ namespace Settings
 	// without rebuilding. See docs/FORCE-PROFILES.md.
 	inline std::string FFBProfile = "legacy";
 
-	// Telemetry shared memory (for SimHub / bass shakers)
-	inline bool TelemetryEnabled = false;
+	// Telemetry shared memory (for SimHub / bass shakers). On by default (STD-016); [Telemetry] Enable = false turns it off.
+	inline bool TelemetryEnabled = true;
 	inline std::string TelemetrySharedMemName = "OutRun2006Telemetry";
 
 	inline int EnableHollyCourse2 = 1;

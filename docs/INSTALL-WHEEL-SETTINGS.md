@@ -45,8 +45,8 @@ The installed PC manual documents these controls.
 
 Handbrake output, custom Bonnet/Bumper mounts and
 camera adjustment keys are not implemented by this adapter. The native Change
-camera button is bindable. Telemetry is optional; its page explains receiver
-setup and distinguishes sending from confirmed receipt.
+camera button is bindable. Telemetry is on by default and can be turned off;
+its page explains receiver setup and distinguishes sending from confirmed receipt.
 
 The installer never overwrites an existing INI, binding file or force profile.
 It adds the shipped template/profile only if absent. Updates replace just
