@@ -720,7 +720,7 @@ static void OptionalControls(bool shifter)
             ButtonRow("Gear 5", Settings::DIShifterButtonGear5, "ButtonGear5", device, section);
             ButtonRow("Gear 6", Settings::DIShifterButtonGear6, "ButtonGear6", device, section);
             ButtonRow("Reverse", Settings::DIShifterButtonGearReverse, "ButtonGearReverse", device, section);
-            ImGui::TextWrapped("The game's gearbox is sequential. This adapter sends bounded shifts toward the selected gear; releasing the shifter does not add a native neutral gear.");
+            ImGui::TextWrapped("The game's gearbox is sequential, with six forward gears and no neutral or reverse. One held gate shifts toward its gear, stopping after three shifts that do not change it; with no gate, two gates or Reverse, the car keeps its gear.");
         }
     }
     else

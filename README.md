@@ -108,7 +108,7 @@ F6 saves:
 | steer | `[DirectInput]` DeviceGuid, SteeringAxis, SteeringInvert; `[DirectInput.Calibration]` SteeringEnabled = false (range-centred, as the contract) |
 | throttle / brake | AccelerationAxis/BrakeAxis, Invert, Throttle/BrakeDeviceGuid and Name; calibration from the captured rest to the full end |
 | confirm, back, start, select, camera, menu buttons | ButtonA, ButtonB, ButtonStart, ButtonBack, ButtonChangeView, ButtonSel* (on another device: `[DirectInput.Aux]`) |
-| shiftUp/shiftDown, gears 1-6, reverse | on the wheel: ButtonGearUp/Down; on another device: `[DirectInput.Shifter]` with GearMode from the profile's transmission |
+| shiftUp/shiftDown, gears 1-6, reverse | on the wheel: ButtonGearUp/Down; on another device: `[DirectInput.Shifter]` with GearMode from the profile's transmission. OutRun has no reverse or neutral: those H-pattern positions keep the current gear |
 
 The first apply backs the user INI up as `.user.ini.before-profile-controls`. The edit is one transaction: read back,
 then moved over the file. `[ControlsApplied]` records the revision, so F6 changes stand until the profile changes.
