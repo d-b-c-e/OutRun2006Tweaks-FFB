@@ -1,0 +1,7 @@
+# Current OutRun private build and install — October 24, 2026
+
+Runtime source `986353a1312b49fe21a3640ec3d65923288d4fe2` built as x86 Release with Visual Studio 2022. CMake 4 required `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` for bundled older projects; no runtime source was changed. `tools/tests/Test-ControlsCapability.ps1` passed 27 synthetic checks. The review-only private package is `build/packages/miho-current-20261024-053439.zip`, SHA-256 `AE88FEC411ED301EA5D2485C21D17A3D4ADBC6AC03C0E17690CB236B53974989`. Its manifest records a clean source tree, runtime commit `986353a`, and Wheelkit controls schema 1; public distribution remains blocked by the existing third-party notice review.
+
+The packaged installer updated the existing Tweaks runtime in `E:/Source/_archive/2026-10-04/outrun2006/outrun2006-redux/game` with the game closed. It verified both installed DLL hashes, preserved five settings files, and wrote the Wheelkit controls receipt. Installed `dinput8.dll` SHA-256 is `EA901C6CE6A1BA274508A8BD9D9E34E52E3A7BF47D01FBD1A0713AB0579DF034`. The install receipt reports `installed`; its backup is `.wheel-settings-backups/20261024-103506-066-e027f85c` under that game directory. The shared lease was released.
+
+This is installed-byte and offline-controls evidence only. The game was not launched; F6 rendering, profile application, driving, force, true triples, recording, and driving-input playback are not accepted by this install.
