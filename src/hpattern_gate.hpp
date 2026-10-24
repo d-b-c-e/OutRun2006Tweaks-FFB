@@ -8,8 +8,9 @@
 // Pure, so it is tested offline (tools/tests/hpattern_gate_fixture.cpp).
 #include <cstdint>
 
-inline int HPatternGate(const bool gates[6])
+inline int HPatternGate(const bool gates[6], bool reverseHeld)
 {
+	if (reverseHeld) return 0;
 	int gate = 0;
 	for (int k = 0; k < 6; ++k)
 		if (gates[k])

@@ -13,8 +13,9 @@ static void check(bool ok, const char* what)
 int main()
 {
 	bool none[6]{}, three[6]{ false, false, true }, twoHeld[6]{ false, true, false, true };
-	check(HPatternGate(none) == 0 && HPatternGate(three) == 3, "no gate selects none; one gate selects its gear");
-	check(HPatternGate(twoHeld) == 0, "two held gates select none (no lower-gate guess)");
+	check(HPatternGate(none, false) == 0 && HPatternGate(three, false) == 3, "no gate selects none; one gate selects its gear");
+	check(HPatternGate(twoHeld, false) == 0, "two held gates select none (no lower-gate guess)");
+	check(HPatternGate(three, true) == 0, "reverse held with a forward gate selects none");
 
 	HPatternPulses p;
 	check(p.Step(3, 1) == 1 && p.Step(3, 2) == 1 && p.Step(3, 3) == 0, "gate 3 from gear 1: up, up, then at the gate");

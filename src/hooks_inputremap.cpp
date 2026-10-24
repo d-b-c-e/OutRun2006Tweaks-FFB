@@ -551,11 +551,12 @@ namespace DInputRemap
 		const bool gates[6] = { isPressed(shifter, Settings::DIShifterButtonGear1), isPressed(shifter, Settings::DIShifterButtonGear2),
 			isPressed(shifter, Settings::DIShifterButtonGear3), isPressed(shifter, Settings::DIShifterButtonGear4),
 			isPressed(shifter, Settings::DIShifterButtonGear5), isPressed(shifter, Settings::DIShifterButtonGear6) };
-		hpattern.targetGear = HPatternGate(gates);
+		const bool reverseHeld = isPressed(shifter, Settings::DIShifterButtonGearReverse);
+		hpattern.targetGear = HPatternGate(gates, reverseHeld);
 
 		// OutRun has no reverse gear: that gate selects none (the car keeps its gear), as neutral does.
 		static bool reverseLogged = false;
-		if (!reverseLogged && isPressed(shifter, Settings::DIShifterButtonGearReverse))
+		if (!reverseLogged && reverseHeld)
 		{
 			reverseLogged = true;
 			spdlog::info("DInputRemap: H-pattern reverse gate held; OutRun has no reverse gear, so the car keeps its gear");
