@@ -940,6 +940,8 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         ImGui::TextLinkOpenURL("Mod on GitHub", "https://github.com/d-b-c-e/dbce-mods-outrun-2006");
         ImGui::SameLine();
         ImGui::TextLinkOpenURL("Wheelkit on GitHub", "https://github.com/d-b-c-e/dbce-wheelkit");
+        if (ImGui::Button("Submit issue"))
+            ShellExecuteW(nullptr, L"open", L"https://github.com/d-b-c-e/dbce-mods-outrun-2006/issues/new", nullptr, nullptr, SW_SHOWNORMAL);
         if (advanced)
         {
             const auto dispatch = WheelInputGuard::Diagnostics();
