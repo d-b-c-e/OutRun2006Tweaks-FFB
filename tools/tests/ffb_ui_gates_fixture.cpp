@@ -15,6 +15,7 @@ static ULONGLONG FixtureTick64() { return recoveryNow; }
 #define GetTickCount64 FixtureTick64
 #include "../../src/hooks_dinputffb.cpp"
 namespace TickDiscovery { void Observe(EVWORK_CAR*, bool) {} void NoteHooks(bool, bool) {} } // inert without an armed window
+namespace RemapInject { bool Observe(float, float, int, uint32_t, uint32_t, bool) { return false; } }
 #include <cassert>
 #include <iostream>
 #include <limits>

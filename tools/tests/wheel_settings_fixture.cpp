@@ -185,6 +185,10 @@ int main(int argc, char** argv)
     assert(SavePending());
     assert(Read(Module::UserIniPath).find("FFBGlobalStrength = 0.37") != std::string::npos);
     assert(Read(Module::UserIniPath).find("DirectInputFFB = false") != std::string::npos);
+    assert(Save("Triple", "Screens", "Separate monitors"));
+    std::string screenDefault = "Off";
+    assert(inih::INIReader(Module::UserIniPath).Get("Triple", "Screens", screenDefault) == "Separate monitors");
+    assert(Settings::TripleScreens == 1); // Runtime span changes only on restart.
 
     ImGui::CreateContext();
     auto& io = ImGui::GetIO();
@@ -213,6 +217,7 @@ int main(int argc, char** argv)
                     assert((text.find("Centering") != std::string::npos) == advanced);
                     assert((text.find("Custom tuning active") != std::string::npos) == !advanced);
                 }
+                if (p == 3) assert(text.find("Triple screens (next launch)") != std::string::npos);
                 std::ofstream(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.txt" : "-simple.txt"))) << text;
                 ExportDrawData(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.json" : "-simple.json")));
             }

@@ -901,11 +901,23 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         }
         break;
     case Page::Cameras:
+    {
+        static int savedScreens = Settings::TripleScreens;
+        const char* layouts[] = {"Off", "Surround", "Separate monitors"};
+        ImGui::TextUnformatted("Triple screens (next launch)");
+        int choice = savedScreens;
+        if (ImGui::Combo("Screen layout", &choice, layouts, 3))
+        {
+            savedScreens = choice;
+            Save("Triple", "Screens", layouts[choice]);
+        }
+        ImGui::TextWrapped("Restart the game to apply this layout. Separate monitors spans three equal screens in one planar view; it needs automatic resolution or a matching wide resolution.");
         ButtonRow("Change camera", Settings::DIRemapButtonChangeView, "ButtonChangeView", input);
         ImGui::TextWrapped("Change camera uses the game's normal camera rotation.");
         ImGui::TextWrapped("Bonnet / Bumper mounts and live adjustment shortcuts have not been implemented in this adapter yet. No camera shortcut is advertised as active.");
         CapturePanel(input);
         break;
+    }
     case Page::Telemetry:
     {
         bool enabled = Settings::TelemetryEnabled;
