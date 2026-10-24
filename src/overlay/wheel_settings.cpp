@@ -937,6 +937,9 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         if (ImGui::Button("Open settings folder"))
             ShellExecuteW(nullptr, L"open", Module::DllPath.parent_path().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         ImGui::TextWrapped("Support-file creation is not implemented. Logs are local beside the game; nothing is uploaded.");
+        ImGui::TextLinkOpenURL("Mod on GitHub", "https://github.com/d-b-c-e/dbce-mods-outrun-2006");
+        ImGui::SameLine();
+        ImGui::TextLinkOpenURL("Wheelkit on GitHub", "https://github.com/d-b-c-e/dbce-wheelkit");
         if (advanced)
         {
             const auto dispatch = WheelInputGuard::Diagnostics();
