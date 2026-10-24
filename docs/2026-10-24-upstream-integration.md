@@ -78,7 +78,31 @@ and still owns. The x86 Release build produced proxy
 `BFE36C55DDADCC8A166D2458C20565A8964DBEB38DA2FC59BCAD761673C6ABB7`.
 The synthetic host-lifecycle fixture passed its once-only cleanup assertion;
 the focused UPnP fixture passed preexisting, conflicting, unreadable, new-rule,
-reassigned-rule, and muted-process cases. These checks do not prove router
-behavior of the revised build in a live game. A new private package and runtime
-check remain open, followed by driving, overlay coexistence, interpolation,
-graphics, wheel/force and release review.
+reassigned-rule, and muted-process cases. Driving, overlay coexistence,
+interpolation, graphics, wheel/force and release review remain open.
+
+## Revised private candidate
+
+The router-safe source is `2f3e1bc`; the reviewed Wheelkit controls policy is
+`2c91c1e`. The new review-only package is
+`build/packages/miho-upstream-router-safe-20261024.zip`, SHA-256
+`0413A75FD0029769B6E76AACD6E10043376DCC54387FCE0EFBFE1BE67DBD0EA0`.
+Its manifest names clean source `2c91c1e`, carries the exact controls
+capability, and pins proxy
+`BFE36C55DDADCC8A166D2458C20565A8964DBEB38DA2FC59BCAD761673C6ABB7`.
+The actual package passed 58 inventory and refusal checks and 26 controls
+capability checks. The source also passed the x86 Release build and the two
+focused lifecycle/ownership fixtures.
+
+The packaged installer upgraded only the private game copy, retained all six
+existing settings files, wrote the exact Wheelkit controls receipt, and backed
+up the preceding proxy at
+`game/.wheel-settings-backups/20261024-145846-189-4e48d750`.
+The second 35-second private startup opened the game, logged the process mute,
+made no UPnP attempt, and closed cleanly. Read-only router snapshots before
+and after match exactly for all six OutRun rules. Evidence is under
+`E:/outrun2-research/private-upstream-9e4ce4b-20261024/startup-02` and its
+adjacent `router-before-startup-02.txt` / `router-after-startup-02.txt` files.
+No owner game install was changed. This remains a private test candidate;
+driving, F6/F11 coexistence, Tweaks graphics/interpolation, triple views,
+physical wheel/force and public distribution are still unqualified.
