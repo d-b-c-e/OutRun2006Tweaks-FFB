@@ -115,3 +115,4 @@ Check ([Convert]::ToBase64String([IO.File]::ReadAllBytes($receiptPath)) -eq [Con
 Check ((Hash (Join-Path $game 'OutRun2006Tweaks.user.ini')) -eq $owner) 'Owner user INI untouched throughout'
 Remove-Item -LiteralPath $fixture -Recurse -Force
 Write-Host "PASS: $checks controls capability checks (exact reviewed commit policy; receipt written, withdrawn, rolled back and restored with its runtime). Synthetic only."
+exit 0
