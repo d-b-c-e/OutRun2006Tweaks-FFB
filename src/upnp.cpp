@@ -1,5 +1,6 @@
 #include "hook_mgr.hpp"
 #include "upnp.hpp"
+#include "signal_mute_policy.hpp"
 
 #include <miniupnpc.h>
 #include <upnpcommands.h>
@@ -7,6 +8,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <thread>
 
@@ -32,6 +34,7 @@ namespace UPnP
 			std::string serviceType;
 			std::string lanAddress;
 			bool mapped = false;
+			std::array<std::array<bool, 2>, Ports.size()> owned{};
 		};
 
 		// Never destroyed. Windows kills the worker thread before running the DLL's static
@@ -41,6 +44,28 @@ namespace UPnP
 		{
 			static State* instance = new State();
 			return *instance;
+		}
+
+		void clear_owned(State& s)
+		{
+			if (!s.mapped) return;
+			for (std::size_t index = 0; index < Ports.size(); ++index)
+			{
+				const std::string portStr = std::to_string(Ports[index]);
+				for (std::size_t protocol = 0; protocol < 2; ++protocol)
+				{
+					if (!s.owned[index][protocol]) continue;
+					const char* name = protocol == 0 ? "TCP" : "UDP";
+					char client[64] = {}, internalPort[16] = {}, desc[80] = {}, enabled[4] = {}, duration[16] = {};
+					const int existing = UPNP_GetSpecificPortMappingEntry(s.controlUrl.c_str(), s.serviceType.c_str(),
+						portStr.c_str(), name, nullptr, client, internalPort, desc, enabled, duration);
+					if (existing == UPNPCOMMAND_SUCCESS && std::strcmp(client, s.lanAddress.c_str()) == 0 &&
+						std::strcmp(internalPort, portStr.c_str()) == 0 && std::strcmp(desc, "OutRun2006") == 0)
+						UPNP_DeletePortMapping(s.controlUrl.c_str(), s.serviceType.c_str(), portStr.c_str(), name, nullptr);
+					s.owned[index][protocol] = false;
+				}
+			}
+			s.mapped = false;
 		}
 
 		struct DeviceList
@@ -127,6 +152,27 @@ namespace UPnP
 				client = intClient;
 		}
 
+		void add_if_absent(const UPNPUrls& urls, const IGDdatas& data, const char* portStr,
+			const char* protocol, const char* lanaddr, bool& added, int& error, bool& owned)
+		{
+			char client[64] = {}, internalPort[16] = {}, desc[80] = {}, enabled[4] = {}, duration[16] = {};
+			const int existing = UPNP_GetSpecificPortMappingEntry(urls.controlURL, data.first.servicetype,
+				portStr, protocol, nullptr, client, internalPort, desc, enabled, duration);
+			if (existing == UPNPCOMMAND_SUCCESS)
+			{
+				added = std::strcmp(client, lanaddr) == 0 && std::strcmp(internalPort, portStr) == 0;
+				error = added ? UPNPCOMMAND_SUCCESS : 718; // Existing mapping belongs to another endpoint.
+				if (!added) owned = false;
+				return;
+			}
+			if (existing != 714) { added = false; error = existing; return; } // Only a known missing entry may be created.
+			owned = false;
+			error = UPNP_AddPortMapping(urls.controlURL, data.first.servicetype,
+				portStr, portStr, lanaddr, "OutRun2006", protocol, nullptr, nullptr);
+			added = error == UPNPCOMMAND_SUCCESS;
+			owned = added;
+		}
+
 		void attempt()
 		{
 			Status status;
@@ -195,24 +241,31 @@ namespace UPnP
 				spdlog::warn("UPnP: router did not report an external address");
 			}
 
+			{
+				std::lock_guard _(state().igdMutex);
+				clear_owned(state()); // A re-check may discover a different router; release only our old rules first.
+				state().controlUrl = igd.urls.controlURL;
+				state().serviceType = data.first.servicetype;
+				state().lanAddress = lanaddr;
+				state().mapped = true; // Cleanup also covers a partially completed attempt.
+			}
+
 			status.stage = Stage::Mapping;
 			publish(status);
 
 			bool anyRejected = false;
-			for (int port : Ports)
+			for (std::size_t index = 0; index < Ports.size(); ++index)
 			{
+				const int port = Ports[index];
 				const std::string portStr = std::to_string(port);
 
 				PortMapping mapping;
 				mapping.port = port;
 
-				mapping.tcpError = UPNP_AddPortMapping(igd.urls.controlURL, data.first.servicetype,
-					portStr.c_str(), portStr.c_str(), lanaddr, "OutRun2006", "TCP", nullptr, nullptr);
-				mapping.tcpAdded = (mapping.tcpError == UPNPCOMMAND_SUCCESS);
-
-				mapping.udpError = UPNP_AddPortMapping(igd.urls.controlURL, data.first.servicetype,
-					portStr.c_str(), portStr.c_str(), lanaddr, "OutRun2006", "UDP", nullptr, nullptr);
-				mapping.udpAdded = (mapping.udpError == UPNPCOMMAND_SUCCESS);
+				add_if_absent(igd.urls, data, portStr.c_str(), "TCP", lanaddr,
+					mapping.tcpAdded, mapping.tcpError, state().owned[index][0]);
+				add_if_absent(igd.urls, data, portStr.c_str(), "UDP", lanaddr,
+					mapping.udpAdded, mapping.udpError, state().owned[index][1]);
 
 				if (!mapping.tcpAdded)
 					spdlog::error("UPnP: AddPortMapping failed for TCP {}: {} ({})", port, error_text(mapping.tcpError), mapping.tcpError);
@@ -238,14 +291,6 @@ namespace UPnP
 					spdlog::warn("UPnP: TCP {} is forwarded to {}, not to us ({})", mapping.port, mapping.tcpClient, status.lanAddress);
 				if (mapping.udpVerified && !mapping.udpClient.empty() && mapping.udpClient != status.lanAddress)
 					spdlog::warn("UPnP: UDP {} is forwarded to {}, not to us ({})", mapping.port, mapping.udpClient, status.lanAddress);
-			}
-
-			{
-				std::lock_guard _(state().igdMutex);
-				state().controlUrl = igd.urls.controlURL;
-				state().serviceType = data.first.servicetype;
-				state().lanAddress = lanaddr;
-				state().mapped = true;
 			}
 
 			if (anyRejected)
@@ -317,6 +362,7 @@ namespace UPnP
 
 	void refresh()
 	{
+		if (OutRunSignalMute::BlocksOutput()) return;
 		State& s = state();
 
 		bool expected = false;
@@ -359,17 +405,7 @@ namespace UPnP
 		}
 
 		std::lock_guard _(s.igdMutex);
-		if (!s.mapped)
-			return;
-
-		for (int port : Ports)
-		{
-			const std::string portStr = std::to_string(port);
-			UPNP_DeletePortMapping(s.controlUrl.c_str(), s.serviceType.c_str(), portStr.c_str(), "TCP", nullptr);
-			UPNP_DeletePortMapping(s.controlUrl.c_str(), s.serviceType.c_str(), portStr.c_str(), "UDP", nullptr);
-		}
-
-		s.mapped = false;
+		clear_owned(s);
 	}
 
 	const char* stage_name(Stage stage)

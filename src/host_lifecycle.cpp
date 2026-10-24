@@ -11,6 +11,7 @@
 #include "Proxy.hpp"
 #include "consumer_lifecycle.hpp"
 #include "host_lifecycle_policy.hpp"
+#include "upnp.hpp"
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Comctl32.lib")
 
@@ -87,6 +88,7 @@ static void FinalizeAtOuterBoundary() {
     InputManager_FinalizeForExit();
     gate.CompleteFinalization();
     FFB::FinalizeSignalCapture(); // physical cleanup and lease drain always precede capture disk work
+    try { UPnP::shutdown(); } catch (...) {} // Router I/O must finish outside loader lock, without blocking game cleanup on failure.
     // Read-only discovery last: outputs are silenced and the gate is complete before any disk work, and nothing from
     // it may escape into the game's exit path.
     try { TickDiscovery::FinalizeForExit(); } catch (...) {}

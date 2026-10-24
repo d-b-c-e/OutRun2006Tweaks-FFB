@@ -91,7 +91,7 @@ namespace UPnP
 
 	bool busy();
 
-	// Starts an attempt, or does nothing if one is already running. Returns immediately.
+	// Starts an attempt unless process output is muted or one is already running. Returns immediately.
 	void refresh();
 
 	// Removes the mappings this added and waits for any attempt still running.

@@ -17,7 +17,7 @@ static unsigned char* synthetic = nullptr;
 static std::wstring diskPath;
 static DWORD fixtureOwner = 0;
 static bool pinOk = true, subclassOk = true, windowOk = true, quit = false;
-static int pins = 0, subclasses = 0, silences = 0, finalizations = 0, inputFinalizations = 0, discoveryFinalizations = 0;
+static int pins = 0, subclasses = 0, silences = 0, finalizations = 0, inputFinalizations = 0, discoveryFinalizations = 0, networkFinalizations = 0;
 static DWORD captured[9]{}, expectedFlags = 0, beforeEsp = 0, gameCleanups = 0;
 static void* hostFunction = nullptr;
 static DWORD WINAPI FixtureFileName(HMODULE, LPWSTR out, DWORD capacity) { return static_cast<DWORD>(wcscpy_s(out, capacity, diskPath.c_str())==0 ? diskPath.size() : 0); }
@@ -54,6 +54,7 @@ void FinalizeForExit() { assert(gameCleanups==0 && discoveryFinalizations==0); +
 namespace TickDiscovery { void FinalizeForExit() { assert(finalizations==1 && inputFinalizations==1 && gameCleanups==0 && !ConsumerLifecycle::Runtime().ClaimFinalization()); ++discoveryFinalizations; throw std::bad_alloc(); } }
 namespace DInputRemap { void FinalizeForExit() { assert(finalizations==1 && gameCleanups==0); ++inputFinalizations; } }
 void InputManager_FinalizeForExit() { assert(inputFinalizations==1 && gameCleanups==0); }
+namespace UPnP { void shutdown() { assert(finalizations==1 && inputFinalizations==1 && gameCleanups==0); ++networkFinalizations; } }
 
 // Deliberately set all general registers/flags before entering the synthetic
 // callsite. The displaced cleanup callee records them before doing anything.
@@ -141,12 +142,12 @@ int wmain(int argc, wchar_t** argv) {
     Guard(guardedWindow,WM_ENDSESSION,TRUE,0,0,0);
     assert(Runtime().Current()==Gate::Phase::Stopping && finalizations==0);
     hostFunction=synthetic+LoopCallRva; Invoke();
-    assert(finalizations==1 && inputFinalizations==1 && discoveryFinalizations==1 && gameCleanups==1);
+    assert(finalizations==1 && inputFinalizations==1 && networkFinalizations==1 && discoveryFinalizations==1 && gameCleanups==1);
     assert(Runtime().Current()==Gate::Phase::Stopped);
     assert(captured[0]==0x111 && captured[1]==0x222 && captured[2]==0x333 && captured[3]==0x444);
     assert(captured[4]==beforeEsp-8 && captured[5]==0x777 && captured[6]==0x555 && captured[7]==0x666);
     assert(captured[8]==expectedFlags);
-    CleanupBoundary(context); assert(finalizations==1 && inputFinalizations==1 && discoveryFinalizations==1 && gameCleanups==1);
+    CleanupBoundary(context); assert(finalizations==1 && inputFinalizations==1 && networkFinalizations==1 && discoveryFinalizations==1 && gameCleanups==1);
     // Synthetic allocation/hooks intentionally retained until process exit.
     std::cout << "PASS: production exact hash/ASLR signatures/owned-patch conflict check; partial-hook, pin, window, thread and subclass refusal; startup skip; canceled close/session and reentrant recovery; real x86 displaced cleanup CALL preserves registers/flags/stack and runs once after consumer finalization. Synthetic host only.\n";
 }

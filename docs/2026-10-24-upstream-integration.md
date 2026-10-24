@@ -48,3 +48,37 @@ The shared build/test lease was released. Next is a private-copy startup and
 driving check, with overlay, frame interpolation, graphics and wheel/force
 behavior observed separately. The unresolved distribution gates still prevent
 a normal release package.
+
+## Private startup and router-rule ownership
+
+The review package was installed only in a new private copy at
+`E:/outrun2-research/private-upstream-9e4ce4b-20261024/game`.
+All 13,103 copied files matched the archived game by SHA-256; the executable is
+`68CEB386829066F8455B9D027320AF962584321F3E2E8A79C72841495A6134C3`.
+The package installer retained the five existing settings files byte-for-byte,
+backed up the prior Tweaks runtime, and verified its new proxy
+`72778692F3BBF0140AAA66475784DD668653E8BFD128BA96385FBB61D724AF2D`.
+
+A 35-second private title run opened the OutRun window, logged a fresh
+`DBCE_OUTRUN_SIGNAL_MUTE=legacy` process mute, and closed cleanly. The lease was
+released. Evidence is in `startup-01` under that research directory. This
+qualifies startup only: no driving, F6, F11, graphics, interpolation, device or
+physical force check was made.
+
+The run exposed a Tweaks UPnP side effect: it requested six router port rules
+despite the process mute, and readback afterward found all six pointing to this
+PC. An older OutRun log records successful mapping on October 5, but there is
+no pre-run router snapshot proving which rules existed immediately before this
+check. They were left in place to avoid deleting possible owner rules.
+
+The following source revision blocks UPnP requests in muted processes. In
+normal play it reads each rule before creating one, never replaces another
+endpoint's rule, and on ordinary exit removes only rules this process created
+and still owns. The x86 Release build produced proxy
+`BFE36C55DDADCC8A166D2458C20565A8964DBEB38DA2FC59BCAD761673C6ABB7`.
+The synthetic host-lifecycle fixture passed its once-only cleanup assertion;
+the focused UPnP fixture passed preexisting, conflicting, unreadable, new-rule,
+reassigned-rule, and muted-process cases. These checks do not prove router
+behavior of the revised build in a live game. A new private package and runtime
+check remain open, followed by driving, overlay coexistence, interpolation,
+graphics, wheel/force and release review.
