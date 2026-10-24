@@ -11,7 +11,7 @@ Seeded 2026-10-04 from what was verified that day; `unchecked` rows need a look.
 | STD-001 | One mod per game | unchecked |  |
 | STD-002 | Recording and playback from launch | n/a | Superseded by STD-012; input determinism is not established. |
 | STD-003 | Normalized FFB strength | unchecked |  |
-| STD-004 | Consistent settings UX | partial (source) | October 23 focused F6 POV capture/preview/save source fixtures pass; H-pattern POV gears remain refused. Help now has small mod/Wheelkit links and a distinct Submit issue action, but support-file preparation and rendered review remain open. See docs/2026-10-23-pov-capture-and-surround-gates.md. |
+| STD-004 | Consistent settings UX | partial (source) | F6 POV capture/preview/save fixtures pass; H-pattern POV gears remain refused. Help now uses the toolkit native support report for opt-in log, redacted preview, local file and reviewed GitHub draft, while retaining small mod/Wheelkit links and a blank-issue link. Actual rendering/browser/game behavior remain open. See docs/2026-10-23-pov-capture-and-surround-gates.md. |
 | STD-005 | Camera numpad layout 8/2 9/3 4/6 7/1 +/- 5 | unchecked |  |
 | STD-006 | Camera step sizes are settings | unchecked |  |
 | STD-007 | Triple screens in one wide window | partial (source) | f4e9f01: one borderless window, planar wide view (Surround native; separate monitors via [Triple] Screens). October 23 pinned camera-byte inspection establishes no projection fix; actual Surround race/back-buffer/HUD/culling remains open. Not angle-correct side views. |

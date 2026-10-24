@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <optional>
 #include <sstream>
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
@@ -17,6 +18,7 @@
 #include "wheel_settings_policy.hpp"
 #include "wheel_ui_snapshot.hpp"
 #include "wheel_input_gate.hpp"
+#include "../vendor/DbceSupport/support_report.hpp"
 #include <imgui.h>
 
 extern void ForceShowCursor(bool show);
@@ -98,6 +100,59 @@ template<class T> static bool Save(const char* section, const char* key, T value
     Queue(section, key, value);
     return SavePending();
 }
+
+struct SupportDraft
+{
+    char title[201] = "OutRun 2006: issue";
+    char description[10001] = {};
+    bool includeLog = false, reviewed = false;
+    std::optional<dbce::support::PreparedReport> report;
+    std::string preview, message, exportedName;
+
+    void Invalidate()
+    {
+        report.reset(); preview.clear(); message.clear(); exportedName.clear(); reviewed = false;
+    }
+    void Prepare()
+    {
+        Invalidate();
+        try
+        {
+            std::vector<std::filesystem::path> logs;
+            if (includeLog) logs.push_back(Module::LogPath);
+            report = dbce::support::prepare(
+                dbce::support::ReportProduct("OutRun 2006", MODULE_VERSION_STR, "d-b-c-e/dbce-mods-outrun-2006"),
+                title, description, logs);
+            preview = report->preview();
+            message = "Review the complete report below. Redaction is best effort; check for private information.";
+        }
+        catch (const std::exception& error) { message = "Could not prepare report: " + SafeError(error); }
+    }
+    void Export()
+    {
+        if (!report || !reviewed) throw std::logic_error("Review the prepared report first.");
+        const auto folder = Module::DllPath.parent_path();
+        if (!exportedName.empty() && std::filesystem::is_regular_file(folder / exportedName)) return;
+        exportedName = "support-report-" + std::to_string(GetTickCount64()) + ".txt";
+        try { report->write_review_file(folder / exportedName); }
+        catch (...) { exportedName.clear(); throw; }
+    }
+    void Submit()
+    {
+        if (!report) throw std::logic_error("Prepare the report first.");
+        const auto draft = report->create_browser_submission(reviewed);
+        if (draft.needs_attachment) Export();
+        if (reinterpret_cast<INT_PTR>(ShellExecuteA(nullptr, "open", draft.url.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) <= 32)
+            throw std::runtime_error("Could not open the browser draft.");
+        message = draft.instructions + (draft.needs_attachment ? " Local file: " + exportedName + " (open the settings folder to find it)." : "");
+    }
+    static std::string SafeError(const std::exception& error)
+    {
+        try { return dbce::support::redact(error.what()); }
+        catch (...) { return "Operation refused."; }
+    }
+};
+static SupportDraft support;
 
 void StopFfb()
 {
@@ -955,12 +1010,42 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         if (ImGui::IsItemDeactivatedAfterEdit()) Save("WheelSettings", "Scale", Settings::WheelSettingsScale);
         if (ImGui::Button("Open settings folder"))
             ShellExecuteW(nullptr, L"open", Module::DllPath.parent_path().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        ImGui::TextWrapped("Support-file creation is not implemented. Logs are local beside the game; nothing is uploaded.");
         ImGui::TextLinkOpenURL("Mod on GitHub", "https://github.com/d-b-c-e/dbce-mods-outrun-2006");
         ImGui::SameLine();
         ImGui::TextLinkOpenURL("Wheelkit on GitHub", "https://github.com/d-b-c-e/dbce-wheelkit");
-        if (ImGui::Button("Submit issue"))
-            ShellExecuteW(nullptr, L"open", L"https://github.com/d-b-c-e/dbce-mods-outrun-2006/issues/new", nullptr, nullptr, SW_SHOWNORMAL);
+        if (ImGui::CollapsingHeader("Report a problem", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TextUnformatted("Issue title");
+            if (ImGui::InputText("##issue-title", support.title, sizeof(support.title))) support.Invalidate();
+            ImGui::TextUnformatted("What happened? What did you expect?");
+            if (ImGui::InputTextMultiline("##issue-description", support.description, sizeof(support.description), ImVec2(-1, 90))) support.Invalidate();
+            if (ImGui::Checkbox("Include the mod log", &support.includeLog)) support.Invalidate();
+            ImGui::TextWrapped("The log is included only if selected. Nothing is uploaded by preparing or saving the report.");
+            if (ImGui::Button("Prepare report")) support.Prepare();
+            if (support.report)
+            {
+                ImGui::TextUnformatted("Complete redacted preview");
+                ImGui::BeginChild("Report preview", ImVec2(0, 180), true);
+                ImGui::TextUnformatted(support.preview.c_str());
+                ImGui::EndChild();
+                ImGui::Checkbox("I reviewed this report for private information", &support.reviewed);
+            }
+            ImGui::BeginDisabled(!support.report || !support.reviewed);
+            if (ImGui::Button("Save support file"))
+            {
+                try { support.Export(); support.message = "Saved " + support.exportedName + " beside the game. Open the settings folder to find it."; }
+                catch (const std::exception& error) { support.message = "Could not save report: " + SupportDraft::SafeError(error); }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Submit issue"))
+            {
+                try { support.Submit(); }
+                catch (const std::exception& error) { support.message = "Could not open issue draft: " + SupportDraft::SafeError(error); }
+            }
+            ImGui::EndDisabled();
+            if (!support.message.empty()) ImGui::TextWrapped("%s", support.message.c_str());
+            ImGui::TextLinkOpenURL("Open blank issue", "https://github.com/d-b-c-e/dbce-mods-outrun-2006/issues/new");
+        }
         if (advanced)
         {
             const auto dispatch = WheelInputGuard::Diagnostics();

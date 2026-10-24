@@ -7,6 +7,7 @@ static HWND FixtureForeground() { return reinterpret_cast<HWND>(1); }
 #include "../../src/overlay/wheel_settings.cpp"
 #include <imgui_internal.h>
 #include <cassert>
+#include <cstring>
 #include <iostream>
 #include "../../external/ini-cpp/ini/ini.h"
 
@@ -156,6 +157,25 @@ int main(int argc, char** argv)
     assert(std::abs(frameRates.Summary().onePercentLowFps - 5.0) < 0.01);
     assert(std::abs(frameRates.Summary().worstMs - 200.0) < 0.01);
     assert(!frameRates.Add(3.0) && !frameRates.Summary().ready);
+    Module::LogPath = directory / "OutRun2006Tweaks.log";
+    std::ofstream(Module::LogPath) << "token=secret-value\nuser@example.com\n";
+    std::strcpy(support.description, "Wheel input stops after a menu. Contact user@example.com.");
+    support.includeLog = true;
+    support.Prepare();
+    assert(support.report && support.preview.find("secret-value") == std::string::npos);
+    assert(support.preview.find("user@example.com") == std::string::npos);
+    const auto reviewedPreview = support.preview;
+    support.reviewed = true;
+    support.Export();
+    assert(std::filesystem::is_regular_file(directory / support.exportedName));
+    assert(support.report->create_browser_submission(true).url.find("github.com/d-b-c-e/dbce-mods-outrun-2006/issues/new") != std::string::npos);
+    std::ofstream(Module::LogPath, std::ios::app) << "later entry\n";
+    assert(support.preview == reviewedPreview);
+    support.Invalidate();
+    assert(!support.report && !support.reviewed && support.preview.empty());
+    support.description[0] = '\0';
+    support.Prepare();
+    assert(!support.report && !support.reviewed && support.preview.empty() && !support.message.empty());
     assert(!IsAdvanced("invalid"));
     assert(IsAdvanced("Advanced"));
     assert(LayoutScale(1280, 720, 1) == 1 && LayoutScale(3840, 2160, 1) == 2);
@@ -230,6 +250,7 @@ int main(int argc, char** argv)
                 }
                 if (p == 3) assert(text.find("Triple screens (next launch)") != std::string::npos);
                 if (p == 3) assert(text.find("1% low") != std::string::npos && text.find("Show frame rate on screen") != std::string::npos);
+                if (p == static_cast<int>(Page::Help)) assert(text.find("Prepare report") != std::string::npos && text.find("Open blank issue") != std::string::npos);
                 std::ofstream(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.txt" : "-simple.txt"))) << text;
                 ExportDrawData(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.json" : "-simple.json")));
             }

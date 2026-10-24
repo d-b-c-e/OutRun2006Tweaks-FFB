@@ -9,7 +9,7 @@ $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Componen
 if (-not $vs) { throw 'Visual C++ x86 build tools are required.' }
 $environment = Join-Path $vs 'VC\Auxiliary\Build\vcvars32.bat'
 $includes = @('src','external\imgui','external\spdlog\include','external\ModUtils','build\_deps\safetyhook-src\include','build\_deps\zydis-src\include','build\_deps\zydis-build','build\_deps\zydis-src\dependencies\zycore\include','build\_deps\zydis-build\zycore')
-$sources = @('tools\tests\wheel_settings_fixture.cpp','external\imgui\imgui.cpp','external\imgui\imgui_draw.cpp','external\imgui\imgui_tables.cpp','external\imgui\imgui_widgets.cpp')
+$sources = @('tools\tests\wheel_settings_fixture.cpp','src\vendor\DbceSupport\support_report.cpp','external\imgui\imgui.cpp','external\imgui\imgui_draw.cpp','external\imgui\imgui_tables.cpp','external\imgui\imgui_widgets.cpp')
 $arguments = @('/nologo','/std:c++latest','/EHsc','/MD','/D_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING','/D_CRT_SECURE_NO_WARNINGS','/DDIRECTINPUT_VERSION=0x0800')
 $arguments += $includes | ForEach-Object { '/I"' + (Join-Path $repo $_) + '"' }
 $arguments += $sources | ForEach-Object { '"' + (Join-Path $repo $_) + '"' }

@@ -344,6 +344,8 @@ set(outrun2006tweaks_SOURCES
 	"src/tick_discovery.cpp"
 	"src/tick_discovery.hpp"
 	"src/triple_span.hpp"
+	"src/vendor/DbceSupport/support_report.cpp"
+	"src/vendor/DbceSupport/support_report.hpp"
 	"src/vendor/controls/dbce_controls.hpp"
 	"src/vendor/controls/dbce_inject.hpp"
 	"src/vendor/controls/dbce_inject_table.hpp"
