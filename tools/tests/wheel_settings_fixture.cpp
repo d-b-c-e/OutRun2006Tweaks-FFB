@@ -149,6 +149,13 @@ int main(int argc, char** argv)
     const std::string old = "; Owner comment\r\n[FFB]\r\nDirectInputFFB = false\r\nFFBGlobalStrength = 0.37\r\nFFBProfile = my-tune@4\r\n\r\n[Unknown]\r\nOpaque = retain me\r\n";
     std::ofstream(Module::UserIniPath, std::ios::binary) << old;
     assert(!IsAdvanced(""));
+    FrameRateStats frameRates;
+    for (int i = 0; i < 99; ++i) assert(!frameRates.Add(0.1));
+    assert(frameRates.Add(0.2));
+    assert(std::abs(frameRates.Summary().averageFps - (100.0 / 10.1)) < 0.01);
+    assert(std::abs(frameRates.Summary().onePercentLowFps - 5.0) < 0.01);
+    assert(std::abs(frameRates.Summary().worstMs - 200.0) < 0.01);
+    assert(!frameRates.Add(3.0) && !frameRates.Summary().ready);
     assert(!IsAdvanced("invalid"));
     assert(IsAdvanced("Advanced"));
     assert(LayoutScale(1280, 720, 1) == 1 && LayoutScale(3840, 2160, 1) == 2);
@@ -186,6 +193,8 @@ int main(int argc, char** argv)
     assert(Read(Module::UserIniPath).find("FFBGlobalStrength = 0.37") != std::string::npos);
     assert(Read(Module::UserIniPath).find("DirectInputFFB = false") != std::string::npos);
     assert(Save("Triple", "Screens", "Separate monitors"));
+    assert(Save("Overlay", "ShowFrameRate", true));
+    assert(Read(Module::UserIniPath).find("ShowFrameRate = true") != std::string::npos);
     std::string screenDefault = "Off";
     assert(inih::INIReader(Module::UserIniPath).Get("Triple", "Screens", screenDefault) == "Separate monitors");
     assert(Settings::TripleScreens == 1); // Runtime span changes only on restart.
@@ -204,6 +213,8 @@ int main(int argc, char** argv)
     Settings::FFBSpringStrength = 0.29f;
     Settings::DirectInputFFB = false;
     Settings::TelemetryEnabled = false;
+    for (int i = 0; i < 99; ++i) Overlay::FrameRates.Add(0.1);
+    Overlay::FrameRates.Add(0.2);
     for (auto size : {ImVec2(1280, 720), ImVec2(3840, 2160)})
         for (int p = 0; p < 6; ++p)
             for (bool advanced : {false, true})
@@ -218,6 +229,7 @@ int main(int argc, char** argv)
                     assert((text.find("Custom tuning active") != std::string::npos) == !advanced);
                 }
                 if (p == 3) assert(text.find("Triple screens (next launch)") != std::string::npos);
+                if (p == 3) assert(text.find("1% low") != std::string::npos && text.find("Show frame rate on screen") != std::string::npos);
                 std::ofstream(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.txt" : "-simple.txt"))) << text;
                 ExportDrawData(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.json" : "-simple.json")));
             }

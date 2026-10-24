@@ -257,6 +257,7 @@ namespace Settings
 	inline bool ProtectLoginData = true;
 
 	inline bool OverlayEnabled = true;
+	inline bool ShowFrameRate = false;
 	inline std::string WheelSettingsView = "Simple";
 	inline float WheelSettingsScale = 1.0f;
 	inline int WheelSettingsKey = 0x75; // F6, Win32 virtual key

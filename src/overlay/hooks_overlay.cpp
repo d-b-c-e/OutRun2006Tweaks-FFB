@@ -91,6 +91,28 @@ class D3DHooks : public Hook
 	inline static SafetyHookMid midhook_d3dendscene{};
 	static void D3DEndScene(SafetyHookContext& ctx)
 	{
+		static LARGE_INTEGER previous{};
+		static LARGE_INTEGER frequency{};
+		static int windows = 0;
+		LARGE_INTEGER current{};
+		if (!frequency.QuadPart) QueryPerformanceFrequency(&frequency);
+		if (frequency.QuadPart && QueryPerformanceCounter(&current))
+		{
+			const double elapsed = previous.QuadPart ? double(current.QuadPart - previous.QuadPart) / frequency.QuadPart : 0;
+			if (elapsed > 2) windows = 0;
+			if (previous.QuadPart && Overlay::FrameRates.Add(elapsed))
+			{
+				if (++windows == 3)
+				{
+					windows = 0;
+					const auto& summary = Overlay::FrameRates.Summary();
+					const char* screens = Settings::TripleScreens == 2 ? "Separate monitors" : Settings::TripleScreens == 1 ? "Surround" : "Off";
+					spdlog::info("Frame rate (10 s, screens {}): average {:.1f} fps, 1% low {:.1f} fps, worst {:.1f} ms",
+						screens, summary.averageFps, summary.onePercentLowFps, summary.worstMs);
+				}
+			}
+			previous = current;
+		}
 		// FFB watchdog: if GamePlCar_Ctrl hasn't been called for 250ms
 		// (menu transition, results screen, etc.), zero the forces.
 		FFB::CheckWatchdog();

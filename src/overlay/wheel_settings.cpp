@@ -912,6 +912,13 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
             Save("Triple", "Screens", layouts[choice]);
         }
         ImGui::TextWrapped("Restart the game to apply this layout. Separate monitors spans three equal screens in one planar view; it needs automatic resolution or a matching wide resolution.");
+        const auto& frameRate = Overlay::FrameRates.Summary();
+        if (frameRate.ready)
+            ImGui::Text("Frame rate (10 s, screens %s): %.1f fps average, %.1f fps 1%% low, %.1f ms worst",
+                Settings::TripleScreens == 2 ? "Separate monitors" : Settings::TripleScreens == 1 ? "Surround" : "Off",
+                frameRate.averageFps, frameRate.onePercentLowFps, frameRate.worstMs);
+        else ImGui::TextUnformatted("Frame rate: measuring the first 10 seconds...");
+        if (Choice("Show frame rate on screen", Settings::ShowFrameRate)) Save("Overlay", "ShowFrameRate", Settings::ShowFrameRate);
         ButtonRow("Change camera", Settings::DIRemapButtonChangeView, "ButtonChangeView", input);
         ImGui::TextWrapped("Change camera uses the game's normal camera rotation.");
         ImGui::TextWrapped("Bonnet / Bumper mounts and live adjustment shortcuts have not been implemented in this adapter yet. No camera shortcut is advertised as active.");

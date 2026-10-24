@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <shellapi.h>
+#include <cstdio>
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
@@ -317,6 +318,20 @@ bool Overlay::render()
 
 	for (const auto& wnd : s_windows)
 		wnd->render(overlay_visible);
+
+	if (Settings::ShowFrameRate && FrameRates.Summary().ready)
+	{
+		char label[80];
+		std::snprintf(label, sizeof(label), "%.0f fps  |  1%% low %.0f", FrameRates.CurrentFps(), FrameRates.Summary().onePercentLowFps);
+		const ImVec2 screen = ImGui::GetIO().DisplaySize;
+		const float right = Settings::TripleScreens != 0 && screen.x >= screen.y * 3 ? screen.x * (2.0f / 3.0f) : screen.x;
+		const ImVec2 size = ImGui::CalcTextSize(label);
+		const ImVec2 pos(right - size.x - 16, 12);
+		auto* draw = ImGui::GetForegroundDrawList();
+		for (const ImVec2 offset : { ImVec2(-1, 0), ImVec2(1, 0), ImVec2(0, -1), ImVec2(0, 1) })
+			draw->AddText(ImVec2(pos.x + offset.x, pos.y + offset.y), IM_COL32(0, 0, 0, 255), label);
+		draw->AddText(pos, IM_COL32(255, 255, 255, 255), label);
+	}
 
 	if (Overlay::RequestMouseHide)
 	{

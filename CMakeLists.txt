@@ -321,6 +321,7 @@ set(outrun2006tweaks_SOURCES
 	"src/network.cpp"
 	"src/overlay/chatroom.cpp"
 	"src/overlay/course_editor.cpp"
+	"src/overlay/frame_rate_stats.hpp"
 	"src/overlay/hooks_overlay.cpp"
 	"src/overlay/notifications.hpp"
 	"src/overlay/overlay.cpp"

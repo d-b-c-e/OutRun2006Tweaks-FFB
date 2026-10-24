@@ -1,4 +1,5 @@
 #pragma once
+#include "frame_rate_stats.hpp"
 struct ImFont;
 
 class OverlayWindow
@@ -13,6 +14,7 @@ public:
 class Overlay
 {
 public:
+	inline static FrameRateStats FrameRates{};
 	inline static float GlobalFontScale = 1.5f;
 	inline static float GlobalOpacity = 0.8f;
 

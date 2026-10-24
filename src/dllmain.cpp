@@ -408,6 +408,7 @@ namespace Settings
 		ProtectLoginData = ini.Get("Misc", "ProtectLoginData", ProtectLoginData);
 
 		OverlayEnabled = ini.Get("Overlay", "Enabled", OverlayEnabled);
+		ShowFrameRate = ini.Get("Overlay", "ShowFrameRate", ShowFrameRate);
 		WheelSettingsView = ini.Get("WheelSettings", "View", WheelSettingsView);
 		if (WheelSettingsView != "Advanced") WheelSettingsView = "Simple";
 		WheelSettingsScale = ini.Get("WheelSettings", "Scale", WheelSettingsScale);
