@@ -314,6 +314,7 @@ set(outrun2006tweaks_SOURCES
 	"src/hooks_uiscaling.cpp"
 	"src/host_lifecycle.cpp"
 	"src/host_lifecycle_policy.hpp"
+	"src/hpattern_gate.hpp"
 	"src/hud_speed.hpp"
 	"src/input_manager.cpp"
 	"src/legacy_force_configuration.hpp"
