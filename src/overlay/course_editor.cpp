@@ -353,18 +353,17 @@ CourseReplacement CourseReplacement::instance;
 class CourseEditor : public OverlayWindow
 {
 public:
+	Kind kind() const override { return Kind::Tab; }
+	const char* name() const override { return "Course Editor"; }
+	int order() const override { return 10; }
+
 	void init() override {}
 	void render(bool overlayEnabled) override
 	{
-		if (!overlayEnabled)
-			return;
-
-		if (ImGui::Begin("Course Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			if (!CustomStageTableCount)
 			{
 				ImGui::Text("Waiting for game to load stage scripts...");
-				ImGui::End();
 				return;
 			}
 
@@ -431,6 +430,8 @@ public:
 					float startY = (windowHeight - columnHeight) * 0.5f;
 					ImGui::SetCursorPosY(startY);
 
+					ImGui::Dummy(ImVec2(0, 0));
+
 					// if player is already past this track (or playing it), disable dropdowns
 					bool col_disabled = (curPlayingIndex >= num) && !editor_disabled && Game::is_in_game();
 
@@ -458,7 +459,11 @@ public:
 
 						// Add vertical spacing between comboboxes
 						if (row <= col)
+						{
 							ImGui::SetCursorPosY(ImGui::GetCursorPosY() + verticalSpacing);
+
+							ImGui::Dummy(ImVec2(0, 0));
+						}
 
 						ImGui::PopID();
 
@@ -647,8 +652,6 @@ public:
 				lobbycode_generate();
 			}
 		}
-
-		ImGui::End();
 	}
 	static CourseEditor instance;
 };

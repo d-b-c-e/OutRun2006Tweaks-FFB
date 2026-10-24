@@ -1,11 +1,23 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <imgui.h>
 #include <ini.h>
 #include "overlay/overlay.hpp"
+#include "input_manager.hpp"
+
+namespace Settings
+{
+	Setting<int> DrawDistanceIncrease{ "Graphics", "DrawDistanceIncrease", 0,
+		"Increases the distance that stage models will begin drawing at, helping a lot with pop-in. "
+		"Higher values may have a chance of causing LOD models to appear, please post screenshots of any you find on the GitHub page for them to get fixed!", Range<int>{ 0, 1024 } };
+	Setting<int> DrawDistanceBehind{ "Graphics", "DrawDistanceBehind", 0,
+		"Increases the distance models will draw behind the car, rather than them being culled out almost immediately. "
+		"A lot of models have backface culling issues, so only recommended if using freecam or other camera mods!", Range<int>{ 0, 1024 } };
+}
 
 std::array<std::vector<uint16_t>, 256> ObjectNodes;
 std::array<std::array<std::bitset<16384>, 256>, 128> ObjectExclusionsPerStage;
@@ -22,16 +34,14 @@ bool DrawDist_ReadExclusions();
 class DrawDistanceDebug : public OverlayWindow
 {
 public:
+	Kind kind() const override { return Kind::Tool; }
+	const char* name() const override { return "Draw Distance Debugger"; }
+
 	void init() override {}
 	void render(bool overlayEnabled) override
 	{
-		if (!overlayEnabled || !Game::DrawDistanceDebugEnabled)
-			return;
-
-		ImGui::Begin("Draw Distance Debugger", &Game::DrawDistanceDebugEnabled);
-
-		ImGui::Checkbox("Countdown timer enabled", Game::Sumo_CountdownTimerEnable);
-		ImGui::Checkbox("Pause menu enabled", &EnablePauseMenu);
+		ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_FirstUseEver);
+		ImGui::Begin("Draw Distance Debugger", &visible);
 
 		// get max column count
 		int num_columns = 0;
@@ -45,7 +55,8 @@ public:
 		static ImGuiTableFlags table_flags = ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_HighlightHoveredColumn;
 
 		ImGui::Text("Usage:");
-		ImGui::Text("- If an ugly LOD object appears, pause game with ESC and press F11 to bring up this window");
+		ImGui::Text("- If an ugly LOD object appears, pause game with ESC and press %s to bring up this window",
+				InputManager_ModActionDisplayName(ModAction::OverlayToggle).c_str());
 		ImGui::Text("- Reduce Draw Distance below to lowest value that still has the LOD object appearing");
 		ImGui::Text("- Once you find the draw-distance that shows the object, click each node checkbox to disable nodes");
 		ImGui::Text("- After finding the node responsible, you can use \"Copy to clipboard\" below to copy the IDs of them, or hover over the node");
@@ -71,7 +82,7 @@ public:
 		auto& objectExclusions = ObjectExclusionsPerStage[cur_stage_num];
 
 		ImGui::Text("Stage: %d (%s / %s)", cur_stage_num, cur_stage_name, Game::GetStageUniqueName(cur_stage_num));
-		ImGui::SliderInt("Draw Distance", &Settings::DrawDistanceIncrease, 0, 1024);
+		ImGui::SliderInt("Draw Distance", Settings::DrawDistanceIncrease.ptr(), 0, 1024);
 
 		if (ImGui::Button("<<<"))
 			Settings::DrawDistanceIncrease -= 10;
@@ -91,7 +102,7 @@ public:
 		if (ImGui::Button(">>>"))
 			Settings::DrawDistanceIncrease += 10;
 
-		ImGui::Text("Nodes at distance +%d (track section #%d):", Settings::DrawDistanceIncrease, (CsLengthNum + Settings::DrawDistanceIncrease));
+		ImGui::Text("Nodes at distance +%d (track section #%d):", Settings::DrawDistanceIncrease.get(), (CsLengthNum + Settings::DrawDistanceIncrease));
 
 		if (num_columns > 0)
 		{
@@ -340,20 +351,62 @@ bool DrawDist_ReadExclusions()
 	return true;
 }
 
-
-class SkipQuickSortHack : public Hook
+// Orders the stage draw list on each entries bounding sphere far edge. View
+// space runs -Z forward, so ascending puts the entry reaching furthest away
+// first.
+//
+// DrawStoredModel_Execute sorts the list, then DrawStoredModel_Internal walks it
+// twice: backwards for the opaque pass, forwards for the blended one, so one
+// ordering serves both. Only the blended pass depends on it. SetDefaultAlphaState
+// leaves the opaque pass writing depth, so the z-buffer settles that one and the
+// order is no more than an early-z optimisation, while the blended pass runs with
+// ZWRITEENABLE off, which leaves list order deciding which of two blended
+// surfaces draws on top.
+class StableDrawSort : public Hook
 {
-	// Before drawing transparent objects the game uses QuickSort on them, which seems to sort them based on Z order
-	// For some reason on Palm Beach the order ends up incorrect, and some kind of reflection texture draws on top of the ocean texture, causing a black area to appear until getting close enough
-	// If we skip the QuickSort call on this track that seems to fix it though, hadn't seen any other issues with transparent objects after it
-	// Not sure if all tracks would work fine with this though, so this tweak only disables it on certain tracks setup in .lods.ini
-	// (also not sure why console ports seem to be fine here, could it be related to games D3D9 depth buffer issue, or could be an issue with the model data itself?)
+	// Centre depth is a poor stand-in for a large object: a water plane covering
+	// the stage has its node centre wherever the plane happens to be centred, so
+	// it can sort ahead of something that visibly sits on it. The far edge scales
+	// the key with the object instead. Radius is object space, so this is off by
+	// the world matrix scale.
+	//
+	// Keep it one key: a comparator that instead calls depths within a tolerance
+	// equal is not a strict weak ordering, and std::sort reads out of bounds when
+	// given one.
+	static float SortKey(const DrawEntry* entry)
+	{
+		const float radius = entry->CullNode_18 ? entry->CullNode_18->radius : 0.0f;
+		return entry->CenterZ_0 - radius;
+	}
+
+	static void SortDrawBuffer(DrawBuffer* buffer)
+	{
+		DrawEntry** entries = buffer->BufferPtrs_10;
+
+		std::sort(entries, entries + buffer->NumBuffers_0,
+			[](const DrawEntry* a, const DrawEntry* b)
+			{
+				const float ka = SortKey(a);
+				const float kb = SortKey(b);
+
+				if (ka < kb)
+					return true;
+				if (kb < ka)
+					return false;
+
+				// BufferPtrs_10[n] is set to &Buffer_14[n] as entries are appended,
+				// so pointer order is the order the stage queued them.
+				return a < b;
+			});
+	}
 
 	inline static SafetyHookInline DrawStoredModel_Execute_hook = {};
 	static void DrawStoredModel_Execute_dest()
 	{
-		if (!SkipQuickSortHackStages[*Game::stg_stage_num])
-			Game::QuickSort(Game::s_AftDrawBuffer->BufferPtrs_10, 0, Game::s_AftDrawBuffer->NumBuffers_0 - 1);
+		// TODO: Allow excluding stages if our new sort causes issues with them.
+		// (or remove SkipQuickSortHackStages entirely if all work fine)
+		//if (!SkipQuickSortHackStages[*Game::stg_stage_num])
+		SortDrawBuffer(Game::s_AftDrawBuffer);
 
 		Game::DrawStoredModel_Internal(Game::s_AftDrawBuffer);
 		Game::s_AftDrawBuffer->NumBuffers_0 = 0;
@@ -363,12 +416,7 @@ class SkipQuickSortHack : public Hook
 public:
 	std::string_view description() override
 	{
-		return "SkipQuickSort";
-	}
-
-	bool validate() override
-	{
-		return false;
+		return "StableDrawSort";
 	}
 
 	bool apply() override
@@ -382,9 +430,9 @@ public:
 		return true;
 	}
 
-	static SkipQuickSortHack instance;
+	static StableDrawSort instance;
 };
-SkipQuickSortHack SkipQuickSortHack::instance;
+StableDrawSort StableDrawSort::instance;
 
 class DrawDistanceIncrease : public Hook
 {
@@ -440,7 +488,7 @@ class DrawDistanceIncrease : public Hook
 		int maxDrawDistance = Settings::DrawDistanceIncrease;
 
 		// Per-stage overrides
-		if (!Game::DrawDistanceDebugEnabled)
+		if (!DrawDistanceDebug::instance.visible)
 		{
 			// CANYON: when cur section is lower than 30 (car inside bunki), limit draw dist to ~80
 			// prevents some far-off stage parts drawing in the air
@@ -468,7 +516,7 @@ class DrawDistanceIncrease : public Hook
 				}
 
 				// DEBUG: clear lastadds for this objectnum here
-				if (Game::DrawDistanceDebugEnabled && csOffset == maxDrawDistance)
+				if (DrawDistanceDebug::instance.visible && csOffset == maxDrawDistance)
 				{
 					ObjectNodes[ObjectNum].clear();
 				}
@@ -493,7 +541,7 @@ class DrawDistanceIncrease : public Hook
 						}
 
 						// DEBUG: add *sectionCollList to lastadds list here
-						if (Game::DrawDistanceDebugEnabled && csOffset == maxDrawDistance)
+						if (DrawDistanceDebug::instance.visible && csOffset == maxDrawDistance)
 							ObjectNodes[ObjectNum].push_back(*sectionCollList);
 
 						num++;
@@ -520,6 +568,13 @@ public:
 	bool validate() override
 	{
 		return Settings::DrawDistanceIncrease > 0 || Settings::DrawDistanceBehind > 0;
+	}
+
+	void declare_settings() override
+	{
+		// TODO: DrawDistanceBehind causes some stage models not to draw for some reason.
+		// Once that's fixed this can be unhidden.
+		Settings::DrawDistanceBehind.hidden(true);
 	}
 
 	bool apply() override
@@ -612,11 +667,6 @@ public:
 	std::string_view description() override
 	{
 		return "PauseMenuVisibility";
-	}
-
-	bool validate() override
-	{
-		return Settings::OverlayEnabled;
 	}
 
 	bool apply() override

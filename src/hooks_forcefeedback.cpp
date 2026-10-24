@@ -8,6 +8,19 @@
 
 #include "Xinput.h"
 
+namespace Settings
+{
+	Setting<int> VibrationMode{ "Controls", "VibrationMode", 0,
+		"Enable/disable/customize the Xbox vibration code. (NOTE: Some bluetooth controllers may cause framerate issues when vibration is enabled)",
+		{ "Disable", "Enable Xbox vibration", "L/R motors swapped", "L/R motors merged together" } };
+	Setting<int> VibrationStrength{ "Controls", "VibrationStrength", 7,
+		"VibrationStrength range is 0 to 10.", Range<int>{ 0, 10 } };
+	Setting<int> VibrationControllerId{ "Controls", "VibrationControllerId", 0,
+		"XInput device to send vibration to, default should work fine in most cases, but if you don't notice any vibration "
+		"you can try increasing this. Ignored when using UseNewInput, vibration will be sent to the active controller.",
+		Range<int>{ 0, 4 } };
+}
+
 int VibrationUserId = 0;
 int VibrationStrength = 10;
 float VibrationLeftMotor = 0.f;
@@ -65,9 +78,12 @@ public:
         return "Vibration";
     }
 
-    bool validate() override
+    void declare_settings() override
     {
-        return Settings::VibrationMode != 0 || Settings::UseNewInput;
+        Settings::VibrationStrength.watch([] { VibrationStrength = Settings::VibrationStrength; });
+
+        Settings::VibrationControllerId.needs_restart();
+        Settings::VibrationControllerId.hidden(Settings::UseNewInput); // Only hidden if UseNewInput enabled
     }
 
     bool apply() override

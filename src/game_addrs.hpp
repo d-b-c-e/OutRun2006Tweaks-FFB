@@ -13,6 +13,40 @@ typedef void(__cdecl* DrawObject_Internal_fn)(int, int, uint16_t*, int, int, int
 typedef void(__cdecl* DrawObjectAlpha_Internal_fn)(int, float, void*, int);
 typedef void(__cdecl* mxPopMatrix_fn)();
 
+// Frame interpolation: display-matrix builders, safe to re-run per rendered
+// frame. Both read their blend factor from sub_4493E0 -> g_InterpAlpha.
+typedef void(__cdecl* CalcDispMatrix_fn)(EVWORK_CAR*);
+typedef void(__cdecl* CalcCameraMatrix_fn)(EvWorkCamera*);
+// sub_4493E0: returns the effective interpolation alpha - g_InterpAlpha normally,
+// but a hard 1.0 during autoscenes (GetPettyAutoSceneEnable / GetAutosceneStatus==3).
+typedef float(__cdecl* GetInterpAlpha_fn)();
+typedef void(__cdecl* mxCalcPoint_fn)(D3DVECTOR* out, const D3DVECTOR* in);
+
+// Queues 2D draws into sprite_prio_root
+//
+// Note: not const! hooks_textures hooks this and rewrites the SPRARGS in place to
+// remap UVs onto a higher-resolution replacement texture.
+typedef void(__cdecl* put_sprite_ex_fn)(SPRARGS* sprargs, float priority);
+
+typedef int(__cdecl* sprani_play_ae_auth_alpha_fn)(uint32_t spriteId, float x, float y, int a4, int a5, float alpha);
+typedef int(__cdecl* put_clip_sprite_fn)(int xstnum, int x, int y, uint32_t flags, float priority, uint32_t color);
+
+// Module offsets used outside of this file.
+namespace GameAddr
+{
+	constexpr int CalcDispMatrix = 0xA2650;
+	constexpr int CalcCameraMatrix = 0x84BD0;
+	constexpr int CalcCharMatrix = 0x88AF0;   // sub_488AF0, __usercall
+	constexpr int OsoDynamics_Ctrl = 0xA9C80;
+	constexpr int OsoDynamics_Disp = 0xA9DF0;
+	constexpr int OsoCommonFunc_Disp = 0xA8A90;
+	constexpr int OsoCommon_PushMatrix = 0xA8AAE; // push esi, just before mxPushLoadMatrix
+	constexpr int OsoCommon_AfterPush = 0xA8AB4;  // add esp, 4, just after it
+	// push ebp in HeartDisp_car_heart, where ebp holds the attached-heart
+	// animation angle - used for both Sinf (bob/squash) and mxRotateY (spin).
+	constexpr int HeartDisp_PulseAngle = 0x5B43A;
+}
+
 namespace Game
 {
 	inline D3DXVECTOR2 original_resolution{ 640, 480 };
@@ -27,12 +61,16 @@ namespace Game
 	inline bool* Sumo_IntroLogosEnable = nullptr;
 
 	inline D3DPRESENT_PARAMETERS* D3DPresentParams = nullptr;
+	inline IDirect3D9** D3D_ptr = nullptr;
 	inline IDirect3DDevice9** D3DDevice_ptr = nullptr;
 
 	inline IDirectInput8A** DirectInput8_ptr = nullptr;
 
 	inline HWND* hWnd_ptr = nullptr;
 
+	inline IDirect3D9* D3D() {
+		return *D3D_ptr;
+	}
 	inline IDirect3DDevice9* D3DDevice() {
 		return *D3DDevice_ptr;
 	}
@@ -51,6 +89,7 @@ namespace Game
 
 	inline int* app_time = nullptr; // used by SetTweeningTable etc
 	inline int* sprani_num_ticks = nullptr; // number of game ticks being ran in the current frame (can be 0 if above 60FPS)
+	inline uint16_t* stage_info_timer = nullptr; // counts DispNextStageInfo calls since the sign naming the stage past a fork appeared
 
 	inline GameStage* stg_stage_num = nullptr;
 
@@ -81,14 +120,74 @@ namespace Game
 
 	inline fn_1arg fn43FA10 = nullptr;
 
+	// --- frame interpolation ---
+	// The game has a complete render-interpolation system that is disabled by
+	// a hardcoded constant. Car *_Ctrl functions copy the current transform into
+	// a "previous" slot each tick (position_14 -> field_16C, field_2C ->
+	// field_17C), and the display-matrix builders lerp between them using a
+	// single global alpha read via sub_4493E0:
+	//
+	//     if (GetPettyAutoSceneEnable() || GetAutosceneStatus() == 3) return 1.0;
+	//     return g_InterpAlpha;
+	//
+	// g_InterpAlpha is 1.0 and is never changed by any code, so both lerps
+	// collapse to a no-op. Writing a fractional value re-enables the original system.
+	//
+	// CalcDispMatrix / CalcCameraMatrix make use of this function that returns the alpha,
+	// however these are only ever called as part of the game ticks, never from the
+	// render path, so they must be replayed once per rendered frame to interpolate.
+	inline CalcDispMatrix_fn CalcDispMatrix = nullptr;     // 0x4A2650
+	inline CalcCameraMatrix_fn CalcCameraMatrix = nullptr; // 0x484BD0
+
+	inline float* g_InterpAlpha = nullptr; // 0x634B34
+
+	// Always ask this for the alpha actually in force rather than reading
+	// g_InterpAlpha directly - it is what CalcDispMatrix/sub_482F20 see.
+	inline GetInterpAlpha_fn GetInterpAlpha = nullptr; // 0x4493E0
+
+	// Sub-tick remainder maintained by CalcNumUpdatesToRun, in QPC ticks:
+	//     ticks     = 60 * (elapsed + remainder) / freq
+	//     remainder = elapsed + remainder - ticks * freq / 60
+	// so alpha = remainder * 60 / qpc_freq, valid right after that call.
+	inline int64_t* frameskip_remainder = nullptr; // 0x8A8CD0
+
+	// Y-scale of the whole stage during the load-in "rise from the ground"
+	// animation.
+	inline float* stage_disp_scale = nullptr; // 0x7D3184
+
+	// HAM "catch the hearts": AttachHeart bakes each heart's world position from
+	// its owner car's matrix_B0 during the tick, and HeartDisp_car_heart draws
+	// straight from those baked values - so they stall at tick rate once the car
+	// matrices are interpolated. Entry layout (stride 0x5C, 32 entries):
+	//   +0x00 event id (0x19A = unused)
+	//   +0x04 / +0x10 local offsets
+	//   +0x28 / +0x34 baked world positions
+	//   +0x4C / +0x50 per-heart active flags
+	inline AttachHeartEntry* attach_heart_table = nullptr; // 0x8037C8
+	inline ConnectionEntry* connection_tbl = nullptr;      // 0x800AF8
+	// Y-spin of the 3D heart drawn above each connected line.
+	inline float* hart_rot_f = nullptr;                    // 0x804384
+	// Particle sources, walked by ParticleEfc_Ctrl and nlParticleDraw.
+	inline NLPartSource* nl_part_src = nullptr;            // 0x8A8D18
+	inline uint8_t* g_EventIsOpenFlag = nullptr;  // 0x79FB48
+	inline mxCalcPoint_fn mxCalcPoint = nullptr;  // 0x40A7D0
+
 	inline fn_0args ReadIO = nullptr;
+	inline SumoDInputState* dinput_state = nullptr;
 	inline fn_0args SoundControl_mb = nullptr;
 	inline fn_0args LinkControlReceive = nullptr;
 	inline fn_0args ModeControl = nullptr;
 	inline fn_0args EventControl = nullptr;
 	inline fn_0args GhostCarExecServer = nullptr;
 	inline fn_0args fn4666A0 = nullptr;
-	inline fn_0args FileLoad_Ctrl = nullptr;
+	inline fn_0args_int FileLoad_Ctrl = nullptr;
+
+	// Guard the loader thread takes around the two pending-read lists. Sumo's
+	// own critical section in sub_423670 sets both of these to null while it
+	// holds them, so any other thread that samples one during that window ends
+	// up calling WaitForSingleObject(nullptr).
+	inline HANDLE* FileLoadSemaphore2 = nullptr;
+	inline HANDLE* FileLoadSemaphore3 = nullptr;
 
 	inline fn_1arg PrjSndRequest = nullptr;
 	inline fn_1arg SetSndQueue = nullptr;
@@ -118,11 +217,17 @@ namespace Game
 	inline fn_2args sprLocateP = nullptr;
 	inline fn_printf sprPrintf = nullptr;
 
+	// The per-frame 2D draw queue itself: one list head per priority.
+	inline SpriteNode** sprite_prio_root = nullptr;
+	inline put_sprite_ex_fn put_sprite_ex = nullptr;
+	inline sprani_play_ae_auth_alpha_fn sprani_play_ae_auth_alpha = nullptr;
+	inline put_clip_sprite_fn put_clip_sprite = nullptr;
+
+	inline constexpr int SpritePriorityCount = 0x15;
+	inline constexpr int SpriteNodeMax = 0x230; // ring capacity of spr_list
+
 	inline fn_1arg_char Sumo_GetStringFromId = nullptr;
 	inline fn_printf Sumo_Printf = nullptr;
-
-	inline fn_0args_void SumoFrontEnd_GetSingleton_4035F0 = nullptr;
-	inline fn_0args_class SumoFrontEnd_animate_443110 = nullptr;
 
 	// 3d drawing
 	inline DrawObject_Internal_fn DrawObject_Internal = nullptr;
@@ -141,6 +246,36 @@ namespace Game
 	// D3DX
 	inline D3DXVec4Transform_fn D3DXVec4Transform = nullptr;
 
+	// sub_488AF0(car@<esi>, rob, charIndex) rebuilds an in-car character's base
+	// matrix from the car's transform.
+	// Unfortunately this is __usercall, with car pointer inside esi, so needs
+	// a thunk in order to call properly.
+	inline uintptr_t CalcCharMatrixAddr = 0;
+
+	static __declspec(naked) void CalcCharMatrix(EVWORK_CAR* /*car*/, void* /*rob*/, int /*charIndex*/)
+	{
+		__asm
+		{
+			push ebp
+			mov  ebp, esp
+			push esi
+			push ebx
+			mov  eax, [ebp + 16]   // charIndex
+			push eax
+			mov  eax, [ebp + 12]   // rob
+			push eax
+			mov  esi, [ebp + 8]    // car -> esi
+			mov  ebx, CalcCharMatrixAddr
+			call ebx
+			add  esp, 8            // caller-cleaned
+			pop  ebx
+			pop  esi
+			mov  esp, ebp
+			pop  ebp
+			ret
+		}
+	}
+
 	inline sEventWork* event(int event_id)
 	{
 		sEventWork* s_EventWork = Module::exe_ptr<sEventWork>(0x399B30);
@@ -150,6 +285,13 @@ namespace Game
 	inline EVWORK_CAR* pl_car()
 	{
 		return event(8)->data<EVWORK_CAR>();
+	}
+
+	// Camera object used by CalcCameraMatrix / sub_482F20. May be null outside
+	// of gameplay (menus, loading), so callers must check.
+	inline EvWorkCamera* camera()
+	{
+		return event(EVENT_CAMERA)->data<EvWorkCamera>();
 	}
 
 	inline bool is_in_game()
@@ -210,8 +352,9 @@ namespace Game
 		Sumo_CountdownTimerEnable = Module::exe_ptr<bool>(0x237911);
 		Sumo_IntroLogosEnable = Module::exe_ptr<bool>(0x2319A1);
 
-		D3DPresentParams = Module::exe_ptr<D3DPRESENT_PARAMETERS>(0x49BD64);
 		D3DDevice_ptr = Module::exe_ptr<IDirect3DDevice9*>(0x49BD60);
+		D3DPresentParams = Module::exe_ptr<D3DPRESENT_PARAMETERS>(0x49BD64);
+		D3D_ptr = Module::exe_ptr<IDirect3D9*>(0x49BD9C);
 		DirectInput8_ptr = Module::exe_ptr<IDirectInput8A*>(0x4606E8);
 		hWnd_ptr = Module::exe_ptr<HWND>(0x4A8C88);
 
@@ -223,6 +366,7 @@ namespace Game
 
 		app_time = Module::exe_ptr<int>(0x49EDB8);
 		sprani_num_ticks = Module::exe_ptr<int>(0x380278);
+		stage_info_timer = Module::exe_ptr<uint16_t>(0x444708);
 
 		stg_stage_num = Module::exe_ptr<GameStage>(0x3D2E8C);
 
@@ -251,14 +395,31 @@ namespace Game
 
 		fn43FA10 = Module::fn_ptr<fn_1arg>(0x3FA10);
 
+		CalcDispMatrix = Module::fn_ptr<CalcDispMatrix_fn>(GameAddr::CalcDispMatrix);
+		CalcCameraMatrix = Module::fn_ptr<CalcCameraMatrix_fn>(GameAddr::CalcCameraMatrix);
+		g_InterpAlpha = Module::exe_ptr<float>(0x234B34);
+		GetInterpAlpha = Module::fn_ptr<GetInterpAlpha_fn>(0x493E0);
+		frameskip_remainder = Module::exe_ptr<int64_t>(0x4A8CD0);
+		stage_disp_scale = Module::exe_ptr<float>(0x3D3184);
+		attach_heart_table = Module::exe_ptr<AttachHeartEntry>(0x4037C8);
+		connection_tbl = Module::exe_ptr<ConnectionEntry>(0x400AF8);
+		hart_rot_f = Module::exe_ptr<float>(0x404384);
+		nl_part_src = Module::exe_ptr<NLPartSource>(0x4A8D18);
+		g_EventIsOpenFlag = Module::exe_ptr<uint8_t>(0x39FB48);
+		mxCalcPoint = Module::fn_ptr<mxCalcPoint_fn>(0xA7D0);
+		CalcCharMatrixAddr = reinterpret_cast<uintptr_t>(Module::exe_ptr(GameAddr::CalcCharMatrix));
+
 		ReadIO = Module::fn_ptr<fn_0args>(0x53BB0); // ReadIO
+		dinput_state = Module::exe_ptr<SumoDInputState>(0x4999C0);
 		SoundControl_mb = Module::fn_ptr<fn_0args>(0x2F330); // SoundControl_mb
 		LinkControlReceive = Module::fn_ptr<fn_0args>(0x55130); // LinkControlReceive
 		ModeControl = Module::fn_ptr<fn_0args>(0x3FA20); // ModeControl
 		EventControl = Module::fn_ptr<fn_0args>(0x3FAB0); // EventControl
 		GhostCarExecServer = Module::fn_ptr<fn_0args>(0x80F80); // GhostCarExecServer
 		fn4666A0 = Module::fn_ptr<fn_0args>(0x666A0);
-		FileLoad_Ctrl = Module::fn_ptr<fn_0args>(0x4FBA0);
+		FileLoad_Ctrl = Module::fn_ptr<fn_0args_int>(0x4FBA0);
+		FileLoadSemaphore2 = Module::exe_ptr<HANDLE>(0x555AAC);
+		FileLoadSemaphore3 = Module::exe_ptr<HANDLE>(0x555A90);
 
 		PrjSndRequest = Module::fn_ptr<fn_1arg>(0x249F0);
 		SetSndQueue = Module::fn_ptr<fn_1arg>(0x24940);
@@ -287,11 +448,13 @@ namespace Game
 		sprLocateP = Module::fn_ptr<fn_2args>(0x2CC00);
 		sprPrintf = Module::fn_ptr<fn_printf>(0x2CCE0);
 
+		sprite_prio_root = Module::exe_ptr<SpriteNode*>(0x556C00);
+		put_sprite_ex = Module::fn_ptr<put_sprite_ex_fn>(0x2CFE0);
+		sprani_play_ae_auth_alpha = Module::fn_ptr<sprani_play_ae_auth_alpha_fn>(0x29580);
+		put_clip_sprite = Module::fn_ptr<put_clip_sprite_fn>(0x2D280);
+
 		Sumo_GetStringFromId = Module::fn_ptr<fn_1arg_char>(0x65EB0);
 		Sumo_Printf = Module::fn_ptr<fn_printf>(0x2CDD0);
-
-		SumoFrontEnd_GetSingleton_4035F0 = Module::fn_ptr<fn_0args_void>(0x35F0);
-		SumoFrontEnd_animate_443110 = Module::fn_ptr<fn_0args_class>(0x43110);
 
 		DrawObject_Internal = Module::fn_ptr<DrawObject_Internal_fn>(0x5360);
 		DrawObjectAlpha_Internal = Module::fn_ptr<DrawObjectAlpha_Internal_fn>(0x56D0);

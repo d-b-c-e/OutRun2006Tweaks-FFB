@@ -4,6 +4,7 @@
 #include "axis_calibration.hpp"
 
 #include "game.hpp"
+#include "settings.hpp"
 
 extern void DInput_RegisterNewDevices(); // hooks_input.cpp
 extern void SetVibration(int userId, float leftMotor, float rightMotor); // hooks_forcefeedback.cpp
@@ -70,27 +71,21 @@ namespace Game
 	inline std::chrono::system_clock::time_point StartupTime;
 	inline float DeltaTime = (1.f / 60.f);
 
-	inline bool DrawDistanceDebugEnabled = false;
-
 	inline GamepadType CurrentPadType = GamepadType::PC;
 	inline GamepadType ForcedPadType = GamepadType::None;
 };
 
+// Each setting is defined in the file that implements the feature it belongs
+// to, next to the hook that reads it. Only the ones read from more than one
+// file are declared here.
 namespace Settings
 {
-	inline int FramerateLimit = 60;
-	inline bool FramerateLimitMode = 0;
-	inline int FramerateFastLoad = 3;
-	inline bool FramerateUnlockExperimental = true;
-	inline int VSync = 1;
-	inline bool SingleCoreAffinity = true;
+	extern Setting<int> FramerateLimit;                    // hooks_framerate.cpp
+	extern Setting<int> FramerateFastLoad;                 // hooks_framerate.cpp
+	extern Setting<bool> FramerateInterpolation;           // hooks_framerate.cpp
 
-	inline bool WindowedBorderless = true;
-	inline int WindowPositionX = 0;
-	inline int WindowPositionY = 0;
-	inline bool WindowedHideMouseCursor = true;
-	inline bool DisableDPIScaling = true;
-	inline bool AutoDetectResolution = true;
+	extern Setting<float> FramerateInterpolationDebugAlpha; // interpolation.cpp
+	extern Setting<bool> FramerateInterpolationDebugLog;    // interpolation.cpp
 
 	// [Triple] Screens (STD-022): 0 Off, 1 Surround (default: the window as before, which already goes wide on a
 	// Surround desktop), 2 Separate monitors (one borderless window over three equal side-by-side monitors; planar
@@ -101,56 +96,60 @@ namespace Settings
 	inline bool TripleSpanActive = false;
 	inline long TripleSpanLeft = 0, TripleSpanTop = 0, TripleSpanWidth = 0, TripleSpanHeight = 0;
 
-	inline bool AllowHorn = true;
-	inline bool AllowWAV = true;
-	inline bool AllowFLAC = true;
+	extern Setting<bool> AllowHorn;
+	extern Setting<bool> AllowWAV;
+	extern Setting<int> UIScalingMode;                     // hooks_uiscaling.cpp
+	extern Setting<int> UILetterboxing;                    // hooks_uiscaling.cpp
+	extern Setting<int> SkyGlowFactor;                     // hooks_graphics.cpp
+	extern Setting<bool> SkyGlowTwoStep;                   // hooks_graphics.cpp
+	extern Setting<bool> UseHiDefCharacters;               // hooks_graphics.cpp
+	extern Setting<int> DrawDistanceIncrease;              // hooks_drawdistance.cpp
+	extern Setting<int> DrawDistanceBehind;                // hooks_drawdistance.cpp
 
-	inline bool CDSwitcherEnable = false;
-	inline bool CDSwitcherDisplayTitle = true;
-	inline int CDSwitcherTitleFont = 2;
-	inline float CDSwitcherTitleFontSizeX = 0.3f;
-	inline float CDSwitcherTitleFontSizeY = 0.5f;
-	inline int CDSwitcherTitlePositionX = 375;
-	inline int CDSwitcherTitlePositionY = 450;
-	inline bool CDSwitcherShuffleTracks = false;
-	inline std::string CDSwitcherTrackNext = "Back";
-	inline std::string CDSwitcherTrackPrevious = "RS+Back";
+	extern Setting<bool> AllowFLAC;                        // hooks_flac.cpp
 
+	extern Setting<bool> UseNewInput;                      // input_manager.cpp
+	extern Setting<bool> BypassGameSensitivity;            // input_manager.cpp
+	extern Setting<float> SteeringDeadZone;                // hooks_input.cpp
+	extern Setting<bool> ControllerHotPlug;                // hooks_input.cpp
+	extern Setting<int> ImpulseVibrationMode;              // hooks_input.cpp
+	extern Setting<float> ImpulseVibrationLeftMultiplier;  // hooks_input.cpp
+	extern Setting<float> ImpulseVibrationRightMultiplier; // hooks_input.cpp
+	extern Setting<int> VibrationMode;                     // hooks_forcefeedback.cpp
+	extern Setting<int> VibrationStrength;                 // hooks_forcefeedback.cpp
+	extern Setting<int> VibrationControllerId;             // hooks_forcefeedback.cpp
+	extern Setting<bool> WindowedBorderless;               // hooks_graphics.cpp
+
+	extern Setting<bool> RestoreJPClarissa;                // hooks_misc.cpp
+	extern Setting<std::string> DemonwareServerOverride;   // hooks_misc.cpp
+	extern Setting<bool> SingleCoreAffinity;               // hooks_misc.cpp
+	extern Setting<bool> FixFullPedalChecks;               // hooks_bugfixes.cpp
+	extern Setting<bool> OverlayEnabled;                   // overlay/hooks_overlay.cpp
+
+	extern Setting<int> InputBackend;					   // input_manager.cpp
+
+	// Track list for the CD switcher. Read by its own parser rather than as a
+	// setting, since INIReader doesn't preserve the order of a section's keys.
 	inline std::vector<std::pair<std::string, std::string>> CDTracks;
 
-	inline int UIScalingMode = 1;
-	inline int UILetterboxing = 1;
-	inline int AnisotropicFiltering = 16;
-	inline int ReflectionResolution = 2048;
-	inline bool UseHiDefCharacters = true;
-	inline bool TransparencySupersampling = true;
-	inline bool ScreenEdgeCullFix = true;
-	inline bool DisableVehicleLODs = true;
-	inline bool DisableStageCulling = true;
-	inline bool FixZBufferPrecision = true;
-	inline float CarBaseShadowOpacity = 1.0f;
-	inline int DrawDistanceIncrease = 0;
-	inline int DrawDistanceBehind = 0;
+	extern Setting<int> AnisotropicFiltering;
+	extern Setting<int> ReflectionResolution;
+	extern Setting<bool> TransparencySupersampling;
+	extern Setting<bool> ScreenEdgeCullFix;
+	extern Setting<bool> DisableVehicleLODs;
+	extern Setting<bool> DisableStageCulling;
+	extern Setting<bool> FixZBufferPrecision;
+	extern Setting<float> CarBaseShadowOpacity;
 
-	inline std::string TextureBaseFolder = "textures";
-	inline bool SceneTextureReplacement = true;
-	inline bool SceneTextureExtract = false;
-	inline bool UITextureReplacement = true;
-	inline bool UITextureExtract = false;
-	inline bool EnableTextureCache = true;
-	inline bool UseNewTextureAllocator = true;
+	extern Setting<std::string> TextureBaseFolder;
+	extern Setting<bool> SceneTextureReplacement;
+	extern Setting<bool> SceneTextureExtract;
+	extern Setting<bool> UITextureReplacement;
+	extern Setting<bool> UITextureExtract;
+	extern Setting<bool> EnableTextureCache;
+	extern Setting<bool> UseNewTextureAllocator;
 
-	inline bool UseNewInput = false;
-	inline float SteeringDeadZone = 0.2f;
-	inline bool ControllerHotPlug = false;
-	inline bool DefaultManualTransmission = false;
-	inline std::string HudToggleKey = "";
-	inline int VibrationMode = 0;
-	inline int VibrationStrength = 10;
-	inline int VibrationControllerId = 0;
-	inline int ImpulseVibrationMode = 0;
-	inline float ImpulseVibrationLeftMultiplier = 0.25f;
-	inline float ImpulseVibrationRightMultiplier = 0.25f;
+	extern Setting<bool> DefaultManualTransmission;
 
 	// DirectInput axis/button remapping (mutually exclusive with UseNewInput)
 	inline bool UseDirectInputRemap = false;
@@ -245,33 +244,29 @@ namespace Settings
 	inline bool TelemetryEnabled = true;
 	inline std::string TelemetrySharedMemName = "OutRun2006Telemetry";
 
-	inline int EnableHollyCourse2 = 1;
-	inline bool SkipIntroLogos = false;
-	inline bool DisableCountdownTimer = false;
-	inline bool EnableLevelSelect = false;
-	inline bool RestoreJPClarissa = false;
-	inline bool ShowOutRunMilesOnMenu = true;
-	inline bool AllowCharacterSelection = false;
-	inline bool RandomHighwayAnimSets = false;
-	inline std::string DemonwareServerOverride = "clarissa.port0.org";
-	inline bool ProtectLoginData = true;
+	extern Setting<int> EnableHollyCourse2;
+	extern Setting<bool> SkipIntroLogos;
+	extern Setting<bool> DisableCountdownTimer;
+	extern Setting<bool> EnableLevelSelect;
+	extern Setting<bool> ShowOutRunMilesOnMenu;
+	extern Setting<bool> AllowCharacterSelection;
+	extern Setting<bool> RandomHighwayAnimSets;
+	extern Setting<bool> ProtectLoginData;
 
-	inline bool OverlayEnabled = true;
 	inline bool ShowFrameRate = false;
 	inline std::string WheelSettingsView = "Simple";
 	inline float WheelSettingsScale = 1.0f;
 	inline int WheelSettingsKey = 0x75; // F6, Win32 virtual key
 	inline int WheelStopKey = 0x77; // F8
 
-	inline bool FixPegasusClopping = true;
-	inline bool FixRightSideBunkiAnimations = true;
-	inline bool FixC2CRankings = true;
-	inline bool PreventDESTSaveCorruption = true;
-	inline bool FixLensFlarePath = true;
-	inline bool FixIncorrectShading = true;
-	inline bool FixParticleRendering = true;
-	inline bool FixFullPedalChecks = true;
-	inline bool HideOnlineSigninText = true;
+	extern Setting<bool> FixPegasusClopping;
+	extern Setting<bool> FixRightSideBunkiAnimations;
+	extern Setting<bool> FixC2CRankings;
+	extern Setting<bool> PreventDESTSaveCorruption;
+	extern Setting<bool> FixLensFlarePath;
+	extern Setting<bool> FixIncorrectShading;
+	extern Setting<bool> FixParticleRendering;
+	extern Setting<bool> HideOnlineSigninText;
 }
 
 namespace Util

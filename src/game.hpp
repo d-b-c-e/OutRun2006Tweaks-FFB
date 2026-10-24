@@ -7,6 +7,7 @@
 
 typedef void (*fn_0args)();
 typedef void* (*fn_0args_void)();
+typedef int (*fn_0args_int)();
 typedef void (*fn_1arg)(int);
 typedef void (*fn_2args)(int, int);
 typedef void (*fn_3args)(int, int, int);
@@ -117,6 +118,36 @@ enum class SwitchId // SwitchOn/SwitchNow bit indexes
 	ChangeView,
 	Count
 };
+
+// The game's raw DirectInput state, rebuilt by DInputUpdate at the top of every
+// ReadIO. Most input reaches the game through SwitchOn and GetVolume, but parts
+// of the Sumo UI and the camera code test these button masks directly instead,
+// so presses have to appear here as well or those inputs never register.
+typedef struct tagSumoDInputState
+{
+	uint8_t gap0[4];
+	uint32_t buttons_4;      // currently held, one bit per button
+	uint32_t pressed_8;      // buttons_4 & ~previous
+	uint32_t released_C;     // previous & ~buttons_4
+	uint8_t gap10[4];
+	uint32_t field_14[2];
+	uint32_t field_1C[2];
+	uint32_t field_24[28];
+	uint16_t axes_94[25];    // raw axis values, scaled by ReadVolume
+	uint8_t unk_C6[2];
+	uint8_t unk_C8[60];
+	uint32_t dword104;
+	uint32_t field_108;
+	int int10C;
+	uint8_t gap110[108];
+	uint8_t byte17C;
+	uint8_t unk_17D[3];
+	uint8_t unk_180[24];
+	char field_198[28];
+	uint8_t field_1B4[28];
+	uint32_t deviceReady_1D0; // ReadIO reads a different config table when zero
+} SumoDInputState;
+static_assert(sizeof(SumoDInputState) == 0x1D4);
 
 enum GameState
 {
@@ -869,7 +900,10 @@ typedef struct tagEVWORK_CAR
   int16_t field_162;
   uint8_t unk_164[6];
   uint16_t field_16A;
-  D3DVECTOR field_16C;
+  // Previous position the display lerps from. CalcDispMatrix draws the car at
+  // mxSubdivideVector(position_14, alpha, this, 1 - alpha), so the rendered car
+  // sits (1 - alpha) * (position_14 - this) behind its tick position.
+  D3DVECTOR disp_prev_pos_16C;
   float field_178;
   int16_t field_17C[3];
   uint8_t unk_182[2];
@@ -1213,6 +1247,23 @@ typedef struct tagSPRARGS2
 } SPRARGS2;
 static_assert(sizeof(SPRARGS2) == 0xB8);
 
+// A queued 2D draw, allocated from the spr_list ring by put_sprite_ex (fills
+// args_10, kind_C = 0) or put_sprite_ex2 (fills args2_58, kind_C = 1)
+// sprite_prio_root holds one list head per priority, itself a node of this shape using only the link fields.
+//
+// draw_entried_sprites walks each list, draws it, and unlinks the lot at the end
+// of every rendered frame, so a node only lives for the frame that queued it.
+typedef struct tagSpriteNode
+{
+	tagSpriteNode* next_0;  // on a list head: first node in the list
+	tagSpriteNode* tail_4;  // on a list head: last node added
+	tagSpriteNode* owner_8;
+	uint32_t kind_C;
+	SPRARGS args_10;
+	SPRARGS2 args2_58;
+} SpriteNode;
+static_assert(sizeof(SpriteNode) == 0x110);
+
 typedef struct tagEvWorkRobot
 {
 	uint32_t workId_0;
@@ -1236,11 +1287,29 @@ typedef struct tagEvWorkRobot
 } EvWorkRobot;
 static_assert(sizeof(EvWorkRobot) == 0x90);
 
+typedef struct TCullingNode
+{
+	uint32_t flags;
+	D3DVECTOR center;
+
+	// Object space, so CheckCulling scales it by the world matrix before use.
+	float radius;
+
+	uint8_t todo[0x24];
+} CullingNode;
+static_assert(sizeof(CullingNode) == 0x38);
+
 typedef struct TDrawEntry
 {
-	uint8_t todo[0x3C];
+	// View space depth of the culling nodes bounding sphere centre, written by
+	// CalcCulling. The stage draw list is ordered on this.
+	float CenterZ_0;
+	uint8_t todo0[0x14];
+	CullingNode* CullNode_18;
+	uint8_t todo1[0x20];
 } DrawEntry;
 static_assert(sizeof(DrawEntry) == 0x3C);
+static_assert(offsetof(DrawEntry, CullNode_18) == 0x18);
 
 typedef struct TDrawBuffer
 {
@@ -1253,6 +1322,127 @@ typedef struct TDrawBuffer
 	void* UnkBuffer_18;
 } DrawBuffer;
 static_assert(sizeof(DrawBuffer) == 0x1C);
+
+// Oso "dynamics" objects (UFOs and similar). OsoDynamics_Disp interpolates
+// between d3dmatrix_0 (current) and d3dmatrixE0 (previous) itself - but it
+// advances that previous-state once per rendered frame rather than once per
+// tick, so above 60fps it collapses to no interpolation. See hooks_framerate.
+typedef struct TEvWorkOsoDynamics
+{
+	D3DMATRIX d3dmatrix_0;          // 0x00
+	D3DVECTOR Translate_40;         // 0x40
+	uint8_t gap4C[8];
+	uint32_t flags_54;              // 0x54
+	uint32_t dword58;
+	uint8_t gap5C[8];
+	int xmtxst_textureId_64;        // 0x64
+	D3DVECTOR Rotate_68;            // 0x68
+	float float74;
+	float float78;
+	uint32_t dword7C;
+	uint32_t dword80;
+	uint32_t dword84;
+	uint32_t UsePosMatrix_88;       // 0x88
+	uint32_t dword8C;
+	uint16_t cull_backside_90;      // 0x90
+	uint16_t word92;
+	uint8_t unk_94[12];
+	D3DMATRIX PosMatrix_A0;         // 0xA0
+	D3DMATRIX d3dmatrixE0;          // 0xE0 - previous frame, written by Disp
+} EvWorkOsoDynamics;
+static_assert(sizeof(EvWorkOsoDynamics) == 0x120);
+
+// Partial view of the objects drawn through OsoCommonFunc_Disp (beach balls,
+// cones...). Only the leading fields are known - the concrete types behind it
+// differ per Oso kind, so do NOT assume this is the whole struct.
+typedef struct TOsoCommonWork
+{
+	D3DMATRIX matrix_0;             // 0x00 - pushed directly by OsoCommonFunc_Disp
+	uint8_t unk_40[0x10];
+	uint32_t scale_50;              // 0x50 - written by OsoCommonFunc_Disp
+	uint32_t flags_54;              // 0x54 - bit0 visible, bit1 hidden
+	uint8_t unk_58[0x04];
+	uint32_t kind_5C;               // 0x5C - 0x38 bypasses the flags check
+	uint8_t unk_60[0x04];
+	uint32_t modelId_64;            // 0x64 - xmtObjId handed to DrawObject_Internal
+} OsoCommonWork;
+
+// NL particle system. Each source owns one buffer of particles, and the stride
+// varies by particle type - but nlParticleBorn fills the first 0x20 bytes of
+// every particle whatever its type, so these fields are at fixed offsets.
+typedef struct TNLPartParticle
+{
+	int32_t   flags;                // 0x00 - high bit set while alive
+	D3DVECTOR pos;                  // 0x04
+	D3DVECTOR vel;                  // 0x10 - added to pos once per tick
+	void* ctrlFunc;             // 0x1C - null means the slot is free
+} NLPartParticle;
+static_assert(sizeof(NLPartParticle) == 0x20);
+
+typedef struct TNLPartSource
+{
+	int32_t  flags;                 // 0x00 - source is live while negative
+	int32_t  particleCount;         // 0x04
+	uint8_t* particles;             // 0x08 - base of the particle buffer
+	uint8_t  gap0C[0x5C];
+	int32_t  particleStride;        // 0x68 - bytes per particle
+	// Rewritten by pcds_funconly_mf each tick, bumped by nlParticleBorn per spawn.
+	int32_t  liveCount;             // 0x6C
+	// Render config, set once at source init and read by particle_draw_* per draw.
+	int32_t  blendSrc;              // 0x70 - D3DRS_SRCBLEND
+	int32_t  blendDst;              // 0x74 - D3DRS_DESTBLEND
+	int32_t  useReduceBuff;         // 0x78
+	int32_t  useZBuff;              // 0x7C
+	int32_t  zOffset;               // 0x80
+} NLPartSource;
+static_assert(sizeof(NLPartSource) == 0x84);
+
+// ParticleEfc_Ctrl walks this many sources.
+static constexpr int NLPartSourceCount = 11;
+
+// HAM "catch the hearts" table entry. AttachHeart bakes world[] from the owner
+// car's matrix_B0 each tick; HeartDisp_car_heart draws from world[] and
+// HeartCtrl_car_heart measures it against the player to decide collection, so
+// world[] is gameplay state, not just display.
+typedef struct TAttachHeartEntry
+{
+	uint32_t eventId;               // 0x00 - 0x19A means unused
+	D3DVECTOR local[2];             // 0x04, 0x10 - offsets in car space
+	uint8_t gap1C[0x0C];
+	D3DVECTOR world[2];             // 0x28, 0x34 - baked = matrix_B0 * local
+	uint8_t gap40[0x0C];
+	uint32_t active[2];             // 0x4C, 0x50
+	uint8_t gap54[0x04];
+	uint16_t pulseCounter;          // 0x58 - incremented once per tick
+	uint16_t pad5A;
+} AttachHeartEntry;
+static_assert(sizeof(AttachHeartEntry) == 0x5C);
+
+static constexpr int AttachHeartEntryCount = 32;
+static constexpr uint32_t AttachHeartUnusedId = 0x19A;
+
+// HAM "cut the lines": ConnectBetweenCars bakes one entry per linked car pair
+// from the two cars' position_14 each tick. DispConnectBetweenCars draws the
+// line model (0x570038) between posA/posB and the 3D heart (0x57002F) at their
+// midpoint, and HeartCtrl_cut_line reads the table back through GetCbcTableAdr
+// to detect the player cutting a line - so this is gameplay state, not display.
+typedef struct TConnectionEntry
+{
+	uint32_t eventIdA;      // 0x00 - 0x19A means unused
+	uint32_t eventIdB;      // 0x04
+	D3DVECTOR posA;         // 0x08
+	D3DVECTOR posB;         // 0x14
+	float rotX;             // 0x20
+	float rotY;             // 0x24
+	uint32_t unk28;
+	float lineScaleZ;       // 0x2C - line length
+	float heartScale;       // 0x30
+	uint32_t unk34;
+} ConnectionEntry;
+static_assert(sizeof(ConnectionEntry) == 0x38);
+
+static constexpr int ConnectionEntryCount = 10;
+static constexpr uint32_t ConnectionUnusedId = 0x19A;
 
 // Info sent between game and master server
 struct SumoNet_MatchMakingInfo

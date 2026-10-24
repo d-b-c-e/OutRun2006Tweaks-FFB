@@ -74,10 +74,8 @@ public:
 		if (!Overlay::NotifyEnable)
 			return;
 
-		ImVec2 screenSize = ImGui::GetIO().DisplaySize;
-
-		// Calculate starting position for the latest notification
-		// (outside the menu letterbox, or in a race at the HUD's right edge: the centre screen of a triple)
+		const ImVec2 screenSize = ImGui::GetIO().DisplaySize;
+		// Keep notifications beside the menu or within the center screen during a triple-screen race.
 		float borderWidth = NotificationBorder(screenSize.x, screenSize.y, Game::is_in_game(), Settings::UILetterboxing,
 			Settings::TripleScreens);
 

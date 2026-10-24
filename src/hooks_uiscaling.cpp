@@ -3,6 +3,19 @@
 #include "game_addrs.hpp"
 #include "triple_span.hpp"
 
+namespace Settings
+{
+	Setting<int> UIScalingMode{ "Graphics", "UIScalingMode", 1,
+		"Adjusts the UI scaling applied by the game.",
+		{ "Vanilla, stretches to screen ratio", "Scaled UI, no stretching (Outrun Online Arcade)",
+		  "Centered 4:3 UI" } };
+	Setting<int> UILetterboxing{ "Graphics", "UILetterboxing", 1,
+		"Adds 4:3 letterboxing to game menus, to address graphical issues outside of the menus 4:3 display. "
+		"Only used when UIScalingMode isn't set to Vanilla.",
+		{ "Disable all letterboxing", "Letterbox menus only, disabled when in-game",
+		  "Always letterbox (only use with Centered 4:3 UI)" } };
+}
+
 enum class ScalingMode
 {
 	Vanilla,
@@ -29,12 +42,30 @@ class UIScaling : public Hook
 	const static int draw_sprite_custom_matrix_multi__case3_Addr = 0x2B53E;
 	const static int draw_sprite_custom_matrix_multi__case4_Addr = 0x2BB2F;
 
+	// sub_4BAD20 draws the 1st/2nd/3rd position markers above rival cars. It
+	// projects the car position to screen, then rounds it down to a whole pixel
+	// of the game's 640x480 coordinate space. That space is stretched to fill
+	// the display, so a single pixel of it spans several real ones and the
+	// marker visibly steps as it moves.
+	//
+	// RankMarker_Truncate is the address just past both cvttss2si, where the
+	// values from before the rounding are still on the stack at these offsets.
+	const static int RankMarker_Truncate = 0xBB046;
+	const static int RankMarker_StackX = 0x40;
+	const static int RankMarker_StackY = 0x44;
+
+	// Addresses of the draw calls sub_4BAD20 makes. sprani_play_ae_auth_alpha
+	// and put_clip_sprite are both used throughout the game, so each call site
+	// is redirected on its own rather than hooking either function.
+	static constexpr int RankMarker_SpraniCalls[] = { 0xBB0FB, 0xBB133, 0xBB16C, 0xBB1A5 };
+	static constexpr int RankMarker_ClipSpriteCalls[] = { 0xBB21F, 0xBB241, 0xBB271, 0xBB2BC, 0xBB2D0 };
+
 	// D3DXMatrixTransformation2D hook allows us to change draw_sprite_custom
 	static inline SafetyHookInline D3DXMatrixTransformation2D = {};
 	static int __stdcall D3DXMatrixTransformation2D_dest(D3DMATRIX* pOut, D3DXVECTOR2* pScalingCenter, float pScalingRotation,
 		D3DXVECTOR2* pScaling, D3DXVECTOR2* pRotationCenter, float Rotation, D3DXVECTOR2* pTranslation)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 
 		if (mode == ScalingMode::KeepCentered || mode == ScalingMode::OnlineArcade)
 		{
@@ -58,7 +89,7 @@ class UIScaling : public Hook
 	static inline SafetyHookMid draw_sprite_custom_matrix_hk = {};
 	static void __cdecl draw_sprite_custom_matrix_mid(safetyhook::Context& ctx)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 
 		float* g_spriteVertexStream = Module::exe_ptr<float>(0x58B868);
 		SPRARGS2* a1 = (SPRARGS2*)ctx.ebx;
@@ -174,11 +205,63 @@ class UIScaling : public Hook
 
 		// TODO: OnlineArcade mode needs to add position here
 
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 
 		if (mode == ScalingMode::KeepCentered || mode == ScalingMode::OnlineArcade)
 			out->x = (out->x / Game::screen_scale->y) * Game::screen_scale->x;
 	};
+
+	// The fraction of a pixel sub_4BAD20 discarded when it rounded the marker
+	// position down, for the draws below to add back.
+	static inline float RankMarkerFracX = 0.0f;
+	static inline float RankMarkerFracY = 0.0f;
+
+	static inline SafetyHookMid RankMarker_Truncate_hk{};
+	static void RankMarker_Truncate_dest(safetyhook::Context& ctx)
+	{
+		const float x = *reinterpret_cast<const float*>(ctx.esp + RankMarker_StackX);
+		const float y = *reinterpret_cast<const float*>(ctx.esp + RankMarker_StackY);
+
+		// esi and ebp hold the rounded position. Keeping the difference instead
+		// of the exact position lets every draw apply it, whatever offset from
+		// the marker that draw sits at.
+		RankMarkerFracX = (x + 320.0f) - float(int(ctx.esi));
+		RankMarkerFracY = ((240.0f - y) - 32.0f) - float(int(ctx.ebp));
+	}
+
+	// 1st, 2nd and 3rd are each a single sprite, and this call takes its
+	// position as floats, so the discarded fraction goes straight back on.
+	static int __cdecl RankMarker_sprani(uint32_t spriteId, float x, float y, int a4, int a5, float alpha)
+	{
+		return Game::sprani_play_ae_auth_alpha(spriteId, x + RankMarkerFracX, y + RankMarkerFracY, a4, a5, alpha);
+	}
+
+	// 4th place onward is spelled out from digit sprites drawn by
+	// put_clip_sprite, which takes its position as int. It converts that to
+	// float when filling in the sprite it queues, so the fraction goes back on
+	// there instead.
+	static int __cdecl RankMarker_putClipSprite(int xstnum, int x, int y, uint32_t flags, float priority, uint32_t color)
+	{
+		int prio = int(priority);
+		prio = prio < 0 ? 0 : (prio >= Game::SpritePriorityCount ? Game::SpritePriorityCount - 1 : prio);
+
+		SpriteNode* root = Game::sprite_prio_root[prio];
+		SpriteNode* tailBefore = root ? root->tail_4 : nullptr;
+
+		int result = Game::put_clip_sprite(xstnum, x, y, flags, priority, color);
+
+		// tail_4 is the last sprite queued at that priority. If it has not
+		// changed then the sprite pool was full and nothing was queued.
+		root = Game::sprite_prio_root[prio];
+		SpriteNode* node = root ? root->tail_4 : nullptr;
+		if (node && node != tailBefore)
+		{
+			node->args_10.float24 += RankMarkerFracX;
+			node->args_10.float28 += RankMarkerFracY;
+		}
+
+		return result;
+	}
 
 	enum SpriteScaleType
 	{
@@ -193,7 +276,7 @@ class UIScaling : public Hook
 	static inline SafetyHookMid drawFootage{};
 	static void drawFootage_dest(safetyhook::Context& ctx)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 		if (mode == ScalingMode::OnlineArcade && ScalingType != SpriteScaleType::Disabled)
 		{
 			float spacing = -((Game::screen_scale->y * Game::original_resolution.x) -
@@ -215,7 +298,7 @@ class UIScaling : public Hook
 	static inline SafetyHookMid draw_sprite_custom_matrix_multi_CenterSprite_hk{};
 	static void draw_sprite_custom_matrix_multi_CenterSprite(safetyhook::Context& ctx)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 		if (mode != ScalingMode::KeepCentered && mode != ScalingMode::OnlineArcade)
 			return;
 
@@ -238,7 +321,7 @@ class UIScaling : public Hook
 	static inline SafetyHookMid draw_sprite_custom_matrix_multi_CenterSprite2_hk{};
 	static void draw_sprite_custom_matrix_multi_CenterSprite2(safetyhook::Context& ctx)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 		if (mode != ScalingMode::KeepCentered && mode != ScalingMode::OnlineArcade)
 			return;
 
@@ -261,7 +344,7 @@ class UIScaling : public Hook
 	static inline SafetyHookMid draw_sprite_custom_matrix_multi_CenterSprite3_hk{};
 	static void draw_sprite_custom_matrix_multi_CenterSprite3(safetyhook::Context& ctx)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 		if (mode != ScalingMode::KeepCentered && mode != ScalingMode::OnlineArcade)
 			return;
 
@@ -347,7 +430,7 @@ class UIScaling : public Hook
 	template <typename T>
 	static void AddSpriteSpacing(T* value, bool left)
 	{
-		ScalingMode mode = ScalingMode(Settings::UIScalingMode);
+		ScalingMode mode = ScalingMode(Settings::UIScalingMode.get());
 		if (mode != ScalingMode::OnlineArcade)
 			return;
 
@@ -499,6 +582,15 @@ public:
 		return Settings::UIScalingMode > 0;
 	}
 
+	void declare_settings() override
+	{
+		Settings::UIScalingMode.needs_restart([] {
+			// apply() nops 0x293 bytes of the original sprite path, so mode 0 can't
+			// be returned to. 1 and 2 only change what the hooks read.
+			return (Settings::UIScalingMode.startup_value() == 0) != (Settings::UIScalingMode.get() == 0);
+		});
+	}
+
 	bool apply() override
 	{
 		Memory::VP::Nop(Module::exe_ptr(draw_sprite_custom_matrix_mid_Addr), 0x293);
@@ -509,6 +601,12 @@ public:
 		D3DXMatrixTransformation2D = safetyhook::create_inline(Module::exe_ptr(D3DXMatrixTransformation2D_Addr), D3DXMatrixTransformation2D_dest);
 
 		Calc3D2D_hk = safetyhook::create_inline(Module::exe_ptr(Calc3D2D_Addr), Calc3D2D_dest);
+
+		RankMarker_Truncate_hk = safetyhook::create_mid(Module::exe_ptr(RankMarker_Truncate), RankMarker_Truncate_dest);
+		for (int addr : RankMarker_SpraniCalls)
+			Memory::VP::InjectHook(Module::exe_ptr(addr), RankMarker_sprani, Memory::HookType::Call);
+		for (int addr : RankMarker_ClipSpriteCalls)
+			Memory::VP::InjectHook(Module::exe_ptr(addr), RankMarker_putClipSprite, Memory::HookType::Call);
 
 		NaviPub_Disp_SpriteSpacingEnable_hk = safetyhook::create_mid(Module::exe_ptr(NaviPub_Disp_SpriteScaleEnable_Addr), SpriteSpacingEnable);
 		NaviPub_Disp_SpriteSpacingEnable2_hk = safetyhook::create_mid(Module::exe_ptr(NaviPub_Disp_SpriteScaleEnable2_Addr), SpriteSpacingEnable);

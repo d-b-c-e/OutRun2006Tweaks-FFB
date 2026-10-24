@@ -11,6 +11,14 @@ static HWND FixtureForeground() { return reinterpret_cast<HWND>(1); }
 #include <iostream>
 #include "../../external/ini-cpp/ini/ini.h"
 
+namespace Settings
+{
+Setting<bool> UseNewInput{ "Controls", "UseNewInput", false };
+Setting<float> SteeringDeadZone{ "Controls", "SteeringDeadZone", 0.2f };
+bool read_legacy(const std::filesystem::path&) { return true; }
+}
+void CDSwitcher_ReadIni(const std::filesystem::path&) {}
+
 static int zeros = 0;
 static int selectionZero = -1, primaryAdoptions = 0;
 static DInputRemap::UiSnapshot fixtureInput;
@@ -149,6 +157,27 @@ int main(int argc, char** argv)
     Game::hWnd_ptr = &hwnd;
     const std::string old = "; Owner comment\r\n[FFB]\r\nDirectInputFFB = false\r\nFFBGlobalStrength = 0.37\r\nFFBProfile = my-tune@4\r\n\r\n[Unknown]\r\nOpaque = retain me\r\n";
     std::ofstream(Module::UserIniPath, std::ios::binary) << old;
+    const auto tweaksIni = directory / "tweaks-merge.user.ini";
+    const std::string legacy = "; Owner comment\r\n[DirectInput.Calibration]\r\nSteeringCenter = 1234\r\n[Controls]\r\nUseNewInput = false\r\n[Unknown]\r\nOpaque = retain me\r\n";
+    std::ofstream(tweaksIni, std::ios::binary) << legacy;
+    Settings::mark_base_values();
+    Settings::UseNewInput = true;
+    assert(Settings::write(tweaksIni));
+    assert(Read(tweaksIni).find("UseNewInput = true\r\n") != std::string::npos);
+    assert(Read(tweaksIni).find("SteeringCenter = 1234\r\n[Controls]") != std::string::npos);
+    Settings::UseNewInput = false;
+    assert(Settings::write(tweaksIni));
+    assert(Read(tweaksIni).find("UseNewInput") == std::string::npos);
+    assert(Read(tweaksIni).find("Opaque = retain me\r\n") != std::string::npos);
+    auto tweaksBackup = tweaksIni; tweaksBackup += L".before-tweaks-settings.bak";
+    assert(Read(tweaksBackup) == legacy);
+    Settings::UseNewInput = true;
+    const auto beforeLocked = Read(tweaksIni);
+    HANDLE tweaksLock = CreateFileW(tweaksIni.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(tweaksLock != INVALID_HANDLE_VALUE);
+    assert(!Settings::write(tweaksIni) && Read(tweaksIni) == beforeLocked);
+    CloseHandle(tweaksLock);
+    Settings::UseNewInput = false;
     assert(!IsAdvanced(""));
     FrameRateStats frameRates;
     for (int i = 0; i < 99; ++i) assert(!frameRates.Add(0.1));
@@ -450,8 +479,7 @@ int main(int argc, char** argv)
     assert(!SaveCapturedBinding({}));
     capture.candidate = VK_F11; assert(!SaveCapturedBinding({}));
     capture.candidate = VK_F9; assert(!SaveCapturedBinding({}));
-    Settings::HudToggleKey = "F3"; capture.candidate = VK_F3; assert(!SaveCapturedBinding({}));
-    Settings::HudToggleKey.clear();
+    capture.candidate = VK_F10; assert(!SaveCapturedBinding({}));
     capture.candidate = VK_F4;
     auto shortcutFrame = Frame(Page::Controls, false, 1280, 720);
     assert(shortcutFrame.find("Detected: F4") != std::string::npos);

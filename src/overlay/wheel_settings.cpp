@@ -193,7 +193,7 @@ std::string ShortcutSummary()
 }
 static bool ExistingShortcutConflict(int key)
 {
-    return WheelSettingsPolicy::Equal(Settings::HudToggleKey, ShortcutLabel(key)) || InputManager_FunctionKeyBound(key);
+    return (!Settings::UseNewInput && key == VK_F10) || InputManager_FunctionKeyBound(key);
 }
 void HandleShortcuts()
 {
@@ -883,7 +883,7 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         AxisRow(0, "Steering", Settings::DIRemapSteeringAxis, Settings::DIRemapSteeringInvert, "SteeringAxis", "SteeringInvert", input.steering, input);
         AxisRow(1, "Throttle", Settings::DIRemapAccelAxis, Settings::DIRemapAccelInvert, "AccelerationAxis", "AccelerationInvert", input.throttle, input);
         AxisRow(2, "Brake", Settings::DIRemapBrakeAxis, Settings::DIRemapBrakeInvert, "BrakeAxis", "BrakeInvert", input.brake, input);
-        Percent("Steering deadzone", Settings::SteeringDeadZone, "Controls", "SteeringDeadZone", 0.95f);
+        Percent("Steering deadzone", *Settings::SteeringDeadZone.ptr(), "Controls", "SteeringDeadZone", 0.95f);
         ImGui::TextWrapped("Values here are game input. Bind lets each pedal use its own device; a missing saved device outputs zero until it returns or you bind a replacement.");
         ImGui::TextDisabled("Handbrake: no handbrake action is exposed by this game adapter.");
         if (ImGui::CollapsingHeader("Driving buttons"))
@@ -1070,6 +1070,8 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
 class WheelSettingsWindow : public OverlayWindow
 {
 public:
+    Kind kind() const override { return Kind::Hud; }
+    const char* name() const override { return "Wheel Settings"; }
     void init() override {}
     void render(bool) override
     {

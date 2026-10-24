@@ -15,6 +15,14 @@ static SHORT FixtureKey(int key) { return key == VK_RETURN && fixtureReturn ? SH
 #include <iostream>
 #include <limits>
 
+namespace Settings
+{
+Setting<bool> UseNewInput{ "Controls", "UseNewInput", false };
+Setting<float> SteeringDeadZone{ "Controls", "SteeringDeadZone", 0.2f };
+bool read_legacy(const std::filesystem::path&) { return true; }
+}
+void CDSwitcher_ReadIni(const std::filesystem::path&) {}
+
 IDirectInput8A* g_RealDirectInput8 = nullptr;
 Hook::Hook() {}
 namespace RemapInject {

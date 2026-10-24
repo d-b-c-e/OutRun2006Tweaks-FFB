@@ -196,18 +196,33 @@ destroyed the downloaded effects mid-corner.
 *Original README follows:*
 
 # OutRun2006Tweaks
-[![GitHub Downloads](https://img.shields.io/github/downloads/emoose/OutRun2006Tweaks/total)](https://github.com/emoose/OutRun2006Tweaks/releases)
+[![GitHub Downloads](https://img.shields.io/github/downloads/emoose/OutRun2006Tweaks/total?style=for-the-badge)](https://github.com/emoose/OutRun2006Tweaks/releases) [![Discord](https://img.shields.io/discord/1259784325394858058?style=for-the-badge&label=discord)](https://discord.gg/GFjKAMg83t)
 
-A wrapper DLL that can patch in some minor fixes & tweaks into OutRun 2006: Coast 2 Coast.
+> [!NOTE]  
+> **Releases are currently very outdated**, and missing a lot of new features (new input system, config overlay, framerate interpolation...) - if you have a GitHub account you can download the latest builds from the Actions tab at top of the page, otherwise you can find the latest build at the Discord above!
 
-Latest builds can be found under the releases section: https://github.com/emoose/OutRun2006Tweaks/releases
+A wrapper DLL that adds fixes & tweaks into OutRun 2006: Coast 2 Coast.
 
 **Tweaks will also point the game to new multiplayer servers**, just head to the multiplayer section in-game and pick a username & password there!
 
-Online games are regularly setup on the OutRun2006Tweaks discord: https://discord.gg/GFjKAMg83t
+Online games are regularly setup on the **OutRun2006Tweaks Discord**: https://discord.gg/GFjKAMg83t
 
 ### Features
+
+**Bugfixes:**
+- Game is now fixed to 60Hz tickrate, running at higher framerates now interpolates to that framerate instead of speeding up gameplay
+- Prevents save corruption bug when remapping controls with many input devices connected
+- Pegasus animation's clopping sound effect will now end correctly
+- Fixed C2C ranking scoreboards not updating on Steam and other releases due to faulty anti-piracy checks
+- Automatically disables DPI scaling on the game window to fix scaling issues
+- Fixes issues with shading on certain character/stage models (eg. the ending cutscene models)
+- Allows particles like grass/gravel to be drawn correctly, like in the console versions
+- Crashes with multi-core machines are now fixed.
+- Bink movie files larger than 1024 pixels can now play without crashes
+- Game crashes will now write a crash report into CrashDumps folder (please feel free to post any crash reports to the issues page!)
+
 **Graphics:**
+- Bloom/glow effect from the console & arcade versions has been re-added
 - UI can now scale to different aspect ratios without stretching
 - Game scene & UI textures can be extracted from game, and replaced with higher-resolution versions
 - Allows disabling vehicle LODs, reducing the ugly pop-in as they get closer
@@ -231,19 +246,6 @@ Online games are regularly setup on the OutRun2006Tweaks discord: https://discor
 - Manual Transmission (MT) can be set as the default for C2C menus
 - Passing all the C2C missions might unlock something new 🐱
 
-**Bugfixes:**
-- Built-in framelimiter to prevent speedups, framerate can be partially unlocked with game running at 60FPS internally
-- Prevents save corruption bug when remapping controls with many input devices connected
-- Fixed C2C ranking scoreboards not updating on Steam and other releases due to faulty anti-piracy checks
-- Pegasus animation's clopping sound effect will now end correctly
-- Text related to the online service can optionally be hidden
-- Automatically disables DPI scaling on the game window to fix scaling issues
-- Fixes issues with shading on certain character/stage models (eg. the ending cutscene models)
-- Allows particles like grass/gravel to be drawn correctly, like in the console versions
-- Game can be forced to run on a single core, to help with freezing issues on some modern systems
-- Bink movie files larger than 1024 pixels will now play without crashes
-- Game crashes will now write a crash report into CrashDumps folder (please feel free to post any crash reports to the issues page!)
-
 **Enhancements:**
 - Game can now run in borderless windowed mode; mouse cursor will now be hidden while game is active
 - Will use desktop resolution for the game if outrun2006.ini isn't present
@@ -255,10 +257,6 @@ Online games are regularly setup on the OutRun2006Tweaks discord: https://discor
 
 All the above can be customized via the OutRun2006Tweaks.ini file.
 
-The partial FPS unlock allows game to render out at higher FPS, **but will still run at 60FPS internally**.  
-This won't give as much benefit as a true framerate unlock since frames will be repeated, but it can help reduce load times & improve some effects like the reflections update rate.  
-(high refresh rate monitors that have poor 60Hz response times may also benefit from this too)
-
 ### Setup
 Since Steam/DVD releases are packed with ancient DRM that doesn't play well with DLL wrappers, this pack includes a replacement game EXE to run the game with.
 
@@ -268,7 +266,7 @@ To set it up:
 
 - Extract the files from the release ZIP into your **Outrun2006 Coast 2 Coast** folder, where **OR2006C2C.EXE** is located, replacing the original EXE.
 - Edit **OutRun2006Tweaks.ini** to customize the tweaks to your liking (by default all tweaks are enabled, other than `CDSwitcher`)
-- **Important:** Install the latest x86 VC redist from (https://aka.ms/vs/17/release/vc_redist.x86.exe), a redist from 2024 is needed for Tweaks to launch correctly (**even if you already have it installed please try installing it again**)
+- **Important:** Install the latest x86 VC redist from (https://aka.ms/vs/17/release/vc_redist.x86.exe), a redist from 2024+ is needed for Tweaks to launch correctly (**even if you already have it installed please try installing it again**)
 - Run the game, your desktop resolution will be used by default if `outrun2006.ini` file isn't present.
 - (optional) the [SoundtrackFix package](https://github.com/emoose/OutRun2006Tweaks/releases/download/v0.3.0-release/OutRun2006Tweaks-SoundtrackFix-1.0.zip) can be applied to fix the missing first 2 seconds in "Rush a Difficulty"
 - (optional) texture improvements can be found in the texture pack releases thread (please feel free to create your own too!): https://github.com/emoose/OutRun2006Tweaks/issues/20
@@ -281,8 +279,3 @@ Building requires Visual Studio 2022, CMake & git to be installed, with those se
 If the batch script succeeds you should see a `build\outrun2006tweaks-proj.sln` solution file, just open that in VS and build it.
 
 (if you have issues building with this setup please let me know)
-
-### Thanks
-Thanks to [debugging.games](http://debugging.games) for hosting debug symbols for OutRun 2 SP (Lindburgh), very useful for looking into Outrun2006.
-
-(**if you own any prototype of Coast 2 Coast or Online Arcade** it may also contain debug symbols inside, which would let us improve even more on the C2C side of the game - please consider getting in touch at my email: lucknut.xbl at gmail dot com)

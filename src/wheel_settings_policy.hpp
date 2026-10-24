@@ -88,4 +88,29 @@ inline std::string SetIniValue(const std::string& source, const std::string& sec
     if (!foundSection) before += "[" + section + "]" + newline;
     return before + key + " = " + value + newline + source.substr(insertAt);
 }
+
+inline std::string EraseIniValue(const std::string& source, const std::string& section, const std::string& key)
+{
+    bool inSection = false;
+    for (size_t pos = 0; pos < source.size();)
+    {
+        const auto end = source.find('\n', pos);
+        const auto next = end == std::string::npos ? source.size() : end + 1;
+        auto line = Trim(source.substr(pos, next - pos));
+        if (pos == 0 && line.rfind("\xEF\xBB\xBF", 0) == 0) line.erase(0, 3);
+        if (!line.empty() && line.front() == '[')
+        {
+            const auto close = line.find(']');
+            inSection = close != std::string::npos && Equal(Trim(line.substr(1, close - 1)), section);
+        }
+        else if (inSection && !line.empty() && line.front() != ';' && line.front() != '#')
+        {
+            const auto equals = line.find('=');
+            if (equals != std::string::npos && Equal(Trim(line.substr(0, equals)), key))
+                return source.substr(0, pos) + source.substr(next);
+        }
+        pos = next;
+    }
+    return source;
+}
 }

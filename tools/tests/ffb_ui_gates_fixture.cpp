@@ -20,6 +20,15 @@ namespace RemapInject { bool Observe(float, float, int, uint32_t, uint32_t, bool
 #include <iostream>
 #include <limits>
 
+namespace Settings
+{
+Setting<bool> UseNewInput{ "Controls", "UseNewInput", false };
+Setting<int> VibrationMode{ "Controls", "VibrationMode", 0 };
+Setting<bool> OverlayEnabled{ "Overlay", "Enabled", true };
+bool read_legacy(const std::filesystem::path&) { return true; }
+}
+void CDSwitcher_ReadIni(const std::filesystem::path&) {}
+
 float VibrationLeftMotor = 0, VibrationRightMotor = 0;
 double __cdecl sub_1149C0(unsigned int, int, DWORD*) { return 0; }
 Hook::Hook() {}

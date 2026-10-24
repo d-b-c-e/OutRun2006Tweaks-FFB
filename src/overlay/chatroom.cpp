@@ -6,6 +6,7 @@
 #include "game_addrs.hpp"
 #include <imgui.h>
 #include "notifications.hpp"
+#include "input_manager.hpp"
 #include <array>
 #include <random>
 #include "overlay.hpp"
@@ -36,6 +37,12 @@ std::string timePointToString(const std::chrono::system_clock::time_point& timeP
 
 class ChatRoom : public OverlayWindow
 {
+public:
+	// Drawn in both states: a plain message list over the game, gaining a title
+	// bar and an input box once the overlay is open.
+	Kind kind() const override { return Kind::Hud; }
+	const char* name() const override { return "Chat"; }
+
 private:
 	ix::WebSocket webSocket;
 	bool socketActive = false;
@@ -55,8 +62,8 @@ private:
 		if (webSocket.getReadyState() == ix::ReadyState::Open)
 			return;
 
-		std::string url = "ws://" + Settings::DemonwareServerOverride + "/ws";
-		if (Settings::DemonwareServerOverride == "localhost")
+		std::string url = "ws://" + Settings::DemonwareServerOverride.get() + "/ws";
+		if (Settings::DemonwareServerOverride.get() == "localhost")
 			url = "ws://localhost:4444/ws";
 		webSocket.setUrl(url);
 
@@ -211,9 +218,28 @@ public:
 		else if (socketState == ix::ReadyState::Open && Overlay::ChatMode == Overlay::ChatMode_Disabled)
 			webSocket.stop();
 
+		// Nothing to draw or listen for with chat off. Below the socket handling
+		// above so a connection still gets closed on the way out, and clears the
+		// input state so disabling it while typing does not leave the window
+		// latched open and holding Overlay::IsActive.
+		if (Overlay::ChatMode == Overlay::ChatMode_Disabled)
+		{
+			isActive = false;
+			return;
+		}
+
 		// Toggle active mode with 'Y' key
+		static bool overlayKeyHeld = false;
+		const bool overlayKeyNow = InputManager_ModActionHeld(ModAction::OpenChat);
+
+		bool toggleOverlay = overlayKeyNow && !overlayKeyHeld;
+		overlayKeyHeld = overlayKeyNow;
+
+		if (!Settings::UseNewInput && !Overlay::IsBindingDialogActive)
+			toggleOverlay |= ImGui::IsKeyReleased(ImGuiKey_Y);
+
 		bool justOpened = false;
-		if (!isActive && ImGui::IsKeyReleased(ImGuiKey_Y))
+		if (!isActive && toggleOverlay)
 		{
 			justOpened = true;
 			isActive = true;
@@ -222,7 +248,7 @@ public:
 		if (isActive && ImGui::IsKeyReleased(ImGuiKey_Escape))
 			isActive = false;
 
-		if (isActive && ImGui::IsKeyReleased(ImGuiKey_Enter))
+		if (isActive && (ImGui::IsKeyReleased(ImGuiKey_Enter) || ImGui::IsKeyReleased(ImGuiKey_KeypadEnter)))
 			isActive = false;
 
 		if (isActive)
@@ -275,19 +301,16 @@ public:
 			}
 		}
 
-		float screenWidth = float(Game::screen_resolution->x);
-		float screenHeight = float(Game::screen_resolution->y);
-		float contentWidth = screenHeight / (3.f / 4.f);
-		float borderWidth = ((screenWidth - contentWidth) / 2) + 0.5f;
+		// Sits in the lower quarter of the game's content area, inset from it.
+		const Overlay::ContentRect content = Overlay::content_rect();
+		const float quarterHeight = content.height / 4;
 
-		float screenQuarterHeight = screenHeight / 4;
-
-		ImGui::SetNextWindowPos(ImVec2(borderWidth + 20, (screenQuarterHeight * 3) - 20), ImGuiCond_FirstUseEver);
-		ImGui::SetNextWindowSize(ImVec2(contentWidth - 40, screenQuarterHeight), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowPos(ImVec2(content.x + 20, (quarterHeight * 3) - 20), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowSize(ImVec2(content.width - 40, quarterHeight), ImGuiCond_FirstUseEver);
 
 		if (ImGui::Begin("Chat Messages", nullptr, !overlayEnabled ? ImGuiWindowFlags_NoDecoration : 0))
 		{
-			ImGui::SetWindowFontScale(Overlay::ChatFontSize);
+			ImGui::PushFont(ImGui::GetFont(), ImGui::GetStyle().FontSizeBase * Overlay::ChatFontSize);
 			ImGui::BeginChild("ScrollingRegion", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
 
 			// Get total available height of scroll region
@@ -358,6 +381,8 @@ public:
 				if (justOpened)
 					ImGui::SetKeyboardFocusHere(-1);
 			}
+
+			ImGui::PopFont();
 		}
 		ImGui::End();
 		if (!overlayEnabled && Overlay::ChatHideBackground)

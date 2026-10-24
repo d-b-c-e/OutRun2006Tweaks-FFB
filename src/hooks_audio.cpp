@@ -1,10 +1,39 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "input_manager.hpp"
 #include <mmiscapi.h>
 #include <fstream>
 #include <algorithm>
 #include <random>
+
+namespace Settings
+{
+	Setting<bool> AllowHorn{ "Audio", "AllowHorn", true,
+		"Allows using horn outside of the \"beep the horn!\" girlfriend missions." };
+	Setting<bool> AllowWAV{ "Audio", "AllowWAV", true,
+		"Adds support for WAV to the games BGM loader. WAVs should use the same filename as the original OGG, "
+		"eg. \"Sound\\14_Rush_a_Difficulty_1989.wav\"." };
+
+	Setting<bool> CDSwitcherEnable{ "CDSwitcher", "SwitcherEnable", false,
+		"Installs an aftermarket CD switcher onto each of your cars, which can be used to change music tracks during a race. "
+		"Tracks are changed with the Z and X keys by default, can be rebound in the bindings config." };
+	Setting<bool> CDSwitcherDisplayTitle{ "CDSwitcher", "SwitcherDisplayTitle", true,
+		"Whether to display track title after switching." };
+	Setting<int> CDSwitcherTitleFont{ "CDSwitcher", "SwitcherTitleFont", 2,
+		"Allows customizing the track title font (certain fonts may be missing glyphs such as square brackets).",
+		Range<int>{ 0, 9 } };
+	Setting<float> CDSwitcherTitleFontSizeX{ "CDSwitcher", "SwitcherTitleFontSizeX", 0.3f,
+		"Size the track title is drawn at." };
+	Setting<float> CDSwitcherTitleFontSizeY{ "CDSwitcher", "SwitcherTitleFontSizeY", 0.5f,
+		"Size the track title is drawn at." };
+	Setting<int> CDSwitcherTitlePositionX{ "CDSwitcher", "SwitcherTitlePositionX", 375,
+		"Where the track title is drawn on screen, based on games original 640x480 screen dimensions." };
+	Setting<int> CDSwitcherTitlePositionY{ "CDSwitcher", "SwitcherTitlePositionY", 450,
+		"Where the track title is drawn on screen, based on games original 640x480 screen dimensions." };
+	Setting<bool> CDSwitcherShuffleTracks{ "CDSwitcher", "SwitcherShuffleTracks", false,
+		"Shuffles the tracks on game launch." };
+}
 
 std::string BGMOverridePath;
 
@@ -92,31 +121,6 @@ public:
 };
 BGMLoaderHook BGMLoaderHook::instance;
 
-uint32_t ParseButtonCombination(std::string_view combo)
-{
-	int retval = 0;
-	std::string cur_token;
-
-	// Parse combo tokens into buttons bitfield (tokens seperated by any non-alphabetical char, eg. +)
-	for (char c : combo)
-	{
-		if (!isalpha(c) && c != '-')
-		{
-			if (cur_token.length() && XInputButtonMap.count(cur_token))
-				retval |= XInputButtonMap.at(cur_token);
-
-			cur_token.clear();
-			continue;
-		}
-		cur_token += ::tolower(c);
-	}
-
-	if (cur_token.length() && XInputButtonMap.count(cur_token))
-		retval |= XInputButtonMap.at(cur_token);
-
-	return retval;
-}
-
 class CDSwitcher : public Hook
 {
 	constexpr static int SongTitleDisplaySeconds = 2;
@@ -128,30 +132,36 @@ class CDSwitcher : public Hook
 	inline static bool PrevKeyStatePrev = false;
 	inline static bool PrevKeyStateNext = false;
 
-	inline static uint32_t PadButtonCombo_Next = XINPUT_GAMEPAD_BACK;
-	inline static uint32_t PadButtonCombo_Prev = XINPUT_GAMEPAD_RIGHT_THUMB | XINPUT_GAMEPAD_BACK;
-	inline static uint32_t PadButtonCombo_Next_BitCount = 0;
-	inline static uint32_t PadButtonCombo_Prev_BitCount = 0;
+	// Legacy input only - the new system binds ModAction::MusicNext/Previous
+	// instead, which is one input per action rather than a chord.
+	static constexpr uint32_t PadButtonCombo_Next = XINPUT_GAMEPAD_BACK;
+	static constexpr uint32_t PadButtonCombo_Prev = XINPUT_GAMEPAD_RIGHT_THUMB | XINPUT_GAMEPAD_BACK;
 
 	inline static SafetyHookInline Game_Ctrl = {};
 	static void destination()
 	{
 		Game_Ctrl.call();
 
-		bool PadStateNext = Input::PadReleased(PadButtonCombo_Next);
-		bool PadStatePrev = Input::PadReleased(PadButtonCombo_Prev);
-		if (PadStateNext && PadStatePrev)
-		{
-			// Whichever combination has the most number of buttons takes precedence
-			// (else there could be issues if one binding is a subset of another one)
-			if (PadButtonCombo_Prev_BitCount > PadButtonCombo_Next_BitCount)
-				PadStateNext = false;
-			else
-				PadStatePrev = false;
-		}
+		bool KeyStateNext = false;
+		bool KeyStatePrev = false;
 
-		bool KeyStateNext = ((GetAsyncKeyState('X') & 1) || PadStateNext);
-		bool KeyStatePrev = ((GetAsyncKeyState('Z') & 1) || PadStatePrev);
+		if (Settings::UseNewInput)
+		{
+			KeyStateNext = InputManager_ModActionHeld(ModAction::MusicNext);
+			KeyStatePrev = InputManager_ModActionHeld(ModAction::MusicPrevious);
+		}
+		else
+		{
+			bool PadStateNext = Input::PadReleased(PadButtonCombo_Next);
+			bool PadStatePrev = Input::PadReleased(PadButtonCombo_Prev);
+
+			// Prev is a superset of Next, so a Prev press also satisfies Next.
+			if (PadStateNext && PadStatePrev)
+				PadStateNext = false;
+
+			KeyStateNext = ((GetAsyncKeyState('X') & 1) || PadStateNext);
+			KeyStatePrev = ((GetAsyncKeyState('Z') & 1) || PadStatePrev);
+		}
 
 		bool BGMChanged = false;
 
@@ -241,16 +251,16 @@ public:
 		return Settings::CDSwitcherEnable;
 	}
 
+	void declare_settings() override
+	{
+		Settings::CDSwitcherEnable.needs_restart();
+	}
+
 	bool apply() override
 	{
 		constexpr int Game_Ctrl_Addr = 0x9C840;
 		constexpr int PettyAutosceneCmdTblAnalysis_adxPlay_CallAddr1 = 0x8687F;
 		constexpr int PettyAutosceneCmdTblAnalysis_adxPlay_CallAddr2 = 0x868D3;
-
-		PadButtonCombo_Next = ParseButtonCombination(Settings::CDSwitcherTrackNext);
-		PadButtonCombo_Prev = ParseButtonCombination(Settings::CDSwitcherTrackPrevious);
-		PadButtonCombo_Next_BitCount = Util::BitCount(PadButtonCombo_Next);
-		PadButtonCombo_Prev_BitCount = Util::BitCount(PadButtonCombo_Prev);
 
 		Memory::VP::InjectHook(Module::exe_ptr(PettyAutosceneCmdTblAnalysis_adxPlay_CallAddr1), PettyAutosceneCmdTblAnalysis_adxPlay_dest, Memory::HookType::Call);
 		Memory::VP::InjectHook(Module::exe_ptr(PettyAutosceneCmdTblAnalysis_adxPlay_CallAddr2), PettyAutosceneCmdTblAnalysis_adxPlay_dest, Memory::HookType::Call);

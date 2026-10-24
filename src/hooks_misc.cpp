@@ -8,11 +8,48 @@
 #include <algorithm>
 #include <vector>
 #include "triple_span.hpp"
-#include <miniupnpc.h>
-#include <upnpcommands.h>
+#include "upnp.hpp"
 #include <WinSock2.h>
 #include <fstream>
 #include <wincrypt.h>
+
+namespace Settings
+{
+	Setting<bool> SingleCoreAffinity{ "Performance", "SingleCoreAffinity", true,
+		"Keep legacy file-loading threads on one core where the OS permits it." };
+	Setting<bool> RestoreJPClarissa{ "Misc", "RestoreJPClarissa", false,
+		"Clarissa in O2SP arcade mode uses a different model in non-JP versions, this allows restoring the original JP model." };
+	Setting<std::string> DemonwareServerOverride{ "Misc", "DemonwareServerOverride", "clarissa.port0.org",
+		"Allows redirecting the Demonware master server to a custom server instead. This host should be hosting lobby/auth/STUN." };
+
+	Setting<int> EnableHollyCourse2{ "Misc", "EnableHollyCourse2", 3,
+		"Enables the second set of Holly missions (\"MIX 2 COURSE\") from the PSP version.",
+		{ "Disable", "Unlocked with Holly 1 missions", "Unlocked after reaching rank A on Holly 1",
+		  "Hidden until reaching rank A on Holly 1 (completion bonus!)" } };
+	Setting<bool> SkipIntroLogos{ "Misc", "SkipIntroLogos", false,
+		"Skips the beginning intro logos, saving a couple seconds from startup time. Can also be enabled via -SkipIntros launch parameter." };
+	Setting<bool> DisableCountdownTimer{ "Misc", "DisableCountdownTimer", false,
+		"Disables the countdown timer, may be useful for modders, or those who just want to take a leisurely drive. "
+		"Can also be enabled via -OuttaTime launch parameter." };
+	Setting<bool> EnableLevelSelect{ "Misc", "EnableLevelSelect", false,
+		"Replaces the main menu with a debug level select, can be useful for quickly testing levels. "
+		"Can also be enabled via -LevelSelect launch parameter." };
+	Setting<bool> ShowOutRunMilesOnMenu{ "Misc", "ShowOutRunMilesOnMenu", true,
+		"Changes the \"Not Signed In\" text to also display number of OutRun miles." };
+	Setting<bool> AllowCharacterSelection{ "Misc", "AllowCharacterSelection", false,
+		"Allows character model to be changed on the Edit License screen. Alternate models have issues: girls will likely "
+		"crash the game when going in-game, and guys besides Alberto may have modelling issues." };
+	Setting<bool> RandomHighwayAnimSets{ "Misc", "RandomHighwayAnimSets", false,
+		"Allows game to pick highway animations from other game modes at random, instead of just the one being played." };
+	Setting<bool> ProtectLoginData{ "Misc", "ProtectLoginData", true,
+		"Protects online login data by removing it from savegame files & encrypting against your Windows user account, making "
+		"sure your login details won't be exposed if you share savegame files." };
+	Setting<bool> DefaultManualTransmission{ "Controls", "DefaultManualTransmission", false,
+		"Makes Manual Transmission the default selection in C2C menus." };
+
+	Setting<bool> AutoDetectResolution{ "Window", "AutoDetectResolution", true,
+		"If the outrun2006.ini file doesn't exist, changes games default 640x480 resolution to primary display resolution instead." };
+}
 
 class ProtectLoginData : public Hook
 {
@@ -161,6 +198,12 @@ public:
 		return Settings::ProtectLoginData;
 	}
 
+	void declare_settings() override
+	{
+		Settings::ProtectLoginData.needs_restart();
+		Settings::ProtectLoginData.hidden(true);
+	}
+
 	bool apply() override
 	{
 		constexpr int Sumo_CommonDat_Read_Addr = 0x16380;
@@ -270,6 +313,12 @@ public:
 		return Settings::AllowCharacterSelection;
 	}
 
+	void declare_settings() override
+	{
+		Settings::AllowCharacterSelection.needs_restart();
+		Settings::AllowCharacterSelection.hidden(true);
+	}
+
 	bool apply() override
 	{
 		Sumo_LicenseScreenChangeSelection = Module::fn_ptr<fn_1args_class>(0xDD990);
@@ -312,6 +361,11 @@ public:
 	bool validate() override
 	{
 		return Settings::DefaultManualTransmission;
+	}
+
+	void declare_settings() override
+	{
+		Settings::DefaultManualTransmission.needs_restart();
 	}
 
 	bool apply() override
@@ -456,6 +510,11 @@ public:
 		return Settings::EnableHollyCourse2 != 0;
 	}
 
+	void declare_settings() override
+	{
+		Settings::EnableHollyCourse2.needs_restart();
+	}
+
 	bool apply() override
 	{
 		// Increase Sumo_RacerMenu alloc size to fit extra sprite
@@ -545,6 +604,11 @@ public:
 		return Settings::ShowOutRunMilesOnMenu;
 	}
 
+	void declare_settings() override
+	{
+		Settings::ShowOutRunMilesOnMenu.needs_restart();
+	}
+
 	bool apply() override
 	{
 		constexpr int PrintSignedInStatus_NotLoggedIn_Addr = 0x413E2;
@@ -564,8 +628,8 @@ class DemonwareServerOverride : public Hook
 	inline static SafetyHookInline bdPlatformSocket__getHostByName_hook = {};
 	static uint32_t __cdecl destination(const char* name, void* a2, int a3)
 	{
-		spdlog::debug("getHostByName: overriding host {} to {}", name, Settings::DemonwareServerOverride);
-		auto ret = bdPlatformSocket__getHostByName_hook.ccall<uint32_t>(Settings::DemonwareServerOverride.c_str(), a2, a3);
+		spdlog::debug("getHostByName: overriding host {} to {}", name, Settings::DemonwareServerOverride.get());
+		auto ret = bdPlatformSocket__getHostByName_hook.ccall<uint32_t>(Settings::DemonwareServerOverride.get().c_str(), a2, a3);
 		return ret;
 	}
 
@@ -577,50 +641,8 @@ class DemonwareServerOverride : public Hook
 		WSADATA tmp;
 		WSAStartup(0x202, &tmp);
 
-		int upnpError = UPNPDISCOVER_SUCCESS;
-		UPNPDev* upnpDevice = upnpDiscover(2000, NULL, NULL, 0, 0, 2, &upnpError);
-
-		bool anyError = false;
-		int ret = 0;
-		if (upnpError != UPNPDISCOVER_SUCCESS || !upnpDevice)
-		{
-			spdlog::error("UPnP: upnpDiscover failed with error {}", upnpError);
-			return;
-		}
-
-		struct UPNPUrls urls;
-		struct IGDdatas data;
-		char lanaddr[16];
-		char wanaddr[16];
-
-		ret = UPNP_GetValidIGD(upnpDevice, &urls, &data, lanaddr, sizeof(lanaddr), wanaddr, sizeof(wanaddr));
-		if (ret != 1 && ret != 2 && ret != 3) // UPNP_GetValidIGD returning 1/2/3 should be fine
-		{
-			spdlog::error("UPnP: UPNP_GetValidIGD failed with error {}", ret);
-			return;
-		}
-
-		std::list<int> portNums = { 41455, 41456, 41457 };
-
-		for (auto port : portNums)
-		{
-			for (int i = 0; i < 2; i++)
-			{
-				ret = UPNP_AddPortMapping(urls.controlURL, data.first.servicetype,
-					std::to_string(port).c_str(), std::to_string(port).c_str(),
-					lanaddr, "OutRun2006", i == 0 ? "TCP" : "UDP", NULL, NULL);
-				if (ret != UPNPCOMMAND_SUCCESS)
-				{
-					spdlog::error("UPnP: UPNP_AddPortMapping failed for port {}/{}, error code {}", port, i, ret);
-					anyError = true;
-				}
-			}
-		}
-
-		if (ret == 0 && !anyError)
-		{
-			spdlog::info("UPnP: port mappings succeeded");
-		}
+		// Try port forwarding on UPnP thread.
+		UPnP::refresh();
 	}
 
 public:
@@ -631,7 +653,13 @@ public:
 
 	bool validate() override
 	{
-		return !Settings::DemonwareServerOverride.empty();
+		return !Settings::DemonwareServerOverride.get().empty();
+	}
+
+	void declare_settings() override
+	{
+		Settings::DemonwareServerOverride.needs_restart();
+		Settings::DemonwareServerOverride.hidden(true);
 	}
 
 	bool apply() override
@@ -649,7 +677,7 @@ public:
 			constexpr int bdPlatformSocket__getHostByName_isalpha_Addr = 0x1349C7;
 
 			bool isIPAddr = true;
-			for (auto c : Settings::DemonwareServerOverride)
+			for (auto c : Settings::DemonwareServerOverride.get())
 				if (isalpha(c))
 				{
 					isIPAddr = false;
@@ -692,6 +720,11 @@ public:
 	bool validate() override
 	{
 		return Settings::RandomHighwayAnimSets;
+	}
+
+	void declare_settings() override
+	{
+		Settings::RandomHighwayAnimSets.needs_restart();
 	}
 
 	bool apply() override
@@ -790,6 +823,11 @@ public:
 	bool validate() override
 	{
 		return Settings::RestoreJPClarissa;
+	}
+
+	void declare_settings() override
+	{
+		Settings::RestoreJPClarissa.needs_restart();
 	}
 
 	bool apply() override
@@ -949,8 +987,36 @@ public:
 		return true;
 	}
 
+	void declare_settings() override
+	{
+		Settings::AutoDetectResolution.needs_restart();
+		Settings::SkipIntroLogos.needs_restart();
+		Settings::DisableCountdownTimer.needs_restart();
+	}
+
 	bool apply() override
 	{
+		// Some versions of the game include an outrun2006.ini by mistake, if it's older than 3 months it's likely not the users.
+		// We'll just delete it if that's the case.
+		// (if it was the users config and we delete by accident, the damage is minimal, and we tell user how to prevent it in log too)
+		const std::filesystem::path configPath = "outrun2006.ini";
+		if (std::filesystem::exists(configPath))
+		{
+			const auto lastWrite = std::filesystem::last_write_time(configPath);
+			const auto now = std::filesystem::file_time_type::clock::now();
+
+			const DWORD attributes = GetFileAttributesW(configPath.c_str());
+
+			const bool hidden = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_HIDDEN) != 0;
+			const bool readOnly = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0;
+
+			if (!hidden && !readOnly && now - lastWrite > std::chrono::days(90))
+			{
+				std::filesystem::remove(configPath);
+				spdlog::warn("GameDefaultConfigOverride: deleted old outrun2006.ini (older than 3 months - set file to read-only or hidden to prevent in future)");
+			}
+		}
+
 		// Override the default settings used when game INI doesn't exist/is empty
 		// (these can still be overridden via INI if needed)
 
@@ -1032,6 +1098,11 @@ public:
 	bool validate() override
 	{
 		return Settings::EnableLevelSelect;
+	}
+
+	void declare_settings() override
+	{
+		Settings::EnableLevelSelect.needs_restart();
 	}
 
 	bool apply() override

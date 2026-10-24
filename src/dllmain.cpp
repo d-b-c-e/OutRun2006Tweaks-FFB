@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <shellapi.h>
 #include <filesystem>
 #include <ini.h>
 
@@ -61,128 +62,9 @@ namespace Module
 
 namespace Settings
 {
-	void to_log()
+	bool read_legacy(const std::filesystem::path& iniPath)
 	{
-		spdlog::info("Settings values:");
-		spdlog::info(" - FramerateLimit: {}", FramerateLimit);
-		spdlog::info(" - FramerateLimitMode: {}", FramerateLimitMode);
-		spdlog::info(" - FramerateFastLoad: {}", FramerateFastLoad);
-		spdlog::info(" - FramerateUnlockExperimental: {}", FramerateUnlockExperimental);
-		spdlog::info(" - VSync: {}", VSync);
-		spdlog::info(" - SingleCoreAffinity: {}", SingleCoreAffinity);
-
-		spdlog::info(" - WindowedBorderless: {}", WindowedBorderless);
-		spdlog::info(" - WindowPosition: {}x{}", WindowPositionX, WindowPositionY);
-		spdlog::info(" - WindowedHideMouseCursor: {}", WindowedHideMouseCursor);
-		spdlog::info(" - TripleScreens: {}", TripleScreens == 2 ? "Separate monitors" : TripleScreens == 0 ? "Off" : "Surround");
-		spdlog::info(" - DisableDPIScaling: {}", DisableDPIScaling);
-		spdlog::info(" - AutoDetectResolution: {}", AutoDetectResolution);
-
-		spdlog::info(" - AllowHorn: {}", AllowHorn);
-		spdlog::info(" - AllowWAV: {}", AllowWAV);
-		spdlog::info(" - AllowFLAC: {}", AllowFLAC);
-
-		spdlog::info(" - CDSwitcherEnable: {}", CDSwitcherEnable);
-		spdlog::info(" - CDSwitcherDisplayTitle: {}", CDSwitcherDisplayTitle);
-		spdlog::info(" - CDSwitcherTitleFont: {}", CDSwitcherTitleFont);
-		spdlog::info(" - CDSwitcherTitleFontSizeX: {}", CDSwitcherTitleFontSizeX);
-		spdlog::info(" - CDSwitcherTitleFontSizeY: {}", CDSwitcherTitleFontSizeY);
-		spdlog::info(" - CDSwitcherTitlePositionX: {}", CDSwitcherTitlePositionX);
-		spdlog::info(" - CDSwitcherTitlePositionY: {}", CDSwitcherTitlePositionY);
-		spdlog::info(" - CDSwitcherShuffleTracks: {}", CDSwitcherShuffleTracks);
-		spdlog::info(" - CDSwitcherTrackNext: {}", CDSwitcherTrackNext);
-		spdlog::info(" - CDSwitcherTrackPrevious: {}", CDSwitcherTrackPrevious);
-
-		spdlog::info(" - UIScalingMode: {}", UIScalingMode);
-		spdlog::info(" - UILetterboxing: {}", UILetterboxing);
-		spdlog::info(" - AnisotropicFiltering: {}", AnisotropicFiltering);
-		spdlog::info(" - ReflectionResolution: {}", ReflectionResolution);
-		spdlog::info(" - UseHiDefCharacters: {}", UseHiDefCharacters);
-		spdlog::info(" - TransparencySupersampling: {}", TransparencySupersampling);
-		spdlog::info(" - ScreenEdgeCullFix: {}", ScreenEdgeCullFix);
-		spdlog::info(" - DisableVehicleLODs: {}", DisableVehicleLODs);
-		spdlog::info(" - DisableStageCulling: {}", DisableStageCulling);
-		spdlog::info(" - FixZBufferPrecision: {}", FixZBufferPrecision);
-		spdlog::info(" - CarBaseShadowOpacity: {}", CarBaseShadowOpacity);
-		spdlog::info(" - DrawDistanceIncrease: {}", DrawDistanceIncrease);
-		spdlog::info(" - DrawDistanceBehind: {}", DrawDistanceBehind);
-
-		spdlog::info(" - TextureBaseFolder: {}", TextureBaseFolder);
-		spdlog::info(" - SceneTextureReplacement: {}", SceneTextureReplacement);
-		spdlog::info(" - SceneTextureExtract: {}", SceneTextureExtract);
-		spdlog::info(" - UITextureReplacement: {}", UITextureReplacement);
-		spdlog::info(" - UITextureExtract: {}", UITextureExtract);
-		spdlog::info(" - EnableTextureCache: {}", EnableTextureCache);
-		spdlog::info(" - UseNewTextureAllocator: {}", UseNewTextureAllocator);
-
-		spdlog::info(" - UseNewInput: {}", UseNewInput);
-		spdlog::info(" - SteeringDeadZone: {}", SteeringDeadZone);
-		spdlog::info(" - ControllerHotPlug: {}", ControllerHotPlug);
-		spdlog::info(" - DefaultManualTransmission: {}", DefaultManualTransmission);
-		spdlog::info(" - VibrationMode: {}", VibrationMode);
-		spdlog::info(" - VibrationStrength: {}", VibrationStrength);
-		spdlog::info(" - VibrationControllerId: {}", VibrationControllerId);
-		spdlog::info(" - ImpulseVibrationMode: {}", ImpulseVibrationMode);
-		spdlog::info(" - ImpulseVibrationLeftMultiplier: {}", ImpulseVibrationLeftMultiplier);
-		spdlog::info(" - ImpulseVibrationRightMultiplier: {}", ImpulseVibrationRightMultiplier);
-
-		spdlog::info(" - UseDirectInputRemap: {}", UseDirectInputRemap);
-		spdlog::info(" - DIRemapDeviceGuid: {}", DIRemapDeviceGuid);
-		spdlog::info(" - DIRemapSteeringAxis: {}", DIRemapSteeringAxis);
-		spdlog::info(" - DIRemapSteeringInvert: {}", DIRemapSteeringInvert);
-		spdlog::info(" - DIRemapAccelAxis: {}", DIRemapAccelAxis);
-		spdlog::info(" - DIRemapAccelInvert: {}", DIRemapAccelInvert);
-		spdlog::info(" - DIRemapBrakeAxis: {}", DIRemapBrakeAxis);
-		spdlog::info(" - DIRemapBrakeInvert: {}", DIRemapBrakeInvert);
-
-		spdlog::info(" - DirectInputFFB: {}", DirectInputFFB);
-		spdlog::info(" - FFBDevice: {}", FFBDevice);
-		spdlog::info(" - FFBProfile: {}", FFBProfile);
-		spdlog::info(" - FFBGlobalStrength: {}", FFBGlobalStrength);
-		spdlog::info(" - FFBSpringStrength: {}", FFBSpringStrength);
-		spdlog::info(" - FFBDamperStrength: {}", FFBDamperStrength);
-		spdlog::info(" - FFBSteeringWeight: {}", FFBSteeringWeight);
-		spdlog::info(" - FFBWallImpact: {}", FFBWallImpact);
-		spdlog::info(" - FFBRumbleStrip: {}", FFBRumbleStrip);
-		spdlog::info(" - FFBGearShift: {}", FFBGearShift);
-		spdlog::info(" - FFBRoadTexture: {}", FFBRoadTexture);
-		spdlog::info(" - FFBTireSlip: {}", FFBTireSlip);
-		spdlog::info(" - FFBGripLoss: {}", FFBGripLoss);
-		spdlog::info(" - FFBWeightTransfer: {}", FFBWeightTransfer);
-		spdlog::info(" - FFBLateralDeadzone: {}", FFBLateralDeadzone);
-		spdlog::info(" - FFBEngineIdle: {}", FFBEngineIdle);
-		spdlog::info(" - FFBUsePeriodicEffects: {}", FFBUsePeriodicEffects);
-		spdlog::info(" - FFBWheelTorqueNm: {}", FFBWheelTorqueNm);
-		spdlog::info(" - FFBInvertForce: {}", FFBInvertForce);
-
-		spdlog::info(" - EnableHollyCourse2: {}", EnableHollyCourse2);
-		spdlog::info(" - SkipIntroLogos: {}", SkipIntroLogos);
-		spdlog::info(" - DisableCountdownTimer: {}", DisableCountdownTimer);
-		spdlog::info(" - EnableLevelSelect: {}", EnableLevelSelect);
-		spdlog::info(" - HudToggleKey: {}", HudToggleKey);
-		spdlog::info(" - RestoreJPClarissa: {}", RestoreJPClarissa);
-		spdlog::info(" - ShowOutRunMilesOnMenu: {}", ShowOutRunMilesOnMenu);
-		spdlog::info(" - AllowCharacterSelection: {}", AllowCharacterSelection);
-		spdlog::info(" - RandomHighwayAnimSets: {}", RandomHighwayAnimSets);
-		spdlog::info(" - DemonwareServerOverride: {}", DemonwareServerOverride);
-		spdlog::info(" - ProtectLoginData: {}", ProtectLoginData);
-
-		spdlog::info(" - OverlayEnabled: {}", OverlayEnabled);
-
-		spdlog::info(" - FixPegasusClopping: {}", FixPegasusClopping);
-		spdlog::info(" - FixRightSideBunkiAnimations: {}", FixRightSideBunkiAnimations);
-		spdlog::info(" - FixC2CRankings: {}", FixC2CRankings);
-		spdlog::info(" - PreventDESTSaveCorruption: {}", PreventDESTSaveCorruption);
-		spdlog::info(" - FixLensFlarePath: {}", FixLensFlarePath);
-		spdlog::info(" - FixIncorrectShading: {}", FixIncorrectShading);
-		spdlog::info(" - FixParticleRendering: {}", FixParticleRendering);
-		spdlog::info(" - FixFullPedalChecks: {}", FixFullPedalChecks);
-		spdlog::info(" - HideOnlineSigninText: {}", HideOnlineSigninText);
-	}
-
-	bool read(std::filesystem::path& iniPath)
-	{
-		spdlog::info("Settings::read - reading INI from {}", iniPath.string());
+		spdlog::info("Settings::read_legacy - reading INI from {}", iniPath.string());
 
 		inih::INIReader ini;
 		try
@@ -191,23 +73,11 @@ namespace Settings
 		}
 		catch (...)
 		{
-			spdlog::error("Settings::read - INI read failed! The file might not exist, or may have duplicate settings inside");
+			spdlog::error("Settings::read_legacy - INI read failed! The file might not exist, or may have duplicate settings inside");
 			return false;
 		}
 
-		FramerateLimit = ini.Get("Performance", "FramerateLimit", FramerateLimit);
-		FramerateLimitMode = ini.Get("Performance", "FramerateLimitMode", FramerateLimitMode);
-		FramerateFastLoad = ini.Get("Performance", "FramerateFastLoad", FramerateFastLoad);
-		FramerateUnlockExperimental = ini.Get("Performance", "FramerateUnlockExperimental", FramerateUnlockExperimental);
-		VSync = ini.Get("Performance", "VSync", VSync);
-		SingleCoreAffinity = ini.Get("Performance", "SingleCoreAffinity", SingleCoreAffinity);
 
-		WindowedBorderless = ini.Get("Window", "WindowedBorderless", WindowedBorderless);
-		WindowPositionX = ini.Get("Window", "WindowPositionX", WindowPositionX);
-		WindowPositionY = ini.Get("Window", "WindowPositionY", WindowPositionY);
-		WindowedHideMouseCursor = ini.Get("Window", "WindowedHideMouseCursor", WindowedHideMouseCursor);
-		DisableDPIScaling = ini.Get("Window", "DisableDPIScaling", DisableDPIScaling);
-		AutoDetectResolution = ini.Get("Window", "AutoDetectResolution", AutoDetectResolution);
 		{
 			std::string screens = TripleScreens == 2 ? "Separate monitors" : TripleScreens == 0 ? "Off" : "Surround";
 			screens = ini.Get("Triple", "Screens", screens);
@@ -215,68 +85,12 @@ namespace Settings
 				: _stricmp(screens.c_str(), "Off") == 0 ? 0 : 1;
 		}
 
-		AllowHorn = ini.Get("Audio", "AllowHorn", AllowHorn);
-		AllowWAV = ini.Get("Audio", "AllowWAV", AllowWAV);
-		AllowFLAC = ini.Get("Audio", "AllowFLAC", AllowFLAC);
 
-		CDSwitcherEnable = ini.Get("CDSwitcher", "SwitcherEnable", CDSwitcherEnable);
-		CDSwitcherDisplayTitle = ini.Get("CDSwitcher", "SwitcherDisplayTitle", CDSwitcherDisplayTitle);
-		CDSwitcherTitleFont = ini.Get("CDSwitcher", "SwitcherTitleFont", CDSwitcherTitleFont);
-		CDSwitcherTitleFont = std::clamp(CDSwitcherTitleFont, 0, 9);
-		CDSwitcherTitleFontSizeX = ini.Get("CDSwitcher", "SwitcherTitleFontSizeX", CDSwitcherTitleFontSizeX);
-		CDSwitcherTitleFontSizeY = ini.Get("CDSwitcher", "SwitcherTitleFontSizeY", CDSwitcherTitleFontSizeY);
-		CDSwitcherTitlePositionX = ini.Get("CDSwitcher", "SwitcherTitlePositionX", CDSwitcherTitlePositionX);
-		CDSwitcherTitlePositionY = ini.Get("CDSwitcher", "SwitcherTitlePositionY", CDSwitcherTitlePositionY);
-		CDSwitcherShuffleTracks = ini.Get("CDSwitcher", "SwitcherShuffleTracks", CDSwitcherShuffleTracks);
-		CDSwitcherTrackNext = ini.Get("CDSwitcher", "TrackNext", CDSwitcherTrackNext);
-		CDSwitcherTrackPrevious = ini.Get("CDSwitcher", "TrackPrevious", CDSwitcherTrackPrevious);
 
-		UIScalingMode = ini.Get("Graphics", "UIScalingMode", UIScalingMode);
-		UIScalingMode = std::clamp(UIScalingMode, 0, 2);
-		UILetterboxing = ini.Get("Graphics", "UILetterboxing", UILetterboxing);
-		UILetterboxing = std::clamp(UILetterboxing, 0, 2);
 
-		AnisotropicFiltering = ini.Get("Graphics", "AnisotropicFiltering", AnisotropicFiltering);
-		AnisotropicFiltering = std::clamp(AnisotropicFiltering, 0, 16);
-		ReflectionResolution = ini.Get("Graphics", "ReflectionResolution", ReflectionResolution);
-		ReflectionResolution = std::clamp(ReflectionResolution, 0, 8192);
-		UseHiDefCharacters = ini.Get("Graphics", "UseHiDefCharacters", UseHiDefCharacters);
-		TransparencySupersampling = ini.Get("Graphics", "TransparencySupersampling", TransparencySupersampling);
-		ScreenEdgeCullFix = ini.Get("Graphics", "ScreenEdgeCullFix", ScreenEdgeCullFix);
-		DisableVehicleLODs = ini.Get("Graphics", "DisableVehicleLODs", DisableVehicleLODs);
-		DisableStageCulling = ini.Get("Graphics", "DisableStageCulling", DisableStageCulling);
-		FixZBufferPrecision = ini.Get("Graphics", "FixZBufferPrecision", FixZBufferPrecision);
-		CarBaseShadowOpacity = ini.Get("Graphics", "CarBaseShadowOpacity", CarBaseShadowOpacity);
-		DrawDistanceIncrease = ini.Get("Graphics", "DrawDistanceIncrease", DrawDistanceIncrease);
-		DrawDistanceBehind = ini.Get("Graphics", "DrawDistanceBehind", DrawDistanceBehind);
 
-		TextureBaseFolder = ini.Get("Graphics", "TextureBaseFolder", TextureBaseFolder);
-		SceneTextureReplacement = ini.Get("Graphics", "SceneTextureReplacement", SceneTextureReplacement);
-		SceneTextureExtract = ini.Get("Graphics", "SceneTextureExtract", SceneTextureExtract);
-		UITextureReplacement = ini.Get("Graphics", "UITextureReplacement", UITextureReplacement);
-		UITextureExtract = ini.Get("Graphics", "UITextureExtract", UITextureExtract);
-		EnableTextureCache = ini.Get("Graphics", "EnableTextureCache", EnableTextureCache);
-		UseNewTextureAllocator = ini.Get("Graphics", "UseNewTextureAllocator", UseNewTextureAllocator);
 
-		UseNewInput = ini.Get("Controls", "UseNewInput", UseNewInput);
-		SteeringDeadZone = ini.Get("Controls", "SteeringDeadZone", SteeringDeadZone);
-		SteeringDeadZone = std::clamp(SteeringDeadZone, 0.f, 1.f);
-		ControllerHotPlug = ini.Get("Controls", "ControllerHotPlug", ControllerHotPlug);
-		DefaultManualTransmission = ini.Get("Controls", "DefaultManualTransmission", DefaultManualTransmission);
-		HudToggleKey = ini.Get("Controls", "HudToggleKey", HudToggleKey);
-		VibrationMode = ini.Get("Controls", "VibrationMode", VibrationMode);
-		VibrationMode = std::clamp(VibrationMode, 0, 3);
-		VibrationStrength = ini.Get("Controls", "VibrationStrength", VibrationStrength);
-		VibrationStrength = std::clamp(VibrationStrength, 0, 10);
-		VibrationControllerId = ini.Get("Controls", "VibrationControllerId", VibrationControllerId);
-		VibrationControllerId = std::clamp(VibrationControllerId, 0, 4);
 
-		ImpulseVibrationMode = ini.Get("Controls", "ImpulseVibrationMode", ImpulseVibrationMode);
-		ImpulseVibrationMode = std::clamp(ImpulseVibrationMode, 0, 3);
-		ImpulseVibrationLeftMultiplier = ini.Get("Controls", "ImpulseVibrationLeftMultiplier", ImpulseVibrationLeftMultiplier);
-		ImpulseVibrationLeftMultiplier = std::clamp(ImpulseVibrationLeftMultiplier, 0.0f, 1.0f);
-		ImpulseVibrationRightMultiplier = ini.Get("Controls", "ImpulseVibrationRightMultiplier", ImpulseVibrationRightMultiplier);
-		ImpulseVibrationRightMultiplier = std::clamp(ImpulseVibrationRightMultiplier, 0.0f, 1.0f);
 
 		UseDirectInputRemap = ini.Get("DirectInput", "UseDirectInputRemap", UseDirectInputRemap);
 		DIRemapDeviceGuid = ini.Get("DirectInput", "DeviceGuid", DIRemapDeviceGuid);
@@ -396,18 +210,7 @@ namespace Settings
 		TelemetryEnabled = ini.Get("Telemetry", "Enable", TelemetryEnabled);
 		TelemetrySharedMemName = ini.Get("Telemetry", "SharedMemName", TelemetrySharedMemName);
 
-		EnableHollyCourse2 = ini.Get("Misc", "EnableHollyCourse2", EnableHollyCourse2);
-		SkipIntroLogos = ini.Get("Misc", "SkipIntroLogos", SkipIntroLogos);
-		DisableCountdownTimer = ini.Get("Misc", "DisableCountdownTimer", DisableCountdownTimer);
-		EnableLevelSelect = ini.Get("Misc", "EnableLevelSelect", EnableLevelSelect);
-		RestoreJPClarissa = ini.Get("Misc", "RestoreJPClarissa", RestoreJPClarissa);
-		ShowOutRunMilesOnMenu = ini.Get("Misc", "ShowOutRunMilesOnMenu", ShowOutRunMilesOnMenu);
-		AllowCharacterSelection = ini.Get("Misc", "AllowCharacterSelection", AllowCharacterSelection);
-		RandomHighwayAnimSets = ini.Get("Misc", "RandomHighwayAnimSets", RandomHighwayAnimSets);
-		DemonwareServerOverride = ini.Get("Misc", "DemonwareServerOverride", DemonwareServerOverride);
-		ProtectLoginData = ini.Get("Misc", "ProtectLoginData", ProtectLoginData);
 
-		OverlayEnabled = ini.Get("Overlay", "Enabled", OverlayEnabled);
 		ShowFrameRate = ini.Get("Overlay", "ShowFrameRate", ShowFrameRate);
 		WheelSettingsView = ini.Get("WheelSettings", "View", WheelSettingsView);
 		if (WheelSettingsView != "Advanced") WheelSettingsView = "Simple";
@@ -422,24 +225,13 @@ namespace Settings
 			spdlog::warn("Wheel settings: invalid/conflicting shortcuts; using F6 and F8 for this session");
 		}
 
-		FixPegasusClopping = ini.Get("Bugfixes", "FixPegasusClopping", FixPegasusClopping);
-		FixRightSideBunkiAnimations = ini.Get("Bugfixes", "FixRightSideBunkiAnimations", FixRightSideBunkiAnimations);
-		FixC2CRankings = ini.Get("Bugfixes", "FixC2CRankings", FixC2CRankings);
-		PreventDESTSaveCorruption = ini.Get("Bugfixes", "PreventDESTSaveCorruption", PreventDESTSaveCorruption);
-		FixLensFlarePath = ini.Get("Bugfixes", "FixLensFlarePath", FixLensFlarePath);
-		FixIncorrectShading = ini.Get("Bugfixes", "FixIncorrectShading", FixIncorrectShading);
-		FixParticleRendering = ini.Get("Bugfixes", "FixParticleRendering", FixParticleRendering);
-		FixFullPedalChecks = ini.Get("Bugfixes", "FixFullPedalChecks", FixFullPedalChecks);
-		HideOnlineSigninText = ini.Get("Bugfixes", "HideOnlineSigninText", HideOnlineSigninText);
 
 		// INIReader doesn't preserve the order of the keys/values in a section
 		// Will need to try opening INI ourselves to grab cd tracks...
-		CDSwitcher_ReadIni(iniPath);
 
 		return true;
 	}
-};
-
+}
 void Plugin_Init()
 {
 	// setup our log & INI paths
@@ -491,8 +283,26 @@ void Plugin_Init()
 	if (!Settings::read(Module::IniPath))
 		spdlog::error("Settings::read - Launching game with default OR2006Tweaks INI settings!");
 
+	// Anything past this point counts as an override, and is what gets written
+	// back out to the user INI.
+	Settings::mark_base_values();
+
 	if (std::filesystem::exists(Module::UserIniPath))
 		Settings::read(Module::UserIniPath);
+
+	int argc;
+	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+	if (argv)
+	{
+		bool changed = Settings::read_cmd_line(argc, argv);
+		LocalFree(argv);
+		if (changed)
+		{
+			// Prevent command-line overrides from being written back to ini
+			spdlog::warn("Command-line overrides are in use, disabling INI writes.");
+			Settings::DisableSettingsWrite = true;
+		}
+	}
 
 	Settings::to_log();
 
@@ -517,6 +327,10 @@ void Plugin_Init()
 	InitExceptionHandler();
 
 	HookManager::ApplyHooks();
+
+	// Hooks declare which settings they read as they apply, so the snapshot and
+	// the no-consumer check both have to wait until they've all run.
+	Settings::mark_startup_values();
 }
 
 #include "Proxy.hpp"

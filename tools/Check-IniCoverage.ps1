@@ -30,10 +30,15 @@ if (-not $Ini) { $Ini = Join-Path $repo 'OutRun2006Tweaks.ini' }
 $source = Join-Path $repo 'src\dllmain.cpp'
 foreach ($f in $Ini, $source) { if (-not (Test-Path $f)) { throw "not found: $f" } }
 
-# What the code reads: ini.Get("<section>", "<key>", ...)
+# Legacy wheel settings read directly; upstream settings register next to their hooks.
 $read = @{}
 foreach ($m in [regex]::Matches((Get-Content $source -Raw), 'ini\.Get\("([^"]+)",\s*"([^"]+)"')) {
     $read["$($m.Groups[1].Value)/$($m.Groups[2].Value)"] = $true
+}
+foreach ($file in (Get-ChildItem (Join-Path $repo 'src') -Recurse -Filter '*.cpp')) {
+    foreach ($m in [regex]::Matches((Get-Content $file.FullName -Raw), 'Setting<[^>]+>\s+\w+\s*\{\s*"([^"]+)",\s*"([^"]+)"')) {
+        $read["$($m.Groups[1].Value)/$($m.Groups[2].Value)"] = $true
+    }
 }
 
 # What the template offers.
@@ -45,21 +50,16 @@ foreach ($line in (Get-Content $Ini)) {
     if ($section -and $t -match '^([^=]+)=') { $have["$section/$($Matches[1].Trim())"] = $true }
 }
 
-# Known-dead, exempted deliberately so the check can go green and stay worth
-# running. Each entry needs a reason; an unexplained exemption is just a
-# silenced bug.
-#   CDTracks/*  Settings::CDTracks is declared in plugin.hpp and read in
-#               hooks_audio.cpp, but NOTHING in this fork ever populates it, so
-#               CDTracks.size() is always 0 and the custom-BGM feature is inert.
-#               The section is left in place because it is upstream's, not ours
-#               to delete; see CLAUDE.md.
+# CDTracks is consumed by its order-preserving parser in hooks_audio.cpp.
 $exempt = @('CDTracks/*')
 function Test-Exempt($key) {
     foreach ($e in $exempt) { if ($key -like $e) { return $true } }
     return $false
 }
 
-$missing = @($read.Keys | Where-Object { -not $have.ContainsKey($_) } | Sort-Object)
+# Diagnostic interpolation knobs are intentionally hidden from the shipped template.
+$internal = @('Performance/FramerateInterpolationDebugAlpha', 'Performance/FramerateInterpolationDebugLog')
+$missing = @($read.Keys | Where-Object { -not $have.ContainsKey($_) -and $_ -notin $internal } | Sort-Object)
 $dead    = @($have.Keys | Where-Object { -not $read.ContainsKey($_) -and -not (Test-Exempt $_) } | Sort-Object)
 $exempted = @($have.Keys | Where-Object { -not $read.ContainsKey($_) -and (Test-Exempt $_) })
 
@@ -76,9 +76,7 @@ if ($dead) {
     Write-Host "  Someone will change one of these and conclude the mod is broken." -ForegroundColor Gray
 }
 
-if ($exempted.Count) {
-    Write-Host ("`n{0} known-dead setting(s) exempted (see the list in this script)." -f $exempted.Count) -ForegroundColor DarkGray
-}
+if ($exempted.Count) { Write-Host ("`n{0} custom-parsed setting(s) exempted." -f $exempted.Count) -ForegroundColor DarkGray }
 if ($missing -or $dead) { Write-Host ""; exit 1 }
 Write-Host "The template and the code agree." -ForegroundColor Green
 exit 0

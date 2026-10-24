@@ -73,79 +73,72 @@ include(FetchContent)
 if(POLICY CMP0135)
 	cmake_policy(SET CMP0135 NEW)
 endif()
-message(STATUS "Fetching zydis (v4.0.0)...")
-FetchContent_Declare(zydis
-	GIT_REPOSITORY
-		"https://github.com/zyantific/zydis"
-	GIT_TAG
-		v4.0.0
-)
-FetchContent_MakeAvailable(zydis)
-
-message(STATUS "Fetching safetyhook (629558c64009a7291ba6ed5cfb49187086a27a47)...")
-FetchContent_Declare(safetyhook
-	GIT_REPOSITORY
-		"https://github.com/cursey/safetyhook"
-	GIT_TAG
-		629558c64009a7291ba6ed5cfb49187086a27a47
-)
-FetchContent_MakeAvailable(safetyhook)
-
-message(STATUS "Fetching ogg (v1.3.5)...")
+message(STATUS "Fetching ogg (v1.3.6)...")
 FetchContent_Declare(ogg
 	GIT_REPOSITORY
 		"https://github.com/xiph/ogg"
 	GIT_TAG
-		v1.3.5
+		v1.3.6
 )
 FetchContent_MakeAvailable(ogg)
 
-message(STATUS "Fetching flac (1.4.3)...")
+message(STATUS "Fetching flac (1.5.0)...")
 FetchContent_Declare(flac
 	GIT_REPOSITORY
 		"https://github.com/xiph/flac"
 	GIT_TAG
-		1.4.3
+		1.5.0
 )
 FetchContent_MakeAvailable(flac)
 
-message(STATUS "Fetching miniupnpc (miniupnpd_2_3_7)...")
+message(STATUS "Fetching miniupnpc (miniupnpd_2_3_10)...")
 FetchContent_Declare(miniupnpc
 	GIT_REPOSITORY
 		"https://github.com/miniupnp/miniupnp"
 	GIT_TAG
-		miniupnpd_2_3_7
+		miniupnpd_2_3_10
 	SOURCE_SUBDIR
 		miniupnpc
 )
 FetchContent_MakeAvailable(miniupnpc)
 
-message(STATUS "Fetching jsoncpp (1.9.6)...")
+message(STATUS "Fetching jsoncpp (1.9.8)...")
 FetchContent_Declare(jsoncpp
 	GIT_REPOSITORY
 		"https://github.com/open-source-parsers/jsoncpp.git"
 	GIT_TAG
-		1.9.6
+		1.9.8
 )
 FetchContent_MakeAvailable(jsoncpp)
 
-message(STATUS "Fetching zlib (v1.3.1)...")
+message(STATUS "Fetching zlib (v1.3.2)...")
 FetchContent_Declare(zlib
 	GIT_REPOSITORY
 		"https://github.com/madler/zlib"
 	GIT_TAG
-		v1.3.1
+		v1.3.2
 )
 FetchContent_MakeAvailable(zlib)
 
-message(STATUS "Fetching sdl (preview-3.1.8)...")
+message(STATUS "Fetching sdl (release-3.4.12)...")
 FetchContent_Declare(sdl
 	GIT_REPOSITORY
 		"https://github.com/libsdl-org/SDL"
 	GIT_TAG
-		preview-3.1.8
+		release-3.4.12
 )
 FetchContent_MakeAvailable(sdl)
+
+set(SAFETYHOOK_FETCH_ZYDIS ON)
+
+message(STATUS "Fetching safetyhook (f44cc070a8340f2f26649553c49533475417304d)...")
+FetchContent_Declare(safetyhook
+	GIT_REPOSITORY
+		"https://github.com/cursey/safetyhook"
+	GIT_TAG
+		f44cc070a8340f2f26649553c49533475417304d
+)
+FetchContent_MakeAvailable(safetyhook)
 
 # Target: spdlog
 set(spdlog_SOURCES
@@ -167,6 +160,10 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${spdlog_SOURCES})
 target_compile_definitions(spdlog PUBLIC
 	SPDLOG_COMPILED_LIB
 	_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
+)
+
+target_compile_options(spdlog PUBLIC
+	"/utf-8"
 )
 
 target_include_directories(spdlog PUBLIC
@@ -317,16 +314,26 @@ set(outrun2006tweaks_SOURCES
 	"src/hpattern_gate.hpp"
 	"src/hud_speed.hpp"
 	"src/input_manager.cpp"
+	"src/input_manager.hpp"
+	"src/input_names.hpp"
+	"src/interpolation.cpp"
+	"src/interpolation.hpp"
 	"src/legacy_force_configuration.hpp"
 	"src/network.cpp"
+	"src/overlay/about_ui.cpp"
 	"src/overlay/chatroom.cpp"
 	"src/overlay/course_editor.cpp"
+	"src/overlay/debug_ui.cpp"
 	"src/overlay/frame_rate_stats.hpp"
 	"src/overlay/hooks_overlay.cpp"
+	"src/overlay/input_bindings_ui.cpp"
+	"src/overlay/networking_ui.cpp"
 	"src/overlay/notifications.hpp"
 	"src/overlay/overlay.cpp"
 	"src/overlay/overlay.hpp"
+	"src/overlay/overlay_settings_ui.cpp"
 	"src/overlay/server_notifications.cpp"
+	"src/overlay/settings_ui.cpp"
 	"src/overlay/update_check.cpp"
 	"src/overlay/wheel_settings.cpp"
 	"src/overlay/wheel_settings.hpp"
@@ -337,6 +344,8 @@ set(outrun2006tweaks_SOURCES
 	"src/remap_inject.cpp"
 	"src/remap_inject.hpp"
 	"src/resource.h"
+	"src/settings.cpp"
+	"src/settings.hpp"
 	"src/signal_capture_contract.hpp"
 	"src/signal_mute_policy.hpp"
 	"src/signal_recording_codec.hpp"
@@ -344,6 +353,8 @@ set(outrun2006tweaks_SOURCES
 	"src/tick_discovery.cpp"
 	"src/tick_discovery.hpp"
 	"src/triple_span.hpp"
+	"src/upnp.cpp"
+	"src/upnp.hpp"
 	"src/vendor/DbceSupport/support_report.cpp"
 	"src/vendor/DbceSupport/support_report.hpp"
 	"src/vendor/controls/dbce_controls.hpp"
@@ -375,6 +386,7 @@ target_compile_options(outrun2006tweaks PUBLIC
 	"/bigobj"
 	"/EHa"
 	"/MP"
+	"/utf-8"
 )
 
 target_include_directories(outrun2006tweaks PUBLIC

@@ -1,9 +1,36 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <shellapi.h>
+#include <atomic>
+#include <intrin.h>
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+
+namespace Settings
+{
+	Setting<bool> FixFullPedalChecks{ "Bugfixes", "FixFullPedalChecks", true,
+		"Fixes certain effects in the game like backfiring which tried to check if pedal/trigger is being fully pressed "
+		"(vanilla DirectInput wouldn't return a high enough value to register, this just nudges it toward the value being checked)." };
+
+	Setting<bool> FixPegasusClopping{ "Bugfixes", "FixPegasusClopping", true,
+		"Fixes looping clop sound effect remaining active through the session." };
+	Setting<bool> FixC2CRankings{ "Bugfixes", "FixC2CRankings", true,
+		"Fixes C2C scoreboard rankings not updating due to incomplete anti-piracy checks." };
+	Setting<bool> PreventDESTSaveCorruption{ "Bugfixes", "PreventDESTSaveCorruption", true,
+		"Prevents the \"DEST\" save corruption caused by remapping controls with many devices connected." };
+	Setting<bool> FixLensFlarePath{ "Bugfixes", "FixLensFlarePath", true,
+		"Game tries to load in lens flare data from common/, but the game files have it inside media/, causing lens flare "
+		"not to be drawn. If lens flare is still present inside media/ then this will just patch game to load it from there instead." };
+	Setting<bool> FixIncorrectShading{ "Bugfixes", "FixIncorrectShading", true,
+		"Fixes incorrect shading on cutscene characters & certain stage models." };
+	Setting<bool> FixParticleRendering{ "Bugfixes", "FixParticleRendering", true,
+		"Fixes rendering of grass & gravel particles to match up with the console versions, and fixes issue with fireworks on Metropolis." };
+	Setting<bool> HideOnlineSigninText{ "Bugfixes", "HideOnlineSigninText", false,
+		"Hides text related to the formerly-defunct online service." };
+	Setting<bool> FixRightSideBunkiAnimations{ "Bugfixes", "FixRightSideBunkiAnimations", true,
+		"Fixes animation models being inverted when taking right side of bunki/highway." };
+}
 
 class FixRightSideBunkiAnimations : public Hook
 {
@@ -20,15 +47,18 @@ public:
 		return "FixRightSideBunkiAnimations";
 	}
 
-	bool validate() override
+	void declare_settings() override
 	{
-		return true;
+		Settings::FixRightSideBunkiAnimations.watch([this] { apply(); });
 	}
 
 	bool apply() override
 	{
+		// The flag is set as each rendition object loads, so putting the code
+		// back takes effect from the next stage load.
 		constexpr int LoadBranchRenditionObject_SetsCCWFlag_PatchAddr = 0x4F6DC;
-		Memory::VP::Nop(Module::exe_ptr(LoadBranchRenditionObject_SetsCCWFlag_PatchAddr), 7);
+		static TogglePatch patch = TogglePatch::nop(Module::exe_ptr(LoadBranchRenditionObject_SetsCCWFlag_PatchAddr), 7);
+		patch.set(Settings::FixRightSideBunkiAnimations);
 
 		return true;
 	}
@@ -95,6 +125,11 @@ public:
 		return Settings::FixParticleRendering;
 	}
 
+	void declare_settings() override
+	{
+		Settings::FixParticleRendering.needs_restart();
+	}
+
 	bool apply() override
 	{
 		constexpr int particle_draw_rect2_HookAddr = 0x19009;
@@ -118,9 +153,9 @@ public:
 		return "FixIncorrectShading";
 	}
 
-	bool validate() override
+	void declare_settings() override
 	{
-		return Settings::FixIncorrectShading;
+		Settings::FixIncorrectShading.watch([this] { apply(); });
 	}
 
 	bool apply() override
@@ -148,8 +183,13 @@ public:
 		constexpr int VSULT_TWOSIDE_LAMBERT_Pointer = 0x33F04C;
 		constexpr int VSULT_TWOSIDE_SPECULAR_Pointer = 0x33F050;
 
-		Memory::VP::Patch(Module::exe_ptr<void*>(VSULT_TWOSIDE_LAMBERT_Pointer), VSULT_DOUBLE_LAMBERT);
-		Memory::VP::Patch(Module::exe_ptr<void*>(VSULT_TWOSIDE_SPECULAR_Pointer), VSULT_DOUBLE_SPECULAR);
+		// The pointers are read each time a shader is set, so putting the
+		// originals back takes effect on the next draw.
+		static TogglePatch lambertPatch = TogglePatch::value(Module::exe_ptr(VSULT_TWOSIDE_LAMBERT_Pointer), VSULT_DOUBLE_LAMBERT);
+		static TogglePatch specularPatch = TogglePatch::value(Module::exe_ptr(VSULT_TWOSIDE_SPECULAR_Pointer), VSULT_DOUBLE_SPECULAR);
+
+		lambertPatch.set(Settings::FixIncorrectShading);
+		specularPatch.set(Settings::FixIncorrectShading);
 
 		return true;
 	}
@@ -238,6 +278,11 @@ public:
 		return Settings::FixPegasusClopping;
 	}
 
+	void declare_settings() override
+	{
+		Settings::FixPegasusClopping.needs_restart();
+	}
+
 	bool apply() override
 	{
 		SndOff_PEGA = safetyhook::create_inline(Module::exe_ptr(SndOff_PEGA_Addr), destination);
@@ -267,6 +312,11 @@ public:
 	bool validate() override
 	{
 		return Settings::FixC2CRankings;
+	}
+
+	void declare_settings() override
+	{
+		Settings::FixC2CRankings.needs_restart();
 	}
 
 	bool apply() override
@@ -313,6 +363,11 @@ public:
 		return Settings::PreventDESTSaveCorruption;
 	}
 
+	void declare_settings() override
+	{
+		Settings::PreventDESTSaveCorruption.needs_restart();
+	}
+
 	bool apply() override
 	{
 		dest_hook = safetyhook::create_mid(Module::exe_ptr(SumoInputDeviceLoop_Addr), destination);
@@ -340,6 +395,11 @@ public:
 	bool validate() override
 	{
 		return Settings::FixLensFlarePath;
+	}
+
+	void declare_settings() override
+	{
+		Settings::FixLensFlarePath.needs_restart();
 	}
 
 	bool apply() override
@@ -381,6 +441,8 @@ class FixFullPedalChecks : public Hook
 	static int GetVolume_dest(int channel)
 	{
 		int result = GetVolume.call<int>(channel);
+		if (!Settings::FixFullPedalChecks)
+			return result;
 		if (channel != 1 && channel != 2) // accelerate / brake pedals only
 			return result;
 		if (result < 255 && result >= 250)
@@ -392,6 +454,8 @@ class FixFullPedalChecks : public Hook
 	static int GetVolumeOld_dest(int channel)
 	{
 		int result = GetVolumeOld.call<int>(channel);
+		if (!Settings::FixFullPedalChecks)
+			return result;
 		if (channel != 1 && channel != 2) // accelerate / brake pedals only
 			return result;
 		if (result < 255 && result >= 250)
@@ -403,11 +467,6 @@ public:
 	std::string_view description() override
 	{
 		return "FixFullPedalChecks";
-	}
-
-	bool validate() override
-	{
-		return Settings::FixFullPedalChecks;
 	}
 
 	bool apply() override
@@ -425,12 +484,21 @@ class HideOnlineSigninText : public Hook
 {
 	// Online mode is no longer active, let's try to clean up the remnants of it
 
+	inline static TogglePatch textPatch;
+	inline static TogglePatch boxPatch;
+
+	static void refresh()
+	{
+		textPatch.set(Settings::HideOnlineSigninText);
+		boxPatch.set(Settings::HideOnlineSigninText);
+	}
+
 	inline static SafetyHookInline Sumo_DrawActionButtonName = {};
 	static bool __fastcall Sumo_DrawActionButtonName_dest(uint8_t* thisptr, int unused, int buttonId)
 	{
 		int num = buttonId + (8 * *(DWORD*)(thisptr + 0x408));
 		int buttonStringId = *(DWORD*)(thisptr + (4 * num) + 0x18);
-		if (buttonStringId == 664)
+		if (Settings::HideOnlineSigninText && buttonStringId == 664)
 			return true;
 
 		return Sumo_DrawActionButtonName.thiscall<bool>(thisptr, buttonId);
@@ -441,7 +509,7 @@ class HideOnlineSigninText : public Hook
 	{
 		int num = buttonId + (8 * *(DWORD*)(thisptr + 0x408));
 		int buttonStringId = *(DWORD*)(thisptr + (4 * num) + 0x18);
-		if (buttonStringId == 664)
+		if (Settings::HideOnlineSigninText && buttonStringId == 664)
 			return true;
 
 		return Sumo_DrawActionButtonIcon1.thiscall<bool>(thisptr, buttonId);
@@ -452,7 +520,7 @@ class HideOnlineSigninText : public Hook
 	{
 		int num = buttonId + (8 * *(DWORD*)(thisptr + 0x408));
 		int buttonStringId = *(DWORD*)(thisptr + (4 * num) + 0x18);
-		if (buttonStringId == 664)
+		if (Settings::HideOnlineSigninText && buttonStringId == 664)
 			return true;
 
 		return Sumo_DrawActionButtonIcon2.thiscall<bool>(thisptr, buttonId);
@@ -464,9 +532,9 @@ public:
 		return "HideOnlineSigninText";
 	}
 
-	bool validate() override
+	void declare_settings() override
 	{
-		return Settings::HideOnlineSigninText;
+		Settings::HideOnlineSigninText.watch([] { refresh(); });
 	}
 
 	bool apply() override
@@ -478,10 +546,12 @@ public:
 		constexpr int Sumo_DrawActionButtonIcon2_Addr = 0x46B20;
 
 		// Hide "Not Signed In" text
-		Memory::VP::Patch(Module::exe_ptr(Sumo_PrintSignedInStatus_Addr), { 0xC3 });
+		textPatch.init(Module::exe_ptr(Sumo_PrintSignedInStatus_Addr), { 0xC3 });
 
 		// Hide box that contains the message above
-		Memory::VP::Patch(Module::exe_ptr(Sumo_DrawSignedInStatusBox_PatchAddr), { 0xEB });
+		boxPatch.init(Module::exe_ptr(Sumo_DrawSignedInStatusBox_PatchAddr), { 0xEB });
+
+		refresh();
 
 		// Don't allow "sign in" action button text/icon to show
 		Sumo_DrawActionButtonName = safetyhook::create_inline(Module::exe_ptr(Sumo_DrawActionButtonName_Addr), Sumo_DrawActionButtonName_dest);
@@ -494,3 +564,358 @@ public:
 	static HideOnlineSigninText instance;
 };
 HideOnlineSigninText HideOnlineSigninText::instance;
+
+class FixFileLoadRace : public Hook
+{
+	static constexpr int ServiceRequest_Addr = 0x23670;      // Sumo_FileLoadServiceRequest
+	static constexpr int ServiceRequestMoveDone_Addr = 0x2371A;
+	static constexpr int sumo_fread_Addr = 0x23CF0;
+	static constexpr int sumo_fread_finished_Addr = 0x23E30;
+
+	// Request id meaning "nothing is in flight", answered without consulting
+	// either list.
+	static constexpr int NoRequest = 0x80000000;
+
+	// The loader keeps its read requests on three doubly linked lists: free,
+	// pending (queued, not started) and active (in progress). Each list header
+	// holds its own guard semaphore at +0x8, and Sumo_ListPopFront and
+	// Sumo_ListPushBack treat a null there as "no guard needed, mutate directly".
+	//
+	// Sumo_FileLoadServiceRequest takes both guard semaphores, nulls both header
+	// fields, moves one request from pending to active, then puts the fields back
+	// and releases. Nulling them is how it stops its own pop and push from
+	// deadlocking on a semaphore it already holds, but the fields are global, so
+	// for the length of that move every other thread reads "no guard needed" too:
+	//
+	//  - sumo_fread pushes onto the pending list with no lock, against the
+	//    loader's concurrent pop, which can lose or duplicate a request.
+	//  - sumo_fread_finished waits on a null handle. The wait fails, so it skips
+	//    both list searches and answers "finished" for a read that has not
+	//    started. LoadXmtsetObject then advances its state machine over object
+	//    data that has not arrived.
+	//
+	// Holding a critical section across the move, and across the two functions
+	// the main thread reaches those lists through, gives back the exclusion the
+	// nulled fields drop. Nothing takes a guard semaphore before this lock, so
+	// the two cannot deadlock against each other. The loader releases it before
+	// the read itself, which suspends its own thread and would otherwise strand
+	// anyone waiting.
+	inline static CRITICAL_SECTION ListLock{};
+
+	inline static SafetyHookMid ServiceRequest_hook = {};
+	static void ServiceRequest_dest(SafetyHookContext& ctx)
+	{
+		EnterCriticalSection(&ListLock);
+	}
+
+	inline static SafetyHookMid ServiceRequestMoveDone_hook = {};
+	static void ServiceRequestMoveDone_dest(SafetyHookContext& ctx)
+	{
+		LeaveCriticalSection(&ListLock);
+	}
+
+	inline static SafetyHookInline sumo_fread_hook = {};
+	static uint32_t __cdecl sumo_fread_dest(void* buf, int numBytes, int a3, void* file, int* outSize)
+	{
+		EnterCriticalSection(&ListLock);
+		uint32_t result = sumo_fread_hook.ccall<uint32_t>(buf, numBytes, a3, file, outSize);
+		LeaveCriticalSection(&ListLock);
+
+		// A read that queues nothing still hands back an id, and sumo_fread_finished
+		// answers "finished" for it without consulting a list, so callers walk their
+		// state machine over a buffer that was never filled. Reaching this with a
+		// real read to make means the free list of request records ran dry.
+		if (result == NoRequest && numBytes > 0 && file)
+			spdlog::error("FixFileLoadRace: file loader refused a {} byte read, its data will be left unset", numBytes);
+
+		return result;
+	}
+
+	inline static SafetyHookInline sumo_fread_finished_hook = {};
+	static int __cdecl sumo_fread_finished_dest(int file, int requestId)
+	{
+		if (requestId == NoRequest)
+			return sumo_fread_finished_hook.ccall<int>(file, requestId);
+
+		EnterCriticalSection(&ListLock);
+		int result = sumo_fread_finished_hook.ccall<int>(file, requestId);
+		LeaveCriticalSection(&ListLock);
+
+		return result;
+	}
+
+	static constexpr int LoadTextures_Addr = 0x2E8D1;
+	static constexpr int XPR0Entry_Addr = 0x557BE0;    // g_Xmt_XPR0Entry
+	static constexpr int TextureIndex_Addr = 0x55B22C;
+	static constexpr int XPR0EntrySize = 20;
+
+	// LoadTextures creates one texture per call from a 20 byte XPR0 entry,
+	// walking g_Xmt_XPR0Entry through the xmtset's system memory block.
+	// ReadXmtsetTexture builds that pointer out of the block's own contents, so
+	// any read that lands late leaves it pointing outside the block and the first
+	// field read faults. Finishing the xmtset short of textures is survivable,
+	// reading unmapped memory is not.
+	inline static SafetyHookMid LoadTextures_hook = {};
+	static void LoadTextures_dest(SafetyHookContext& ctx)
+	{
+		uint8_t* xmt = reinterpret_cast<uint8_t*>(ctx.edi);
+		uint8_t* head = *reinterpret_cast<uint8_t**>(xmt);                    // XMTSET::head
+		uint8_t** objectHandle = *reinterpret_cast<uint8_t***>(xmt + 0x28);   // XMTSET::ObjectHandle
+		const uint32_t blockSize = *reinterpret_cast<uint32_t*>(xmt + 0x3C);  // XMTSET::dwSysMemDataSize
+
+		uint32_t& textureIdx = *reinterpret_cast<uint32_t*>(Module::exe_ptr(TextureIndex_Addr));
+
+		// Same test LoadTextures makes a few instructions later, repeated here so
+		// an xmtset already given up on doesn't report again on every call.
+		if (!head || textureIdx >= *reinterpret_cast<uint32_t*>(head + 8))
+			return;
+
+		uint8_t* entry = *reinterpret_cast<uint8_t**>(Module::exe_ptr(XPR0Entry_Addr));
+		uint8_t* block = objectHandle ? *objectHandle : nullptr;
+
+		if (block && entry >= block && entry + XPR0EntrySize <= block + blockSize)
+			return;
+
+		spdlog::error("FixFileLoadRace: XPR0 entry {:p} outside xmtset block {:p}+{:X}, skipping its remaining textures",
+			(void*)entry, (void*)block, blockSize);
+
+		// Raising the index to the texture count makes that test read as done.
+		textureIdx = *reinterpret_cast<uint32_t*>(head + 8);
+	}
+
+public:
+	std::string_view description() override
+	{
+		return "FixFileLoadRace";
+	}
+
+	bool validate() override
+	{
+		return true;
+	}
+
+	bool apply() override
+	{
+		// Held only across a list pop and push, so a waiter is better off spinning
+		// than paying for the trip into the kernel.
+		InitializeCriticalSectionAndSpinCount(&ListLock, 4000);
+
+		ServiceRequest_hook = safetyhook::create_mid(Module::exe_ptr(ServiceRequest_Addr), ServiceRequest_dest);
+		ServiceRequestMoveDone_hook = safetyhook::create_mid(Module::exe_ptr(ServiceRequestMoveDone_Addr), ServiceRequestMoveDone_dest);
+		sumo_fread_hook = safetyhook::create_inline(Module::exe_ptr(sumo_fread_Addr), sumo_fread_dest);
+		sumo_fread_finished_hook = safetyhook::create_inline(Module::exe_ptr(sumo_fread_finished_Addr), sumo_fread_finished_dest);
+		LoadTextures_hook = safetyhook::create_mid(Module::exe_ptr(LoadTextures_Addr), LoadTextures_dest);
+
+		return ServiceRequest_hook && ServiceRequestMoveDone_hook && sumo_fread_hook && sumo_fread_finished_hook && LoadTextures_hook;
+	}
+
+	static FixFileLoadRace instance;
+};
+FixFileLoadRace FixFileLoadRace::instance;
+
+// LoadXmtsetObject builds an xmtset's objects in one state and its textures in
+// the next, each by calling a worker over and over until half a millisecond of
+// the frame has gone.
+//
+// The worker says when it has nothing left to do, but that only gets checked
+// after the loop has exited, so a state that finishes early still wastes time
+// in the loop.
+//
+// Each loop saves the time it started at and repeats while GetNowCpuTime() minus
+// that stays under 0.5. Backdating the saved time makes the next comparison read
+// as over budget, ending the loop on its own so it falls into the completion
+// check it was always going to make.
+class FileLoadSliceEndsEarly : public Hook
+{
+	// Both sites are "mov bl, al" straight after the worker returns, so al still
+	// holds its answer and the following call is the only relative operand.
+	static constexpr int ReadObjects_Addr = 0x2E399;
+	static constexpr int LoadTextures_Addr = 0x2E3F5;
+
+	// Where both loops keep the millisecond their slice began at.
+	static constexpr int SliceStart_Offset = 0x1C;
+
+	// Far enough back that the subtraction clears 0.5 by any margin a frame timer
+	// could produce.
+	static constexpr float Backdated = -1.0e9f;
+
+	inline static SafetyHookMid ReadObjects_hook = {};
+	inline static SafetyHookMid LoadTextures_hook = {};
+
+	static void EndSliceWhenDone(SafetyHookContext& ctx)
+	{
+		if (ctx.eax & 0xFF)
+			*reinterpret_cast<float*>(ctx.esp + SliceStart_Offset) = Backdated;
+	}
+
+public:
+	std::string_view description() override
+	{
+		return "FileLoadSliceEndsEarly";
+	}
+
+	bool validate() override
+	{
+		return Settings::FramerateFastLoad > 0;
+	}
+
+	bool apply() override
+	{
+		ReadObjects_hook = safetyhook::create_mid(Module::exe_ptr(ReadObjects_Addr), EndSliceWhenDone);
+		LoadTextures_hook = safetyhook::create_mid(Module::exe_ptr(LoadTextures_Addr), EndSliceWhenDone);
+
+		return ReadObjects_hook && LoadTextures_hook;
+	}
+
+	static FileLoadSliceEndsEarly instance;
+};
+FileLoadSliceEndsEarly FileLoadSliceEndsEarly::instance;
+
+// outrun2006.ini parser fix
+// Games ini reader uses sub_4304B0 to parse DX/WINDOWED=X line, which copies the value to a 32-bit int pointer
+// The ini code passes pointer to g_Cfg_DxWindowed though, which is an 8-bit byte, not 32-bit.
+// After that byte comes the setting for enabling glow, and two bytes related to mipmapping
+// So if an INI is present with DX/WINDOWED line it'll always clear those following bytes
+// Not a huge deal in vanilla game, but this now stops our RestoreSkyGlow fix from working..
+class FixOutRunIniRead : public Hook
+{
+	static void __cdecl destination(uint8_t* dest)
+	{
+		typedef void (*sub_4304B0_fn)(int*);
+		sub_4304B0_fn sub_4304B0 = Module::fn_ptr<sub_4304B0_fn>(0x304B0);
+		int temp = 0;
+		sub_4304B0(&temp);
+		*dest = temp;
+	}
+
+public:
+	std::string_view description() override
+	{
+		return "FixOutRunIniRead";
+	}
+
+	bool validate() override
+	{
+		return true;
+	}
+
+	bool apply() override
+	{
+		Memory::VP::InjectHook(Module::exe_ptr(0xE704), destination, Memory::HookType::Call);
+
+		return true;
+	}
+
+	static FixOutRunIniRead instance;
+};
+FixOutRunIniRead FixOutRunIniRead::instance;
+
+// Sumo UI wraparound fix
+// For some reason UIs with options layed out vertically (pause menu) allow wraparound
+// from top/bottom ends, but the UIs that are horizontal (main menu) don't.
+//
+// Added hooks to allow these horizontal menus to wrap-around too, makes it a
+// little quicker to get to the ends of the lists now.
+class MenuSelectionWrap : public Hook
+{
+	static constexpr int Increment_Addr = 0x11BB10;
+	static constexpr int Decrement_Addr = 0x11BBA0;
+
+	static constexpr int MaxIndex_Offset = 0xAC;
+	static constexpr int PrevIndex_Offset = 0xB0;
+	static constexpr int CurIndex_Offset = 0xB4;
+
+	// Some menus have their own selected-index tests which skip calling Increment/Decrement
+	// if the tests fail, not really sure why since Inc/Dec also tested index too.
+	// Just nop these out so they call into our hooks.
+	struct Guard { int addr; int size; };
+	static constexpr Guard Guards[] = {
+		{ 0xD35BF, 6 }, // stage select, left (right side guard checks for higher value than list actually contains, dev mistake?)
+		{ 0xCBDB6, 6 }, // game mode select, left
+		{ 0xCBE66, 6 }, // game mode select, right
+		{ 0xCF51B, 6 }, // sub_4CEF30, left
+		{ 0xCF5E8, 6 }, // sub_4CEF30, right
+		{ 0xD91E8, 2 }, // sub_4D90A0, left
+		{ 0xD91FE, 2 }, // sub_4D90A0, right
+	};
+
+	static int& field(void* thisptr, int offset)
+	{
+		return *reinterpret_cast<int*>(reinterpret_cast<uint8_t*>(thisptr) + offset);
+	}
+
+	// Neither function's index arithmetic can land on an odd entry, so the resting
+	// one for the target is handed over as entry 0, where an index of -1 sends the
+	// increment half. init_465860 copies the three dwords out during the call, so
+	// the stand-in only has to outlive that.
+	static int wrapTo(void* thisptr, int target)
+	{
+		uint32_t** table = reinterpret_cast<uint32_t**>(thisptr);
+		uint32_t* entries = *table;
+
+		const int resting = 3 * (2 * target + 1);
+		uint32_t wrapEntry[3] = { entries[resting], entries[resting + 1], entries[resting + 2] };
+
+		*table = wrapEntry;
+		field(thisptr, CurIndex_Offset) = -1;
+		int result = Increment_hook.thiscall<int>(thisptr);
+		*table = entries;
+
+		const int landedOn = field(thisptr, CurIndex_Offset);
+
+		field(thisptr, CurIndex_Offset) = target;
+		field(thisptr, PrevIndex_Offset) = target;
+
+		return result;
+	}
+
+	inline static SafetyHookInline Increment_hook = {};
+	static int __fastcall Increment_dest(void* thisptr, int unused)
+	{
+		int& current = field(thisptr, CurIndex_Offset);
+		const int maxIndex = field(thisptr, MaxIndex_Offset);
+
+		if (current < maxIndex)
+			return Increment_hook.thiscall<int>(thisptr);
+
+		return wrapTo(thisptr, 0);
+	}
+
+	inline static SafetyHookInline Decrement_hook = {};
+	static int __fastcall Decrement_dest(void* thisptr, int unused)
+	{
+		int& current = field(thisptr, CurIndex_Offset);
+		const int maxIndex = field(thisptr, MaxIndex_Offset);
+
+		// A single option has nowhere to wrap to.
+		if (current > 0 || maxIndex <= 0)
+			return Decrement_hook.thiscall<int>(thisptr);
+
+		return wrapTo(thisptr, maxIndex);
+	}
+
+public:
+	std::string_view description() override
+	{
+		return "MenuSelectionWrap";
+	}
+
+	bool validate() override
+	{
+		return true;
+	}
+
+	bool apply() override
+	{
+		Increment_hook = safetyhook::create_inline(Module::exe_ptr(Increment_Addr), Increment_dest);
+		Decrement_hook = safetyhook::create_inline(Module::exe_ptr(Decrement_Addr), Decrement_dest);
+
+		for (const Guard& guard : Guards)
+			Memory::VP::Nop(Module::exe_ptr<uint8_t>(guard.addr), guard.size);
+
+		return !!Increment_hook && !!Decrement_hook;
+	}
+
+	static MenuSelectionWrap instance;
+};
+MenuSelectionWrap MenuSelectionWrap::instance;
