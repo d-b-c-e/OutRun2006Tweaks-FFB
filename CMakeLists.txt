@@ -349,6 +349,7 @@ set(outrun2006tweaks_SOURCES
 	"src/vendor/controls/dbce_controls.hpp"
 	"src/vendor/controls/dbce_inject.hpp"
 	"src/vendor/controls/dbce_inject_table.hpp"
+	"src/vendor/macro/dbce_macro_record.hpp"
 	"src/wheel_input_gate.cpp"
 	"src/wheel_input_gate.hpp"
 	"src/wheel_settings_policy.hpp"

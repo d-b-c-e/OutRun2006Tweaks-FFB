@@ -6,6 +6,7 @@
 #include "profile_controls.hpp"
 #include "signal_mute_policy.hpp"
 #include "vendor/controls/dbce_inject_table.hpp"
+#include "vendor/macro/dbce_macro_record.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -163,7 +164,7 @@ namespace RemapInject
 		int DeliverView(const std::string& dev, DIJOYSTATE2& state, int buttons, int povs,
 			const std::function<bool(int, long&, long&)>& range)
 		{
-			if (!SessionLive() || !g_table.any()) return 0;
+			if (!SessionLive()) return 0;
 			ctl::StateView v;
 			static_assert(offsetof(DIJOYSTATE2, rglSlider) == offsetof(DIJOYSTATE2, lX) + 6 * sizeof(LONG), "DIJOYSTATE2 axes are not contiguous");
 			v.axes = reinterpret_cast<long*>(&state.lX);   // lX lY lZ lRx lRy lRz rglSlider[0] rglSlider[1]
@@ -171,9 +172,16 @@ namespace RemapInject
 			v.buttonCount = buttons < 0 ? 0 : buttons > 128 ? 128 : buttons;
 			v.povs = reinterpret_cast<unsigned long*>(state.rgdwPOV);
 			v.povCount = povs < 0 ? 0 : povs > 4 ? 4 : povs;
-			std::vector<std::string> lines;
-			const int n = g_table.apply(dev, v, NowMs(), range, lines);
-			for (auto& l : lines) Log(l);
+			int n = 0;
+			if (g_table.any())
+			{
+				std::vector<std::string> lines;
+				n = g_table.apply(dev, v, NowMs(), range, lines);
+				for (auto& l : lines) Log(l);
+			}
+			// While record.on exists, the read as the game takes it (injections included) goes to macro-<time>.txt.
+			static dbce::macro::Recorder recorder("outrun2006");
+			recorder.sample(dev, v, NowMs(), range);
 			return n;
 		}
 	}
@@ -258,7 +266,7 @@ namespace RemapInject
 
 	int Deliver(const GUID& instance, IDirectInputDevice8A* device, DIJOYSTATE2& state)
 	{
-		if (!device || !g_armed || !g_table.any()) return 0;
+		if (!device || !g_armed) return 0;
 		DIDEVCAPS caps{ sizeof(DIDEVCAPS) };
 		if (FAILED(device->GetCapabilities(&caps))) return 0;
 		static const DWORD offsets[8] = { DIJOFS_X, DIJOFS_Y, DIJOFS_Z, DIJOFS_RX, DIJOFS_RY, DIJOFS_RZ, DIJOFS_SLIDER(0), DIJOFS_SLIDER(1) };
