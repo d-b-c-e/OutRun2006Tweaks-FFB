@@ -32,8 +32,8 @@ static float UiScale()
     const auto size = ImGui::GetIO().DisplaySize;
     return WheelSettingsPolicy::LayoutScale(size.x, size.y, Settings::WheelSettingsScale);
 }
-enum class Page { Setup, Controls, Ffb, Cameras, Telemetry, Help };
-static Page page = Page::Setup;
+enum class Page { Controls, Ffb, Cameras, Telemetry, Help };   // the standard tab order (toolkit native/panel)
+static Page page = Page::Controls;
 static bool saveFailed = false;
 static std::map<std::pair<std::string, std::string>, std::string> pending;
 static std::string saveError;
@@ -846,34 +846,18 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
     if (IsCapturing()) { CapturePanel(input); return; }
     switch (page)
     {
-    case Page::Setup:
-        ImGui::TextUnformatted("Connect your wheel, check the axes, then drive.");
+    case Page::Controls:
         if (!Settings::UseDirectInputRemap || Settings::UseNewInput)
         {
-            ImGui::TextWrapped("Wheel remapping is not active. Enabling it takes effect after restarting the game.");
-            if (ImGui::Button("Enable wheel controls for next launch"))
+            ImGui::TextWrapped("Wheel controls are off. Turning them on takes effect after restarting the game.");
+            if (ImGui::Button("Use wheel controls from next launch"))
             {
                 pending[{"DirectInput", "UseDirectInputRemap"}] = "true";
                 pending[{"Controls", "UseNewInput"}] = "false";
                 if (SavePending()) Save("WheelSettings", "View", Settings::WheelSettingsView);
             }
-            ImGui::TextWrapped("After saving, exit normally and restart. Then open Controls to bind and calibrate your wheel and pedals.");
         }
-        else if (!input.connected)
-            ImGui::TextWrapped("Wheel input unavailable. Reconnect it, or open Controls and use Steering > Bind to choose a replacement.");
-        else
-        {
-            ImGui::TextWrapped("Wheel: %s", input.name.c_str());
-            ImGui::Text("Steering: %+.0f%%   Throttle: %.0f%%   Brake: %.0f%%", input.steering * 100, input.throttle * 100, input.brake * 100);
-            ImGui::TextWrapped("Next: check each axis and bind your driving buttons in Controls.");
-        }
-        if (ImGui::Button("Open Controls")) page = Page::Controls;
-        ImGui::SameLine();
-        if (ImGui::Button("Check FFB")) page = Page::Ffb;
-        ImGui::TextWrapped("Telemetry and advanced tuning are optional. FFB remains Off unless you enable it.");
-        break;
-    case Page::Controls:
-        if (Settings::UseNewInput)
+        if (Settings::UseNewInput && advanced)
         {
             ImGui::TextWrapped("The current controller input route uses the existing bindings dialog.");
             if (ImGui::Button("Open controller bindings")) Overlay::RequestBindingDialog = true;
@@ -884,15 +868,18 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         AxisRow(1, "Throttle", Settings::DIRemapAccelAxis, Settings::DIRemapAccelInvert, "AccelerationAxis", "AccelerationInvert", input.throttle, input);
         AxisRow(2, "Brake", Settings::DIRemapBrakeAxis, Settings::DIRemapBrakeInvert, "BrakeAxis", "BrakeInvert", input.brake, input);
         Percent("Steering deadzone", Settings::SteeringDeadZone, "Controls", "SteeringDeadZone", 0.95f);
-        ImGui::TextWrapped("Values here are game input. Bind lets each pedal use its own device; a missing saved device outputs zero until it returns or you bind a replacement.");
-        ImGui::TextDisabled("Handbrake: no handbrake action is exposed by this game adapter.");
+        if (advanced)
+        {
+            ImGui::TextWrapped("Values here are game input. Bind lets each pedal use its own device; a missing saved device outputs zero until it returns or you bind a replacement.");
+            ImGui::TextDisabled("Handbrake: no handbrake action is exposed by this game adapter.");
+        }
         if (ImGui::CollapsingHeader("Driving buttons"))
         {
             ButtonRow("Shift up", Settings::DIRemapButtonGearUp, "ButtonGearUp", input);
             ButtonRow("Shift down", Settings::DIRemapButtonGearDown, "ButtonGearDown", input);
             ButtonRow("Change camera", Settings::DIRemapButtonChangeView, "ButtonChangeView", input);
         }
-        if (ImGui::CollapsingHeader("Menu buttons"))
+        if (advanced && ImGui::CollapsingHeader("Menu buttons"))
         {
             ButtonRow("Confirm", Settings::DIRemapButtonA, "ButtonA", input);
             ButtonRow("Back", Settings::DIRemapButtonB, "ButtonB", input);
@@ -907,9 +894,9 @@ static void Contents(const DInputRemap::UiSnapshot& input, bool advanced)
         }
         OptionalControls(true);
         OptionalControls(false);
-        SettingsShortcuts();
         if (advanced)
         {
+            SettingsShortcuts();
             if (ImGui::SliderFloat("Steering sensitivity", &Settings::DIRemapSteeringSensitivity, 0.1f, 10.0f, "%.2fx"))
                 Queue("DirectInput", "SteeringSensitivity", Settings::DIRemapSteeringSensitivity);
             if (ImGui::IsItemDeactivatedAfterEdit()) Save("DirectInput", "SteeringSensitivity", Settings::DIRemapSteeringSensitivity);
@@ -1157,8 +1144,6 @@ public:
                 ImGui::PopStyleColor();
                 if (!pending.empty() && ImGui::Button("Retry save")) SavePending();
             }
-            else ImGui::TextDisabled("Changes save automatically");
-            ImGui::TextWrapped("FFB: %s", FFB::UiStatus());
             if (!advanced && CustomTuning())
             {
                 ImGui::TextUnformatted("Custom tuning active");
@@ -1172,20 +1157,19 @@ public:
                 }
                 ImGui::EndDisabled();
             }
-            static const char* pages[] = { "Setup", "Controls", "FFB", "Cameras", "Telemetry", "Help" };
+            static const char* pages[] = { "Controls", "FFB", "Cameras", "Telemetry", "Help" };
             ImGui::Separator();
-            ImGui::BeginChild("Navigation", ImVec2(136 * scale, 0), false);
             ImGui::BeginDisabled(IsCapturing());
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < 5; ++i)   // flat tabs in one row
             {
                 const bool selected = page == static_cast<Page>(i);
+                if (i) ImGui::SameLine();
                 if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-                if (ImGui::Button(pages[i], ImVec2(-1, 36 * scale))) page = static_cast<Page>(i);
+                if (ImGui::Button(pages[i], ImVec2(0, 36 * scale))) page = static_cast<Page>(i);
                 if (selected) ImGui::PopStyleColor();
             }
             ImGui::EndDisabled();
-            ImGui::EndChild();
-            ImGui::SameLine();
+            ImGui::Separator();
             ImGui::BeginChild("Page contents", ImVec2(0, 0), false);
             Contents(input, advanced);
             ImGui::EndChild();

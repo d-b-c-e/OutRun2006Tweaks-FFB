@@ -236,20 +236,20 @@ int main(int argc, char** argv)
     for (int i = 0; i < 99; ++i) Overlay::FrameRates.Add(0.1);
     Overlay::FrameRates.Add(0.2);
     for (auto size : {ImVec2(1280, 720), ImVec2(3840, 2160)})
-        for (int p = 0; p < 6; ++p)
+        for (int p = 0; p < 5; ++p)
             for (bool advanced : {false, true})
             {
                 const auto text = Frame(static_cast<Page>(p), advanced, static_cast<int>(size.x), static_cast<int>(size.y));
                 assert(text.find("Stop FFB") != std::string::npos);
                 assert(text.find("Close") != std::string::npos);
-                if (p == 2)
+                if (p == static_cast<int>(Page::Ffb))
                 {
                     assert(text.find("Strength") != std::string::npos);
                     assert((text.find("Centering") != std::string::npos) == advanced);
                     assert((text.find("Custom tuning active") != std::string::npos) == !advanced);
                 }
-                if (p == 3) assert(text.find("Triple screens (next launch)") != std::string::npos);
-                if (p == 3) assert(text.find("1% low") != std::string::npos && text.find("Show frame rate on screen") != std::string::npos);
+                if (p == static_cast<int>(Page::Cameras)) assert(text.find("Triple screens (next launch)") != std::string::npos);
+                if (p == static_cast<int>(Page::Cameras)) assert(text.find("1% low") != std::string::npos && text.find("Show frame rate on screen") != std::string::npos);
                 if (p == static_cast<int>(Page::Help)) assert(text.find("Prepare report") != std::string::npos && text.find("Open blank issue") != std::string::npos);
                 std::ofstream(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.txt" : "-simple.txt"))) << text;
                 ExportDrawData(directory / (std::to_string(static_cast<int>(size.x)) + "-page" + std::to_string(p) + (advanced ? "-advanced.json" : "-simple.json")));
@@ -257,7 +257,7 @@ int main(int argc, char** argv)
     fixtureInput.connected = true;
     fixtureInput.name = "Example wheel with a deliberately long device name for layout verification";
     Settings::UseDirectInputRemap = true;
-    Frame(Page::Setup, false, 1280, 720);
+    Frame(Page::Controls, false, 1280, 720);
     ExportDrawData(directory / "1280-long-device-simple.json");
     Settings::WheelSettingsScale = 1.5f;
     Frame(Page::Ffb, false, 3840, 2160);
