@@ -1,7 +1,7 @@
 // Dev-only spike for three projected views (docs/2026-10-30-triple-views-and-clean-launch-plan.md, step 3), off unless
 // DBCE_OUTRUN_TRIPLE_VIEWS is set at process start. During a race (STATE_GAME) each frame render (0x449050) runs once per
 // panel: the main camera gets the panel's aspect (+B8) and turn (y angle +12C, and +388 which 0x482F20 blends from), its
-// matrices and culling planes are recomputed (0x484BD0), and every viewport, render-target switch onto the frame's base
+// matrices and culling planes are recomputed (0x484BD0), and every viewport (read back unmapped), render-target switch onto the frame's base
 // target and StretchRect into it is mapped into the panel's third, with a scissor so screen-space draws cannot spill. The
 // 2D flush (0x42D710) runs on the centre pass only. Value: "1" (turn = one panel's horizontal field of view, seamless),
 // "deg=<n>" to set the turn, "flip" to reverse its sign. The log reports three-projections only from three observed passes.
@@ -36,10 +36,11 @@ constexpr uintptr_t FrameRenderCall = 0x17D31, FrameRender = 0x49050, TwoDCall =
 int g_pass = -1;                       // the panel being drawn: 0 left, 1 centre, 2 right; -1 outside the spike
 IDirect3DSurface9* g_base = nullptr;   // the frame's base target (render target 0 as the frame render starts)
 bool g_onBase = false;
+D3DVIEWPORT9 g_gameVp{};               // the viewport the game last set on the base target, in its own (unmapped) terms
 UINT g_w = 0, g_h = 0;
 unsigned g_frames = 0, g_threePass = 0, g_vpMaps = 0, g_rtMaps = 0, g_srMaps = 0, g_twoDSkips = 0;
 float g_turnDeg = 0.f, g_panelAspect = 0.f;
-SafetyHookInline g_setViewport = {}, g_setRenderTarget = {}, g_stretchRect = {};
+SafetyHookInline g_setViewport = {}, g_getViewport = {}, g_setRenderTarget = {}, g_stretchRect = {};
 
 RECT Panel() { return {LONG(g_w * g_pass / 3), 0, LONG(g_w * (g_pass + 1) / 3), LONG(g_h)}; }
 
@@ -56,11 +57,21 @@ D3DVIEWPORT9 Map(const D3DVIEWPORT9& v)
 HRESULT STDMETHODCALLTYPE SetViewport_dest(IDirect3DDevice9* d, const D3DVIEWPORT9* v)
 {
     if (g_pass < 0 || !g_onBase || !v) return g_setViewport.stdcall<HRESULT>(d, v);
+    g_gameVp = *v;
     const D3DVIEWPORT9 m = Map(*v);
     const RECT p = Panel();
     d->SetScissorRect(&p);
     ++g_vpMaps;
     return g_setViewport.stdcall<HRESULT>(d, &m);
+}
+
+// The game saves the viewport and sets it back later (frame begin/end, effects): hand back its own viewport, or the
+// panel mapping would be applied twice.
+HRESULT STDMETHODCALLTYPE GetViewport_dest(IDirect3DDevice9* d, D3DVIEWPORT9* v)
+{
+    if (g_pass < 0 || !g_onBase || !v) return g_getViewport.stdcall<HRESULT>(d, v);
+    *v = g_gameVp;
+    return D3D_OK;
 }
 
 HRESULT STDMETHODCALLTYPE SetRenderTarget_dest(IDirect3DDevice9* d, DWORD i, IDirect3DSurface9* s)
@@ -110,7 +121,8 @@ bool HookDevice(IDirect3DDevice9* d)
     g_stretchRect = safetyhook::create_inline(vt[34], StretchRect_dest);
     g_setRenderTarget = safetyhook::create_inline(vt[37], SetRenderTarget_dest);
     g_setViewport = safetyhook::create_inline(vt[47], SetViewport_dest);
-    ok = g_stretchRect && g_setRenderTarget && g_setViewport;
+    g_getViewport = safetyhook::create_inline(vt[48], GetViewport_dest);
+    ok = g_stretchRect && g_setRenderTarget && g_setViewport && g_getViewport;
     spdlog::info("TripleViews: device hooks {}", ok ? "installed" : "FAILED: the spike stays off");
     return ok;
 }
