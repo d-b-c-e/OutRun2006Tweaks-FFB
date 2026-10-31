@@ -52,6 +52,19 @@ culling planes, so the smaller change is to run the 3D scene pass three times:
    - the title never calls `0x484BD0` itself and the main camera at `0x39FE10` is all zero there; the attract demo did
      not start a race in 150 s. The race cameras' call sites still need a run in a race (menu presses through the
      test injection, or a longer wait for the demo).
+   Second run, in a race (2026-10-30, Start/A through the test injection, 90 s, 60 fps):
+   - in the race the game computes the main camera once per frame from one call site (returns to RVA `0x85B2C`),
+     in the game update between frames, not inside the frame render; camera switches add `0x8601F`, `0x852CA`,
+     `0x85248`, `0x86163`;
+   - the fields read as the decomp says: fov `+A0` 1.1234, aspect `+B8` 1.7778, near/far `+BC`/`+C0` 1.0/5000,
+     shift `+C4`/`+C8` 0;
+   - so at render time the camera holds that frame's matrices, and a per-panel pass sets aspect, shift and yaw and
+     recomputes them, exactly as the scene-effect hook already does inside the pass;
+   - the back buffer was 2560x1440 with `Screens = Separate monitors` logged, so the span did not cover three screens in
+     this run (rig topology at the time); the spike's rig check needs the three-monitor span first.
+   - Open for step 3: `0x449050` is the whole frame (begin, layers, end, 2D). Running only its layers three times needs
+     the layer loop driven per panel, and each render-target switch inside it resets the Direct3D 9 viewport to the full
+     target, so the panel viewport has to be re-applied after every back-buffer target change.
 3. **Spike.** Behind an environment switch, `Separate monitors` only: three passes as above. The log reports
    `three-projections` only from three observed passes per frame (a counter).
 4. **Rig check (muted).** Pass counter, frame rate at 48:9 against the planar span (A/B), window captures by handle of
