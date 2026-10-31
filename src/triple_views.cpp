@@ -1,9 +1,8 @@
 // Three projected views (docs/2026-10-30-triple-views-and-clean-launch-plan.md). With triple screens on, a wide target and
 // [Triple] ViewMode = Angle (F7 while driving, saved by the panel's writer; Original when missing), or DBCE_OUTRUN_TRIPLE_VIEWS
 // set at process start (development), each race (STATE_GAME) frame render (0x449050) runs once per
-// panel: the main camera gets the panel's base fov (+AC), aspect (+B8), shift (+C4/+C8) and turn (y angle +12C, and +388
-// which 0x482F20 blends from), its
-// matrices and culling planes are recomputed (0x484BD0), and every viewport (read back unmapped), render-target switch onto the frame's base
+// panel: the main camera gets the panel's base fov (+AC), aspect (+B8), shift (+C4/+C8) and turn about the camera's
+// own up axis (angles +128..+130 and the +384.. copies 0x482F20 blends from, solved by TurnInView), its matrices and culling planes are recomputed (0x484BD0), and every viewport (read back unmapped), render-target switch onto the frame's base
 // target and StretchRect into it is mapped into the panel's third, with a scissor so screen-space draws cannot spill. The
 // 2D flush (0x42D710) runs on the centre pass only. The panels come from the toolkit [Triple] measurements in the INIs
 // (MatchGameFov, on unless false, keeps the game's vertical fov on the centre panel); without usable measurements they
@@ -184,8 +183,11 @@ void __cdecl FrameRender_dest()
     }    g_base = base; g_w = desc.Width; g_h = desc.Height;
     auto* c = reinterpret_cast<float*>(Module::exe_ptr<uint8_t>(MainCamera));
     float &baseFov = c[0xAC / 4], &aspect = c[0xB8 / 4], &shiftX = c[0xC4 / 4], &shiftY = c[0xC8 / 4];
-    float &y = c[0x12C / 4], &prevY = c[0x388 / 4];
-    const float baseFov0 = baseFov, aspect0 = aspect, shiftX0 = shiftX, shiftY0 = shiftY, y0 = y, prevY0 = prevY;
+    float* const now = c + 0x128 / 4;    // the angles x, y, z 0x482F20 rotates by
+    float* const prev = c + 0x384 / 4;   // the angles it blends from (equal to now once the update has computed the camera)
+    const float baseFov0 = baseFov, aspect0 = aspect, shiftX0 = shiftX, shiftY0 = shiftY;
+    const float now0[3] = {now[0], now[1], now[2]}, prev0[3] = {prev[0], prev[1], prev[2]};
+    const TripleViewsMath::Angles view0{now0[0], now0[1], now0[2]};
     g_panelAspect = float(g_w) / 3.f / float(g_h);
     auto panels = TripleViewsMath::Seamless(baseFov0, g_panelAspect);
     g_measured = false;
@@ -208,7 +210,9 @@ void __cdecl FrameRender_dest()
         g_onBase = true;
         const auto& p = panels[i];
         baseFov = p.baseFov; aspect = p.aspect; shiftX = p.shiftX; shiftY = p.shiftY;
-        y = prevY = y0 - p.turn;   // shortcut: a world-y turn, exact only while pitch and roll are small
+        // The panel's turn about the camera's own up axis, solved back into the game's angles (exact with pitch and roll).
+        const auto a = TripleViewsMath::TurnInView(view0, p.turn);
+        now[0] = prev[0] = float(a.x); now[1] = prev[1] = float(a.y); now[2] = prev[2] = float(a.z);
         CallCamera(c);
         const D3DVIEWPORT9 full{0, 0, g_w, g_h, 0.f, 1.f};
         SetViewport_dest(d, &full);
@@ -217,9 +221,10 @@ void __cdecl FrameRender_dest()
     }
     g_pass = -1;
     g_onBase = false;
-    baseFov = baseFov0; aspect = aspect0; shiftX = shiftX0; shiftY = shiftY0; y = y0; prevY = prevY0;
+    baseFov = baseFov0; aspect = aspect0; shiftX = shiftX0; shiftY = shiftY0;
+    for (int k = 0; k < 3; ++k) { now[k] = now0[k]; prev[k] = prev0[k]; }
     CallCamera(c);
-    prevY = prevY0;
+    for (int k = 0; k < 3; ++k) prev[k] = prev0[k];
     d->SetRenderState(D3DRS_SCISSORTESTENABLE, scissor);
     const D3DVIEWPORT9 full{0, 0, g_w, g_h, 0.f, 1.f};
     d->SetViewport(&full);   // frame end restored the last panel's viewport

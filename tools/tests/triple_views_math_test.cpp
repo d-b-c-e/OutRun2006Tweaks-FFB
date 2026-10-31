@@ -51,6 +51,25 @@ int main()
     std::array<Panel, 3> keep = s;
     check(!Measured(bad, keep) && near(keep[2].turn, s[2].turn), "an invalid rig is refused without changing the output");
 
+    // A side view turns about the camera's own up axis, for any pitch and roll.
+    {
+        const Angles level{0, 0.7, 0};
+        const Angles t = TurnInView(level, 0.9);
+        check(near(t.x, 0) && near(t.z, 0) && near(std::remainder(t.y - (0.7 - 0.9), 2 * 3.141592653589793), 0),
+              "with no pitch or roll the turn is y - turn");
+        const Angles cam{0.25, -1.1, 0.12};   // pitched and rolled
+        const Angles side = TurnInView(cam, -1.0);
+        const M3 want = Mul(ViewRotation(cam), RotY(-1.0)), got = ViewRotation(side);
+        bool same = true, upKept = true;
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) same = same && near(want[r][c], got[r][c], 1e-9);
+        const M3 base = ViewRotation(cam);
+        for (int r = 0; r < 3; ++r) upKept = upKept && near(base[r][1], got[r][1], 1e-9);   // the camera's up in world
+        check(same, "the solved angles rebuild the turned view rotation exactly");
+        check(upKept, "the turn keeps the camera's up axis (pitch and roll carried into the side view)");
+        check(!near(side.x, cam.x, 1e-3), "a pitched camera's side view needs other angles than a world-y turn");
+    }
+
     // The F7 notice follows what was drawn, never only what was chosen.
     check(ViewLabel(false, false, Shown::Original, "") == "Original game view (1/2)", "Original is shown as Original");
     check(ViewLabel(true, false, Shown::Original, "").empty(), "no notice text until a frame shows the new choice");

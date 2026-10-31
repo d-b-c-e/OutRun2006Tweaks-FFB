@@ -1,6 +1,7 @@
 #pragma once
 // Pure maths for the three-view spike (triple_views.cpp): the toolkit rig (src/vendor/triple-screen, toolkit 09e6c4f) to
 // OutRun's camera inputs per panel. No game or Direct3D dependency; tools/tests/triple_views_math_test.cpp checks it.
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <string>
@@ -43,6 +44,32 @@ inline bool Measured(const dbce::triple_screen::Rig& rig, std::array<Panel, 3>& 
     }
     out = p;
     return true;
+}
+
+// The camera's angles (+128 / +12C / +130, radians) and the view rotation 0x482F20 builds from them: the matrix stack
+// left-multiplies D3DX rotations (row vectors), so world-to-view is R = Ry(-y) Rx(-x) Rz(-z).
+struct Angles { double x, y, z; };
+using M3 = std::array<std::array<double, 3>, 3>;
+inline M3 Mul(const M3& a, const M3& b)
+{
+    M3 m{};
+    for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) for (int k = 0; k < 3; ++k) m[r][c] += a[r][k] * b[k][c];
+    return m;
+}
+inline M3 RotX(double t) { const double c = std::cos(t), s = std::sin(t); return {{{1, 0, 0}, {0, c, s}, {0, -s, c}}}; }
+inline M3 RotY(double t) { const double c = std::cos(t), s = std::sin(t); return {{{c, 0, -s}, {0, 1, 0}, {s, 0, c}}}; }
+inline M3 RotZ(double t) { const double c = std::cos(t), s = std::sin(t); return {{{c, s, 0}, {-s, c, 0}, {0, 0, 1}}}; }
+inline M3 ViewRotation(const Angles& a) { return Mul(Mul(RotY(-a.y), RotX(-a.x)), RotZ(-a.z)); }
+
+// The same camera turned by `turn` (radians, + right) about its own up axis: R Ry(turn), solved back into the game's
+// angles, so a side view is exact for any pitch and roll (with both zero this is y - turn).
+inline Angles TurnInView(const Angles& a, double turn)
+{
+    const M3 m = Mul(ViewRotation(a), RotY(turn));
+    // m = Ry(p) Rx(q) Rz(r): m[1][2] = sin q, m[0][2] = -sin p cos q, m[2][2] = cos p cos q, m[1][0] = -cos q sin r,
+    // m[1][1] = cos q cos r.
+    const double q = std::asin(std::clamp(m[1][2], -1.0, 1.0)), p = std::atan2(-m[0][2], m[2][2]), r = std::atan2(-m[1][0], m[1][1]);
+    return {-q, -p, -r};
 }
 
 // What the last race frame actually drew (triple_views.cpp sets it per frame) and the F7 notice for it.
