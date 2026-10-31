@@ -16,6 +16,14 @@ static int selectionZero = -1, primaryAdoptions = 0;
 static DInputRemap::UiSnapshot fixtureInput;
 bool overlay_visible = false;
 bool InputManager_FunctionKeyBound(int key) { return key == VK_F9; } // Saved SDL binding conflict.
+// The F7 view switch's side of triple_views.cpp.
+namespace TripleViews {
+static bool fakeAngle = false;
+bool Driving() { return true; }
+bool AngleSelected() { return fakeAngle; }
+void SelectAngle(bool angle) { fakeAngle = angle; }
+std::string Label() { return fakeAngle ? "Angle correction (2/2)" : "Original game view (1/2)"; }
+}
 namespace WheelInputGuard { DiagnosticSnapshot Diagnostics() { return {}; } }
 void ForceShowCursor(bool) {}
 OverlayWindow::OverlayWindow() {}
@@ -218,7 +226,24 @@ int main(int argc, char** argv)
     std::string screenDefault = "Off";
     assert(inih::INIReader(Module::UserIniPath).Get("Triple", "Screens", screenDefault) == "Separate monitors");
     assert(Settings::TripleScreens == 1); // Runtime span changes only on restart.
-
+    {
+        // F7 saves only [Triple] ViewMode; an F6 edit still waiting is neither written nor dropped.
+        pending[{"WheelSettings", "Scale"}] = "1.25";
+        assert(SaveViewMode("Angle"));
+        const auto saved = Read(Module::UserIniPath);
+        std::string none = "missing";
+        assert(inih::INIReader(Module::UserIniPath).Get("Triple", "ViewMode", none) == "Angle");
+        assert(inih::INIReader(Module::UserIniPath).Get("Triple", "Screens", none) == "Separate monitors");
+        assert(saved.find("Scale = 1.25") == std::string::npos && pending.size() == 1 && pending.count({"WheelSettings", "Scale"}));
+        pending.clear();
+        // A failed F7 save changes nothing on disk and is not left waiting for a later panel save.
+        HANDLE held = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+        assert(held != INVALID_HANDLE_VALUE);
+        assert(!SaveViewMode("Original"));
+        assert(Read(Module::UserIniPath) == saved && pending.empty() && !saveFailed);
+        CloseHandle(held);
+        assert(SaveViewMode("Original") && inih::INIReader(Module::UserIniPath).Get("Triple", "ViewMode", none) == "Original");
+    }
     ImGui::CreateContext();
     auto& io = ImGui::GetIO();
     io.IniFilename = nullptr;

@@ -344,6 +344,8 @@ set(outrun2006tweaks_SOURCES
 	"src/tick_discovery.cpp"
 	"src/triple_observe.cpp"
 	"src/triple_views.cpp"
+	"src/triple_views.hpp"
+	"src/triple_views_math.hpp"
 	"src/tick_discovery.hpp"
 	"src/triple_span.hpp"
 	"src/vendor/DbceSupport/support_report.cpp"

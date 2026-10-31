@@ -19,6 +19,7 @@
 #include "wheel_ui_snapshot.hpp"
 #include "wheel_input_gate.hpp"
 #include "../vendor/DbceSupport/support_report.hpp"
+#include "triple_views.hpp"
 #include <imgui.h>
 
 extern void ForceShowCursor(bool show);
@@ -89,6 +90,36 @@ static bool SavePending()
     }
 }
 
+// F7's correction choice alone ([Triple] ViewMode) through the same writer. F6 edits still waiting after a failed panel
+// save are neither written nor dropped here, and a failed F7 save is not retried later.
+static bool SaveViewMode(const char* value)
+{
+    auto waiting = std::move(pending);
+    const bool failedBefore = saveFailed;
+    const std::string errorBefore = saveError;
+    pending = {{{"Triple", "ViewMode"}, value}};
+    const bool ok = SavePending();
+    pending = std::move(waiting);
+    saveFailed = failedBefore;
+    saveError = errorBefore;
+    return ok;
+}
+
+static std::string viewNotice;
+static double viewNoticeAt = -10.0;
+// The F7 notice: the actual mode, centred on the centre screen for about 2.5 s, on a dark background.
+static void DrawViewNotice()
+{
+    if (viewNotice.empty() || ImGui::GetTime() - viewNoticeAt > 2.5) return;
+    const ImVec2 screen = ImGui::GetIO().DisplaySize;
+    ImFont* font = ImGui::GetFont();
+    const float size = ImGui::GetFontSize() * 1.6f * UiScale();
+    const ImVec2 text = font->CalcTextSizeA(size, FLT_MAX, 0.f, viewNotice.c_str());
+    const ImVec2 pos(screen.x / 2 - text.x / 2, screen.y * 0.22f);
+    auto* draw = ImGui::GetForegroundDrawList();
+    draw->AddRectFilled({pos.x - 20, pos.y - 12}, {pos.x + text.x + 20, pos.y + text.y + 12}, IM_COL32(0, 0, 0, 200), 8.f);
+    draw->AddText(font, size, pos, IM_COL32(255, 255, 255, 255), viewNotice.c_str());
+}
 template<class T> static void Queue(const char* section, const char* key, T value)
 {
     std::ostringstream text;
@@ -199,6 +230,7 @@ void HandleShortcuts()
 {
     ConsumerLifecycle::Gate::Lease lease(ConsumerLifecycle::Runtime());
     if (!lease) return;
+    DrawViewNotice();
     const bool focused = GetForegroundWindow() == Game::GameHwnd();
     if (!focused) return;
     const auto stop = ShortcutKey(Settings::WheelStopKey);
@@ -211,7 +243,21 @@ void HandleShortcuts()
         if (Overlay::WheelSettingsVisible) overlay_visible = false;
         ForceShowCursor(Overlay::WheelSettingsVisible || overlay_visible);
     }
-}
+    // F7 (toolkit framing policy rev 3): while driving, switch Original / Angle correction and save the pick. Not while
+    // the panel is open, and not when F7 is already the panel's, Stop FFB's, the HUD toggle's or a game binding.
+    const bool f7Taken = Settings::WheelSettingsKey == VK_F7 || Settings::WheelStopKey == VK_F7 || ExistingShortcutConflict(VK_F7);
+    if (!f7Taken && !Overlay::WheelSettingsVisible && !Overlay::IsBindingDialogActive && ImGui::IsKeyPressed(ImGuiKey_F7, false))
+    {
+        if (!TripleViews::Driving()) viewNotice = "View switching available while driving";
+        else
+        {
+            const bool angle = !TripleViews::AngleSelected();
+            TripleViews::SelectAngle(angle);
+            viewNotice = TripleViews::Label();
+            if (!SaveViewMode(angle ? "Angle" : "Original")) viewNotice += "\nCouldn't save view";
+        }
+        viewNoticeAt = ImGui::GetTime();
+    }}
 
 static bool Choice(const char* label, bool& value)
 {

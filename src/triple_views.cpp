@@ -1,5 +1,6 @@
-// Dev-only spike for three projected views (docs/2026-10-30-triple-views-and-clean-launch-plan.md, step 3), off unless
-// DBCE_OUTRUN_TRIPLE_VIEWS is set at process start. During a race (STATE_GAME) each frame render (0x449050) runs once per
+// Three projected views (docs/2026-10-30-triple-views-and-clean-launch-plan.md). With triple screens on, a wide target and
+// [Triple] ViewMode = Angle (F7 while driving, saved by the panel's writer; Original when missing), or DBCE_OUTRUN_TRIPLE_VIEWS
+// set at process start (development), each race (STATE_GAME) frame render (0x449050) runs once per
 // panel: the main camera gets the panel's base fov (+AC), aspect (+B8), shift (+C4/+C8) and turn (y angle +12C, and +388
 // which 0x482F20 blends from), its
 // matrices and culling planes are recomputed (0x484BD0), and every viewport (read back unmapped), render-target switch onto the frame's base
@@ -11,6 +12,7 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "triple_views.hpp"
 #include "triple_views_math.hpp"
 #include "vendor/triple-screen/layout/dbce_triple_ini.hpp"
 #include <ini.h>
@@ -51,6 +53,16 @@ unsigned g_frames = 0, g_threePass = 0, g_vpMaps = 0, g_rtMaps = 0, g_srMaps = 0
 float g_turnDeg = 0.f, g_panelAspect = 0.f;
 dbce::triple_screen::Rig g_rig{};
 bool g_rigOk = false, g_matchGameFov = true, g_measured = false;
+bool g_angle = false;     // the chosen correction mode: Angle, or Original
+bool g_hooksFailed = false;
+float g_eyeMm = 0.f;      // the effective eye of the last angled frame (0: seamless)
+
+// Angled views can be drawn: triple screens on and a target at least two and a half times as wide as it is high.
+bool Wide()
+{
+    const auto* pp = Game::D3DPresentParams;
+    return Settings::TripleScreens != 0 && !g_hooksFailed && pp && pp->BackBufferHeight && pp->BackBufferWidth * 2 >= pp->BackBufferHeight * 5;
+}
 SafetyHookInline g_setViewport = {}, g_getViewport = {}, g_setRenderTarget = {}, g_stretchRect = {};
 
 RECT Panel() { return {LONG(g_w * g_pass / 3), 0, LONG(g_w * (g_pass + 1) / 3), LONG(g_h)}; }
@@ -134,6 +146,7 @@ bool HookDevice(IDirect3DDevice9* d)
     g_setViewport = safetyhook::create_inline(vt[47], SetViewport_dest);
     g_getViewport = safetyhook::create_inline(vt[48], GetViewport_dest);
     ok = g_stretchRect && g_setRenderTarget && g_setViewport && g_getViewport;
+    g_hooksFailed = !ok;
     spdlog::info("TripleViews: device hooks {}", ok ? "installed" : "FAILED: the spike stays off");
     return ok;
 }
@@ -141,7 +154,7 @@ bool HookDevice(IDirect3DDevice9* d)
 void __cdecl FrameRender_dest()
 {
     auto* d = Game::D3DDevice();
-    if (!d || *Game::current_mode != GameState::STATE_GAME || !HookDevice(d)) { CallFrameRender(); return; }
+    if (!d || !(Opt().on || g_angle) || !Wide() || *Game::current_mode != GameState::STATE_GAME || !HookDevice(d)) { CallFrameRender(); return; }
     IDirect3DSurface9* base = nullptr;
     D3DSURFACE_DESC desc{};
     if (FAILED(d->GetRenderTarget(0, &base)) || !base || FAILED(base->GetDesc(&desc))) {
@@ -160,6 +173,7 @@ void __cdecl FrameRender_dest()
     if (g_rigOk) {
         auto rig = g_rig;
         if (!g_matchGameFov || TripleViewsMath::MatchGameFov(rig, baseFov0)) g_measured = TripleViewsMath::Measured(rig, panels);
+        g_eyeMm = g_measured ? float(rig.eye_distance_mm) : 0.f;
     }
     if (!g_measured && Opt().deg != 0.f) { panels[0].turn = -Opt().deg * 3.14159265f / 180.f; panels[2].turn = -panels[0].turn; }
     if (Opt().flip) for (auto& p : panels) p.turn = -p.turn;
@@ -226,6 +240,9 @@ void ReadRig()
                      g_rig.panel_width_mm, g_rig.panel_height_mm, g_rig.eye_distance_mm, g_rig.left_angle_degrees,
                      g_rig.right_angle_degrees, g_rig.bezel_gap_mm, g_rig.eye_height_above_center_mm, g_matchGameFov);
     else spdlog::info("TripleViews: no usable [Triple] measurements ({}); seamless views", t.refusal);
+    // Missing or unrecognized: the existing startup behaviour (Original), and nothing is rewritten.
+    g_angle = get("ViewMode", b, sizeof b) && !_stricmp(b, "Angle");
+    spdlog::info("TripleViews: correction mode {} at start", g_angle ? "Angle" : "Original");
 }
 
 // The call at `site` must be E8 rel32 to `target` (both RVAs) before it is redirected.
@@ -236,12 +253,32 @@ bool CallsTo(uintptr_t site, uintptr_t target)
 }
 }
 
+bool Driving() { return Game::current_mode && *Game::current_mode == GameState::STATE_GAME; }
+bool AngleSelected() { return g_angle; }
+
+std::string Label()
+{
+    if (!g_angle) return "Original game view (1/2)";
+    if (!Wide()) return "Original game view (1/2): angle correction needs triple screens";
+    const bool measured = g_rigOk && !g_matchGameFov;
+    return std::string("Angle correction \xC2\xB7 ") + (measured ? "Measured FOV" : "Game FOV") + " (2/2)";
+}
+
+void SelectAngle(bool angle)
+{
+    g_angle = angle;
+    const auto* c = Module::exe_ptr<uint8_t>(MainCamera);
+    spdlog::info("TripleViews: F7 -> {} (shown: {}); camera mode {}, framing {}, effective eye {} mm{}", angle ? "Angle" : "Original", Label(),
+                 int(int8_t(c[0x34A])), g_rigOk ? (g_matchGameFov ? "measured rig, game fov" : "measured rig, measured fov") : "seamless, game fov",
+                 g_eyeMm, angle && !Wide() ? "; fallback: Original (triple screens off or not wide)" : "");
+}
+
 class TripleViewsHook : public Hook
 {
 public:
     std::string_view description() override { return "TripleViews"; }
 
-    bool validate() override { return Opt().on; }
+    bool validate() override { return Opt().on || Settings::TripleScreens != 0; }
 
     bool apply() override
     {
@@ -252,7 +289,7 @@ public:
         ReadRig();
         Memory::VP::InjectHook(Module::exe_ptr(FrameRenderCall), FrameRender_dest, Memory::HookType::Call);
         Memory::VP::InjectHook(Module::exe_ptr(TwoDCall), TwoD_dest, Memory::HookType::Call);
-        spdlog::info("TripleViews: on (development spike): race frames drawn once per panel; turn {}{}", Opt().deg != 0.f ? std::to_string(Opt().deg) + " deg" : std::string("= one panel's horizontal fov"),
+        if (Opt().on) spdlog::info("TripleViews: forced on (DBCE_OUTRUN_TRIPLE_VIEWS); seamless turn {}{}", Opt().deg != 0.f ? std::to_string(Opt().deg) + " deg" : std::string("= one panel's horizontal fov"),
                      Opt().flip ? ", flipped" : "");
         return true;
     }
