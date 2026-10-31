@@ -38,6 +38,9 @@ culling planes, so the smaller change is to run the 3D scene pass three times:
 
 1. **Offline address check.** A test that reads the installed executable's bytes at `0x404310`, `0x482F20`,
    `0x484BD0` and the scene-pass function, and compares them with the decomp's hashed ranges. No game run.
+   Result (2026-10-30, one-off read of the installed executable, SHA-256 `68ceb386…`): it is the retail build
+   (SizeOfImage `0x58E000`, the protection-free DVD executable). Mapped the way the decomp maps it (import table and
+   the retail debug metadata blanked), **all 38 of the decomp's hashed ranges match**, so its addresses apply here.
 2. **Observation build (rig, muted, focused once).** Count calls to `0x484BD0` per frame with their return
    addresses, and log the 3D pass entry/exit, to find the main-view call and the pass boundary (scene effects call
    `0x484BD0` extra). Log only; nothing changed.
