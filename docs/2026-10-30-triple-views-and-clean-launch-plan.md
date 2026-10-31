@@ -67,7 +67,18 @@ culling planes, so the smaller change is to run the 3D scene pass three times:
      target, so the panel viewport has to be re-applied after every back-buffer target change.
 3. **Spike.** Behind an environment switch, `Separate monitors` only: three passes as above. The log reports
    `three-projections` only from three observed passes per frame (a counter).
-4. **Rig check (muted).** Pass counter, frame rate at 48:9 against the planar span (A/B), window captures by handle of
+   Built as `src/triple_views.cpp` (`DBCE_OUTRUN_TRIPLE_VIEWS`, off by default). The frame render call (`0x417D31`) and
+   the 2D flush call (`0x4491D7`) are redirected after a byte check; viewports, `GetViewport` (handed back unmapped, or
+   frame begin/end would map twice), render-target switches onto the frame's base target and `StretchRect` are hooked on
+   the device and map into the panel under a scissor.
+4. **Rig check (muted).** Result 2026-10-30 (display block "Sim Racing Surround", 7680x1440, race via the test
+   injection's Start/A): three-projections on 600 of 600 frames in every report, 60 fps (1% low about 52 fps; one
+   stall while the device hooks install), the 2D flush on the centre pass only. Window captures show three continuous
+   views: the side views turn 96.4 degrees (one panel's horizontal field of view, so the picture is seamless), road
+   edges and kerbs run on across both joins, and the HUD sits on the centre screen at its normal proportions. The first
+   run, before the `GetViewport` fix, drew each view into a third of its screen. Still to do: the turn from the rig's
+   real geometry (side angle, bezels, eye distance) instead of the seamless default, a pitch-safe turn (it is a
+   world-y turn now), menus and non-race states (single view today), and the owner's look at the angles. Pass counter, frame rate at 48:9 against the planar span (A/B), window captures by handle of
    the three thirds. Angles and seams need the owner at the rig.
 5. **Then curve.** With three views, the toolkit's curved presenter contract per panel (`CurveRadiusMm`), and F7
    Original / Angle / Angle + curve saved as the framing policy rev 3 describes.
