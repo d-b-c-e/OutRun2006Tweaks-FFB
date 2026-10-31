@@ -3,5 +3,5 @@
   "note": "Runtime commits whose rig-profile controls adapter (src/profile_controls.cpp, the [WheelkitProfile] stage in OutRun2006Tweaks.user.ini) passed review. Package-WheelSettings.ps1 declares the capability in package-manifest.json only for these exact commits; Install-WheelSettings.ps1 then writes dbce-outrun2006-controls.json in the game folder for Wheelkit.",
   "controlsProfileSchema": 1,
   "adapter": "outrun-remap-1",
-  "reviewedRuntimeCommits": ["52638229472836edbf585467dd20ea6de8e06198", "7e6bf040c56b23257e3f09a6c4f83c177381ba5e", "94310db3d256b185cc87351bcb85c5dd67578a5b", "d1cdbdea564361a00c006add2554bdfda6d207af", "bac3b189024a6be508f58191bcdc2280d2484701", "d9d06933470882c455c51f63749726303f567cf4", "d4580daf03c780d1fd19fe3b9011c5e47b3402f2"]
+  "reviewedRuntimeCommits": ["52638229472836edbf585467dd20ea6de8e06198", "7e6bf040c56b23257e3f09a6c4f83c177381ba5e", "94310db3d256b185cc87351bcb85c5dd67578a5b", "d1cdbdea564361a00c006add2554bdfda6d207af", "bac3b189024a6be508f58191bcdc2280d2484701", "d9d06933470882c455c51f63749726303f567cf4", "d4580daf03c780d1fd19fe3b9011c5e47b3402f2", "ccd8734518bf3559ca06e134cd10ef0ef64bb794"]
 }
