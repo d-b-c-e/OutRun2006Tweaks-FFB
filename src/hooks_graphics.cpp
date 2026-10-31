@@ -1,6 +1,8 @@
 #include "hook_mgr.hpp"
 #include "plugin.hpp"
 #include "game_addrs.hpp"
+#include "triple_observe.hpp"
+#include <intrin.h>
 #include <iostream>
 #include <array>
 
@@ -268,6 +270,8 @@ class FixZBufferPrecision : public Hook
 	{
 		// improve z-buffer precision by increasing znear
 		// game default is 0.1 which reduces precision of far objects massively, causing z-fighting and objects not drawing properly
+		if (TripleObserve::On()) TripleObserve::Camera(camera, _ReturnAddress());   // dev-only, read-only (triple_observe.cpp)
+
 
 		if (allow_znear_override)
 		{
