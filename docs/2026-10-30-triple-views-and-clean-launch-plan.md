@@ -44,6 +44,14 @@ culling planes, so the smaller change is to run the 3D scene pass three times:
 2. **Observation build (rig, muted, focused once).** Count calls to `0x484BD0` per frame with their return
    addresses, and log the 3D pass entry/exit, to find the main-view call and the pass boundary (scene effects call
    `0x484BD0` extra). Log only; nothing changed.
+   First run (2026-10-30, `TripleObserve`, 150 s at the title, no input; 13 reports of 600 frames, 60 fps):
+   - frame begin `0x448DB0` / frame end `0x448E40` bracket the layer loop, and `0x7D25F0` is its layer index (0..8 on
+     every frame), as the decomp says;
+   - `Clr_SceneEffect` (`0xBE70`) runs once per layer, and through FixZBufferPrecision recomputes the main camera's
+     matrices twice each time: the game already tolerates 18 camera recomputes inside the pass per frame;
+   - the title never calls `0x484BD0` itself and the main camera at `0x39FE10` is all zero there; the attract demo did
+     not start a race in 150 s. The race cameras' call sites still need a run in a race (menu presses through the
+     test injection, or a longer wait for the demo).
 3. **Spike.** Behind an environment switch, `Separate monitors` only: three passes as above. The log reports
    `three-projections` only from three observed passes per frame (a counter).
 4. **Rig check (muted).** Pass counter, frame rate at 48:9 against the planar span (A/B), window captures by handle of
