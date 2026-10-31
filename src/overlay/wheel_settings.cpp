@@ -20,6 +20,7 @@
 #include "wheel_input_gate.hpp"
 #include "../vendor/DbceSupport/support_report.hpp"
 #include "triple_views.hpp"
+#include <ini.h>
 #include <imgui.h>
 
 extern void ForceShowCursor(bool show);
@@ -94,6 +95,40 @@ static bool SavePending()
 // save are neither written nor dropped here, and a failed F7 save is not retried later.
 static bool SaveViewMode(const char* value)
 {
+    // The game reads the user INI case-sensitively and refuses duplicate keys, while SetIniValue matches any letter case:
+    // check the would-be file with the actual reader first, and refuse (nothing written) unless it reads back as saved.
+    auto check = Module::UserIniPath;
+    check += L".viewmode-check.tmp";
+    bool readsBack = false;
+    std::string got = "(missing)";
+    try
+    {
+        std::string contents;
+        if (std::filesystem::exists(Module::UserIniPath))
+        {
+            std::ifstream input(Module::UserIniPath, std::ios::binary);
+            contents.assign(std::istreambuf_iterator<char>(input), {});
+            if (input.bad()) throw std::runtime_error("Cannot read the settings file");
+        }
+        // Parsed through our own FILE*: the reader's path constructor leaks its handle when the parse throws.
+        FILE* file = nullptr;
+        if (_wfopen_s(&file, check.c_str(), L"w+b") != 0 || !file) throw std::runtime_error("cannot write the check file");
+        struct Close { FILE* f; ~Close() { fclose(f); } } close{file};
+        const std::string next = WheelSettingsPolicy::SetIniValue(contents, "Triple", "ViewMode", value);
+        if (std::fwrite(next.data(), 1, next.size(), file) != next.size()) throw std::runtime_error("cannot write the check file");
+        std::rewind(file);
+        got = inih::INIReader(file).Get<std::string>("Triple", "ViewMode", got);
+        readsBack = got == value;
+    }
+    catch (const std::exception& e) { got = std::string("reader error: ") + e.what(); readsBack = false; }
+    catch (...) { got = "reader error"; readsBack = false; }
+    std::error_code ignored;
+    std::filesystem::remove(check, ignored);
+    if (!readsBack)
+    {
+        spdlog::error("F7 view: [Triple] ViewMode would not read back as {} (read {}: another letter case or a duplicate key in the user INI?); not saved", value, got);
+        return false;
+    }
     auto waiting = std::move(pending);
     const bool failedBefore = saveFailed;
     const std::string errorBefore = saveError;
@@ -105,22 +140,43 @@ static bool SaveViewMode(const char* value)
     return ok;
 }
 
-static std::string viewNotice;
+static std::string viewNotice, viewNoticeSuffix;
+static bool viewNoticeLive = false;   // the text is TripleViews::Label(), i.e. what is actually drawn now
 static double viewNoticeAt = -10.0;
 // The F7 notice: the actual mode, centred on the centre screen for about 2.5 s, on a dark background.
 static void DrawViewNotice()
 {
-    if (viewNotice.empty() || ImGui::GetTime() - viewNoticeAt > 2.5) return;
+    if (ImGui::GetTime() - viewNoticeAt > 2.5) return;
+    const std::string shown = (viewNoticeLive ? TripleViews::Label() : viewNotice);
+    if (shown.empty()) return;   // the new choice has not been drawn yet
+    const std::string notice = shown + viewNoticeSuffix;
     const ImVec2 screen = ImGui::GetIO().DisplaySize;
     ImFont* font = ImGui::GetFont();
     const float size = ImGui::GetFontSize() * 1.6f * UiScale();
-    const ImVec2 text = font->CalcTextSizeA(size, FLT_MAX, 0.f, viewNotice.c_str());
+    const ImVec2 text = font->CalcTextSizeA(size, FLT_MAX, 0.f, notice.c_str());
     const ImVec2 pos(screen.x / 2 - text.x / 2, screen.y * 0.22f);
     auto* draw = ImGui::GetForegroundDrawList();
     draw->AddRectFilled({pos.x - 20, pos.y - 12}, {pos.x + text.x + 20, pos.y + text.y + 12}, IM_COL32(0, 0, 0, 200), 8.f);
-    draw->AddText(font, size, pos, IM_COL32(255, 255, 255, 255), viewNotice.c_str());
+    draw->AddText(font, size, pos, IM_COL32(255, 255, 255, 255), notice.c_str());
 }
-template<class T> static void Queue(const char* section, const char* key, T value)
+
+// F7 (toolkit framing policy rev 3): while driving, switch Original / Angle correction and save the pick; the notice then
+// shows what is actually drawn. Outside a race it only says so.
+static void OnViewKey()
+{
+    viewNoticeAt = ImGui::GetTime();
+    viewNoticeSuffix.clear();
+    if (!TripleViews::Driving())
+    {
+        viewNotice = "View switching available while driving";
+        viewNoticeLive = false;
+        return;
+    }
+    const bool angle = !TripleViews::AngleSelected();
+    TripleViews::SelectAngle(angle);
+    viewNoticeLive = true;
+    if (!SaveViewMode(angle ? "Angle" : "Original")) viewNoticeSuffix = "\nCouldn't save view";
+}template<class T> static void Queue(const char* section, const char* key, T value)
 {
     std::ostringstream text;
     text << std::boolalpha << value;
@@ -243,21 +299,10 @@ void HandleShortcuts()
         if (Overlay::WheelSettingsVisible) overlay_visible = false;
         ForceShowCursor(Overlay::WheelSettingsVisible || overlay_visible);
     }
-    // F7 (toolkit framing policy rev 3): while driving, switch Original / Angle correction and save the pick. Not while
-    // the panel is open, and not when F7 is already the panel's, Stop FFB's, the HUD toggle's or a game binding.
+    // F7: not while the panel is open, and not when F7 is already the panel's, Stop FFB's, the HUD toggle's or a game binding.
     const bool f7Taken = Settings::WheelSettingsKey == VK_F7 || Settings::WheelStopKey == VK_F7 || ExistingShortcutConflict(VK_F7);
-    if (!f7Taken && !Overlay::WheelSettingsVisible && !Overlay::IsBindingDialogActive && ImGui::IsKeyPressed(ImGuiKey_F7, false))
-    {
-        if (!TripleViews::Driving()) viewNotice = "View switching available while driving";
-        else
-        {
-            const bool angle = !TripleViews::AngleSelected();
-            TripleViews::SelectAngle(angle);
-            viewNotice = TripleViews::Label();
-            if (!SaveViewMode(angle ? "Angle" : "Original")) viewNotice += "\nCouldn't save view";
-        }
-        viewNoticeAt = ImGui::GetTime();
-    }}
+    if (!f7Taken && !Overlay::WheelSettingsVisible && !Overlay::IsBindingDialogActive && ImGui::IsKeyPressed(ImGuiKey_F7, false)) OnViewKey();
+}
 
 static bool Choice(const char* label, bool& value)
 {

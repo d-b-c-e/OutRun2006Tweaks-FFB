@@ -3,6 +3,7 @@
 // OutRun's camera inputs per panel. No game or Direct3D dependency; tools/tests/triple_views_math_test.cpp checks it.
 #include <array>
 #include <cmath>
+#include <string>
 #include "vendor/triple-screen/geometry/dbce_triple_geometry.hpp"
 
 namespace TripleViewsMath {
@@ -42,6 +43,22 @@ inline bool Measured(const dbce::triple_screen::Rig& rig, std::array<Panel, 3>& 
     }
     out = p;
     return true;
+}
+
+// What the last race frame actually drew (triple_views.cpp sets it per frame) and the F7 notice for it.
+enum class Shown { Original, GameFov, MeasuredFov, Unavailable };
+
+// `wanted`: Angle is chosen (or forced). `drawnFor`: the choice the last frame was drawn with; until a frame shows a new
+// choice the notice says nothing rather than guess. `why`: the reason angle correction is unavailable.
+inline std::string ViewLabel(bool wanted, bool drawnFor, Shown shown, const std::string& why)
+{
+    if (!wanted) return "Original game view (1/2)";
+    if (drawnFor != wanted) return "";
+    switch (shown) {
+    case Shown::GameFov: return "Angle correction \xC2\xB7 Game FOV (2/2)";
+    case Shown::MeasuredFov: return "Angle correction \xC2\xB7 Measured FOV (2/2)";
+    default: return "Original game view (1/2): angle correction unavailable (" + why + ")";
+    }
 }
 
 // MatchGameFov (the toolkit's default framing): the eye distance at which the centre panel shows the game's own

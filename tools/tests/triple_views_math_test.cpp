@@ -51,6 +51,14 @@ int main()
     std::array<Panel, 3> keep = s;
     check(!Measured(bad, keep) && near(keep[2].turn, s[2].turn), "an invalid rig is refused without changing the output");
 
+    // The F7 notice follows what was drawn, never only what was chosen.
+    check(ViewLabel(false, false, Shown::Original, "") == "Original game view (1/2)", "Original is shown as Original");
+    check(ViewLabel(true, false, Shown::Original, "").empty(), "no notice text until a frame shows the new choice");
+    check(ViewLabel(true, true, Shown::GameFov, "").find("Game FOV (2/2)") != std::string::npos, "an angled frame reports Game FOV");
+    check(ViewLabel(true, true, Shown::MeasuredFov, "").find("Measured FOV (2/2)") != std::string::npos, "measured framing is named");
+    check(ViewLabel(true, true, Shown::Unavailable, "no render target") ==
+              "Original game view (1/2): angle correction unavailable (no render target)", "a fallback reports the original view and why");
+
     std::printf("%s %d triple-views math checks\n", g_failed ? "FAIL" : "PASS", g_checks);
     return g_failed ? 1 : 0;
 }

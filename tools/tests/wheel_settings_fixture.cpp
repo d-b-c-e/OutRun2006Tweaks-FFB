@@ -18,8 +18,8 @@ bool overlay_visible = false;
 bool InputManager_FunctionKeyBound(int key) { return key == VK_F9; } // Saved SDL binding conflict.
 // The F7 view switch's side of triple_views.cpp.
 namespace TripleViews {
-static bool fakeAngle = false;
-bool Driving() { return true; }
+static bool fakeAngle = false, fakeDriving = true;
+bool Driving() { return fakeDriving; }
 bool AngleSelected() { return fakeAngle; }
 void SelectAngle(bool angle) { fakeAngle = angle; }
 std::string Label() { return fakeAngle ? "Angle correction (2/2)" : "Original game view (1/2)"; }
@@ -243,6 +243,34 @@ int main(int argc, char** argv)
         assert(Read(Module::UserIniPath) == saved && pending.empty() && !saveFailed);
         CloseHandle(held);
         assert(SaveViewMode("Original") && inih::INIReader(Module::UserIniPath).Get("Triple", "ViewMode", none) == "Original");
+        // The game's reader is case-sensitive and refuses duplicate keys: such a file is refused, not saved "successfully".
+        const auto canonical = Read(Module::UserIniPath);
+        for (const char* odd : {"[triple]\r\nviewmode = Angle\r\n", "[Triple]\r\nViewMode = Angle\r\nViewMode = Angle\r\n"})
+        {
+            std::ofstream(Module::UserIniPath, std::ios::binary | std::ios::trunc) << odd;
+            assert(!SaveViewMode("Original") && Read(Module::UserIniPath) == odd);
+        }
+        std::ofstream(Module::UserIniPath, std::ios::binary | std::ios::trunc) << canonical;
+        // The F7 event: outside a race it only says so; while driving it switches, saves and shows the drawn state live.
+        ImGui::CreateContext();   // OnViewKey stamps the notice with ImGui time
+        TripleViews::fakeDriving = false;
+        TripleViews::fakeAngle = false;
+        OnViewKey();
+        assert(viewNotice == "View switching available while driving" && !viewNoticeLive && !TripleViews::fakeAngle);
+        assert(Read(Module::UserIniPath) == canonical);
+        TripleViews::fakeDriving = true;
+        OnViewKey();
+        assert(TripleViews::fakeAngle && viewNoticeLive && viewNoticeSuffix.empty());
+        assert(inih::INIReader(Module::UserIniPath).Get("Triple", "ViewMode", none) == "Angle");
+        // A failed save keeps the switch for this session, says so, and leaves the file as it was.
+        const auto beforeFailed = Read(Module::UserIniPath);
+        held = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+        assert(held != INVALID_HANDLE_VALUE);
+        OnViewKey();
+        CloseHandle(held);
+        assert(!TripleViews::fakeAngle && viewNoticeSuffix == "\nCouldn't save view" && Read(Module::UserIniPath) == beforeFailed && pending.empty());
+        TripleViews::fakeAngle = false;
+        ImGui::DestroyContext();
     }
     ImGui::CreateContext();
     auto& io = ImGui::GetIO();
