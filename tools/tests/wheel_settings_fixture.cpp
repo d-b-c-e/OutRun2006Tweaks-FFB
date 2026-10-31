@@ -18,7 +18,8 @@ bool overlay_visible = false;
 bool InputManager_FunctionKeyBound(int key) { return key == VK_F9; } // Saved SDL binding conflict.
 // The F7 view switch's side of triple_views.cpp.
 namespace TripleViews {
-static bool fakeAngle = false, fakeDriving = true;
+static bool fakeAngle = false, fakeDriving = true, fakeAvailable = true;
+bool AngleAvailable(std::string& why) { why = fakeAvailable ? "" : "triple screens off or not wide"; return fakeAvailable; }
 bool Driving() { return fakeDriving; }
 bool AngleSelected() { return fakeAngle; }
 void SelectAngle(bool angle) { fakeAngle = angle; }
@@ -262,6 +263,13 @@ int main(int argc, char** argv)
         OnViewKey();
         assert(TripleViews::fakeAngle && viewNoticeLive && viewNoticeSuffix.empty());
         assert(inih::INIReader(Module::UserIniPath).Get("Triple", "ViewMode", none) == "Angle");
+        // Angle correction unavailable: F7 says why and neither switches nor writes.
+        const auto beforeUnavailable = Read(Module::UserIniPath);
+        TripleViews::fakeAvailable = false;
+        OnViewKey();
+        assert(TripleViews::fakeAngle && !viewNoticeLive && viewNotice == "Original game view (1/1): angle correction unavailable (triple screens off or not wide)");
+        assert(Read(Module::UserIniPath) == beforeUnavailable);
+        TripleViews::fakeAvailable = true;
         // A failed save keeps the switch for this session, says so, and leaves the file as it was.
         const auto beforeFailed = Read(Module::UserIniPath);
         held = CreateFileW(Module::UserIniPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);

@@ -277,6 +277,12 @@ bool CallsTo(uintptr_t site, uintptr_t target)
 bool Driving() { return Game::current_mode && *Game::current_mode == GameState::STATE_GAME; }
 bool AngleSelected() { return g_angle; }
 
+bool AngleAvailable(std::string& why)
+{
+    why = !g_patched ? "renderer not hooked" : !Wide() ? "triple screens off or not wide" : g_hooksFailed ? "device hooks failed" : "";
+    return why.empty();
+}
+
 std::string Label()
 {
     const bool wanted = Opt().on || g_angle;

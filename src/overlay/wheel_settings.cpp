@@ -147,6 +147,7 @@ static double viewNoticeAt = -10.0;
 static void DrawViewNotice()
 {
     if (ImGui::GetTime() - viewNoticeAt > 2.5) return;
+    if (viewNoticeLive && !TripleViews::Driving()) return;   // left the race: no correction claim over a menu
     const std::string shown = (viewNoticeLive ? TripleViews::Label() : viewNotice);
     if (shown.empty()) return;   // the new choice has not been drawn yet
     const std::string notice = shown + viewNoticeSuffix;
@@ -169,6 +170,14 @@ static void OnViewKey()
     if (!TripleViews::Driving())
     {
         viewNotice = "View switching available while driving";
+        viewNoticeLive = false;
+        return;
+    }
+    // Only supported modes cycle: with angle correction unavailable F7 says why and neither switches nor saves.
+    std::string why;
+    if (!TripleViews::AngleAvailable(why))
+    {
+        viewNotice = "Original game view (1/1): angle correction unavailable (" + why + ")";
         viewNoticeLive = false;
         return;
     }
