@@ -107,3 +107,11 @@ What Phase B needs:
 4. **Checks:** the log shows the mod loaded with defaults, the receipt matches, the copy's new files are only the
    game's own first-launch files plus the seeded settings, and the owner's folder is byte-identical. Then the copy is
    deleted.
+
+**Player-path rig check (2026-11-01, f68bead with the TurnInView gimbal-lock fix):** no dev variable; staged `[Triple]
+ViewMode = Angle` and the Wheelkit rig (702x398 mm, eye 660, sides 70/70, bezel 8). Log: measured rig, "correction mode
+Angle at start", three-projections on 600/600 frames with a 70.0 degree turn, 60 fps steady (one 3.7 fps 1% low in the
+first 10 s while the device hooks installed). Captures show three continuous views, HUD on the centre. The one F7 was
+skipped by its own guard (VS Code took the foreground mid-run), so the F7 notice and save remain unverified. Owner files
+byte-exact (246), Sim Racing restored. Evidence `E:\Source\temp\outrun-2006\views-20261101-013550`. Work stopped here by the
+owner (OutRun mod paused 2026-11-01).
