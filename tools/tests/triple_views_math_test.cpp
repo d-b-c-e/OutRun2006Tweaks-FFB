@@ -70,6 +70,28 @@ int main()
         check(!near(side.x, cam.x, 1e-3), "a pitched camera's side view needs other angles than a world-y turn");
     }
 
+    // Gimbal lock: a turned view looking straight up or down (lulu's sweep, 160 of 28,561 failed before the fix).
+    {
+        const double d = 3.141592653589793 / 180;
+        double worst = 0;
+        for (int x = -90; x <= 90; x += 15)
+            for (int y = -180; y <= 180; y += 30)
+                for (int z = -90; z <= 90; z += 15)
+                    for (int t = -90; t <= 90; t += 15) {
+                        const Angles a{x * d, y * d, z * d};
+                        const M3 want = Mul(ViewRotation(a), RotY(t * d)), got = ViewRotation(TurnInView(a, t * d));
+                        for (int r = 0; r < 3; ++r)
+                            for (int c = 0; c < 3; ++c) worst = std::max(worst, std::abs(want[r][c] - got[r][c]));
+                    }
+        const Angles lock{-75 * d, -150 * d, -90 * d};
+        const M3 want = Mul(ViewRotation(lock), RotY(15 * d)), got = ViewRotation(TurnInView(lock, 15 * d));
+        bool same = true;
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) same = same && near(want[r][c], got[r][c], 1e-7);
+        check(same, "a side view turned into straight down (x -75, y -150, z -90, turn 15) is rebuilt exactly");
+        check(worst < 1e-7, "every swept pitch, yaw, roll and turn is rebuilt exactly, gimbal lock included");
+    }
+
     // The F7 notice follows what was drawn, never only what was chosen.
     check(ViewLabel(false, false, Shown::Original, "") == "Original game view (1/2)", "Original is shown as Original");
     check(ViewLabel(true, false, Shown::Original, "").empty(), "no notice text until a frame shows the new choice");

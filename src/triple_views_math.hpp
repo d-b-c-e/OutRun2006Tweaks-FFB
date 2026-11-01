@@ -68,7 +68,11 @@ inline Angles TurnInView(const Angles& a, double turn)
     const M3 m = Mul(ViewRotation(a), RotY(turn));
     // m = Ry(p) Rx(q) Rz(r): m[1][2] = sin q, m[0][2] = -sin p cos q, m[2][2] = cos p cos q, m[1][0] = -cos q sin r,
     // m[1][1] = cos q cos r.
-    const double q = std::asin(std::clamp(m[1][2], -1.0, 1.0)), p = std::atan2(-m[0][2], m[2][2]), r = std::atan2(-m[1][0], m[1][1]);
+    const double cq = std::hypot(m[1][0], m[1][1]), q = std::atan2(m[1][2], cq);
+    // Looking straight up or down (cos q ~ 0) only p + r (sin q = 1) or p - r (sin q = -1) is defined: m[0][0] = cos p,
+    // m[0][1] = sin q sin p with r = 0. 1e-7 balances rounding in the general branch against the error of r = 0 here.
+    if (cq < 1e-7) return {-q, -std::atan2(m[1][2] * m[0][1], m[0][0]), 0};
+    const double p = std::atan2(-m[0][2], m[2][2]), r = std::atan2(-m[1][0], m[1][1]);
     return {-q, -p, -r};
 }
 
