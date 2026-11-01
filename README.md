@@ -1,5 +1,7 @@
 # DBCE Mods: OutRun 2006
 
+> **Status 2026-11-01: abandoned in favor of the decompilation port `outrun2-decomp`.** See [docs/ABANDONED-FOR-DECOMP.md](docs/ABANDONED-FOR-DECOMP.md).
+
 Canonical repository: [dbce-mods-outrun-2006](https://github.com/d-b-c-e/dbce-mods-outrun-2006)
 The existing public repository was renamed in place on 2026-10-01, retaining
 numeric ID `1163595970`, history and default branch. The legacy URL
